@@ -14,8 +14,87 @@ export type Database = {
   }
   public: {
     Tables: {
+      financial_transactions: {
+        Row: {
+          amount: number
+          category: string | null
+          created_at: string
+          description: string
+          id: string
+          notes: string | null
+          transaction_date: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          category?: string | null
+          created_at?: string
+          description: string
+          id?: string
+          notes?: string | null
+          transaction_date?: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          category?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          notes?: string | null
+          transaction_date?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      mining_products: {
+        Row: {
+          acquisition_date: string
+          cost: number | null
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          notes: string | null
+          quantity: number
+          unit: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          acquisition_date?: string
+          cost?: number | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          quantity?: number
+          unit?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          acquisition_date?: string
+          cost?: number | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          quantity?: number
+          unit?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       pieces: {
         Row: {
+          cost: number | null
           created_at: string | null
           depth: number | null
           description: string | null
@@ -30,6 +109,7 @@ export type Database = {
           width: number | null
         }
         Insert: {
+          cost?: number | null
           created_at?: string | null
           depth?: number | null
           description?: string | null
@@ -44,6 +124,7 @@ export type Database = {
           width?: number | null
         }
         Update: {
+          cost?: number | null
           created_at?: string | null
           depth?: number | null
           description?: string | null

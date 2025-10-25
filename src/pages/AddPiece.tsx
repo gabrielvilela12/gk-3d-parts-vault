@@ -20,6 +20,7 @@ export default function AddPiece() {
     height: "",
     depth: "",
     material: "",
+    cost: "",
     notes: "",
   });
   const [stlFile, setStlFile] = useState<File | null>(null);
@@ -75,6 +76,7 @@ export default function AddPiece() {
         height: formData.height ? parseFloat(formData.height) : null,
         depth: formData.depth ? parseFloat(formData.depth) : null,
         material: formData.material,
+        cost: formData.cost ? parseFloat(formData.cost) : null,
         notes: formData.notes,
         stl_url: stlUrl,
         image_url: imageUrl,
@@ -176,15 +178,29 @@ export default function AddPiece() {
                 </div>
               </div>
 
-              {/* Material */}
-              <div className="space-y-2">
-                <Label htmlFor="material">Material</Label>
-                <Input
-                  id="material"
-                  placeholder="Ex: PLA, ABS, PETG..."
-                  value={formData.material}
-                  onChange={(e) => setFormData({ ...formData, material: e.target.value })}
-                />
+              {/* Material and Cost */}
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="material">Material</Label>
+                  <Input
+                    id="material"
+                    placeholder="Ex: PLA, ABS, PETG..."
+                    value={formData.material}
+                    onChange={(e) => setFormData({ ...formData, material: e.target.value })}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="cost">Custo (R$)</Label>
+                  <Input
+                    id="cost"
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={formData.cost}
+                    onChange={(e) => setFormData({ ...formData, cost: e.target.value })}
+                  />
+                </div>
               </div>
 
               {/* Files */}

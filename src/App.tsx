@@ -13,6 +13,8 @@ import Auth from "./pages/Auth";
 import Catalog from "./pages/Catalog";
 import PieceDetail from "./pages/PieceDetail";
 import AddPiece from "./pages/AddPiece";
+import MiningProducts from "./pages/MiningProducts";
+import FinancialControl from "./pages/FinancialControl";
 import Dashboard from "./pages/Dashboard";
 import About from "./pages/About";
 import NotFound from "./pages/NotFound";
@@ -73,6 +75,14 @@ function AppContent() {
           <Route
             path="/add"
             element={user ? <AddPiece /> : <Navigate to="/auth" replace />}
+          />
+          <Route
+            path="/mining"
+            element={user ? <MiningProducts /> : <Navigate to="/auth" replace />}
+          />
+          <Route
+            path="/financial"
+            element={user ? <FinancialControl /> : <Navigate to="/auth" replace />}
           />
           <Route
             path="/dashboard"
