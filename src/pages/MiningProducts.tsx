@@ -7,8 +7,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-// Remover Checkbox se não for mais usado
-// import { Checkbox } from "@/components/ui/checkbox";
 import {
   Pickaxe,
   Plus,
@@ -22,13 +20,12 @@ import {
   CheckCircle,
   AlertCircle,
   Download,
-  Upload, // Mantido para possível uso futuro, mas o input file não terá ícone por padrão
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
-// Interface Atualizada
+// Interface (garanta que o DB tenha makerworld_url e stl_url)
 interface MiningProduct {
   id: string;
   name: string;
@@ -58,7 +55,7 @@ const addedByBorderColorMap: { [key: string]: string } = {
     Kaique: "border-green-500",
 };
 
-// Interface EditState Atualizada
+// Interface EditState (sem stl_url para edição rápida)
 interface EditState {
     source_url: string | null;
     added_by: string | null;
@@ -73,7 +70,7 @@ export default function MiningProducts() {
   const { toast } = useToast();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
-  // Estados para edição rápida
+  // Estados para edição rápida (Função de Edição)
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [editFormData, setEditFormData] = useState<EditState>({
       source_url: '',
@@ -82,23 +79,22 @@ export default function MiningProducts() {
       makerworld_url: '',
   });
 
-  // Estado para o formulário de adição (com makerworld_url)
+  // Estado para o formulário de adição
   const [addFormData, setAddFormData] = useState({
     name: "", description: "", quantity: "", unit: "", cost: "",
     notes: "", source_url: "", makerworld_checked: 'pending' as MiningProduct['makerworld_checked'],
-    makerworld_url: "", // Adicionado
+    makerworld_url: "",
     added_by: "",
   });
   const [stlFile, setStlFile] = useState<File | null>(null);
   const addStlInputRef = useRef<HTMLInputElement>(null);
 
-  // Funções fetchUserProfile, getCurrentUser, fetchProducts (garantir seleção de novas colunas)
+  // Funções de busca de dados
   const fetchUserProfile = async (userId: string) => {
      try {
         const { data, error } = await supabase.from('profiles').select('full_name').eq('id', userId).single();
         if (error) { console.error("Erro ao buscar perfil:", error); return; }
         const fullNameLower = data?.full_name?.toLowerCase();
-        // Pré-seleciona SÓ o formulário de ADIÇÃO
         if (fullNameLower?.includes('gabriel')) {
             setAddFormData(prev => ({ ...prev, added_by: 'Gabriel' }));
         } else if (fullNameLower?.includes('kaique')) {
@@ -118,7 +114,7 @@ export default function MiningProducts() {
     try {
       const { data, error } = await supabase
         .from("mining_products")
-        .select("*, profiles ( full_name )") // Garante que busca tudo
+        .select("*, profiles ( full_name )")
         .order("created_at", { ascending: false });
       if (error) throw error;
       setProducts(data || []);
@@ -129,26 +125,21 @@ export default function MiningProducts() {
     }
    };
 
-  // handleSubmit (Adicionar) - Upload condicional de STL
+  // Função para Adicionar Produto
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUserId) { toast({ title: "Erro", description: "Usuário não identificado.", variant: "destructive" }); return; }
     if (!addFormData.added_by) { toast({ title: "Campo obrigatório", description: "Selecione quem adicionou o produto.", variant: "destructive" }); return; }
 
     setLoading(true);
-
     try {
       let finalStlUrl: string | null = null;
 
       // Upload STL somente se 'checked_found' e se houver arquivo
       if (addFormData.makerworld_checked === 'checked_found' && stlFile) {
         const filePath = `mining_stl/${currentUserId}/${Date.now()}-${stlFile.name}`;
-        const { error: uploadError } = await supabase.storage
-          .from('stl-files')
-          .upload(filePath, stlFile);
-
+        const { error: uploadError } = await supabase.storage.from('stl-files').upload(filePath, stlFile);
         if (uploadError) throw uploadError;
-
         const { data: urlData } = supabase.storage.from('stl-files').getPublicUrl(filePath);
         finalStlUrl = urlData.publicUrl;
       }
@@ -163,25 +154,21 @@ export default function MiningProducts() {
         notes: addFormData.notes || null,
         source_url: addFormData.source_url || null,
         makerworld_checked: addFormData.makerworld_checked,
-        // Salva makerworld_url somente se 'checked_found'
-        makerworld_url: (addFormData.makerworld_checked === 'checked_found' && addFormData.makerworld_url)
-                          ? addFormData.makerworld_url
-                          : null,
-        stl_url: finalStlUrl, // Salva URL do STL (será null se não fez upload)
+        makerworld_url: (addFormData.makerworld_checked === 'checked_found' && addFormData.makerworld_url) ? addFormData.makerworld_url : null,
+        stl_url: finalStlUrl,
         added_by: addFormData.added_by,
       };
 
       const { error: insertError } = await supabase.from("mining_products").insert(productToInsert);
-
       if (insertError) throw insertError;
 
       toast({ title: "Produto adicionado!", description: "O produto foi registrado com sucesso." });
 
-      // Resetar formulário e arquivo
+      // Resetar formulário
       setAddFormData({ name: "", description: "", quantity: "", unit: "", cost: "", notes: "", source_url: "", makerworld_checked: 'pending', makerworld_url: "", added_by: "" });
       setStlFile(null);
       if (addStlInputRef.current) addStlInputRef.current.value = "";
-      if (currentUserId) await fetchUserProfile(currentUserId);
+      if (currentUserId) await fetchUserProfile(currentUserId); // Repopular 'added_by'
       setDialogOpen(false);
       fetchProducts();
 
@@ -192,32 +179,45 @@ export default function MiningProducts() {
     }
   };
 
-  // handleDelete (sem alterações)
-  const handleDelete = async (id: string) => { if (!window.confirm("Tem certeza que deseja excluir?")) { return; } try { const { error } = await supabase.from("mining_products").delete().eq("id", id); if (error) throw error; toast({ title: "Produto removido" }); fetchProducts(); } catch (error: any) { toast({ title: "Erro ao remover", description: error.message, variant: "destructive" }); } };
+  // Função para Deletar
+  const handleDelete = async (id: string) => {
+    // (Poderia adicionar exclusão do STL do storage aqui se quisesse)
+    if (!window.confirm("Tem certeza que deseja excluir?")) { return; }
+    try {
+      const { error } = await supabase.from("mining_products").delete().eq("id", id);
+      if (error) throw error;
+      toast({ title: "Produto removido" });
+      fetchProducts();
+    } catch (error: any) {
+      toast({ title: "Erro ao remover", description: error.message, variant: "destructive" });
+    }
+  };
 
 
-  // --- Funções para Edição Rápida ---
+  // --- Funções para Edição Rápida (A "FUNÇÃO DE EDITAR" ESTÁ AQUI) ---
 
+  // 1. handleEditClick: Prepara o formulário de edição
   const handleEditClick = (product: MiningProduct) => {
     setEditingProductId(product.id);
     setEditFormData({
         source_url: product.source_url,
         added_by: product.added_by,
         makerworld_checked: product.makerworld_checked ?? 'pending',
-        makerworld_url: product.makerworld_url, // Preencher estado
+        makerworld_url: product.makerworld_url,
     });
   };
 
+  // 2. handleCancelEdit: Cancela o modo de edição
   const handleCancelEdit = () => {
     setEditingProductId(null);
   };
 
+  // 3. handleUpdate: Salva as alterações da edição
   const handleUpdate = async () => {
     if (!editingProductId || !currentUserId) return;
      if (!editFormData.added_by) { toast({ title: "Campo obrigatório", description: "Selecione quem adicionou o produto.", variant: "destructive" }); return; }
 
     setLoading(true);
-
     try {
        const { error } = await supabase
          .from("mining_products")
@@ -225,11 +225,8 @@ export default function MiningProducts() {
              source_url: editFormData.source_url || null,
              added_by: editFormData.added_by,
              makerworld_checked: editFormData.makerworld_checked,
-             // Salva makerworld_url somente se 'checked_found'
-             makerworld_url: (editFormData.makerworld_checked === 'checked_found' && editFormData.makerworld_url)
-                               ? editFormData.makerworld_url
-                               : null,
-             // stl_url não é editado aqui (poderia ser adicionado se necessário)
+             makerworld_url: (editFormData.makerworld_checked === 'checked_found' && editFormData.makerworld_url) ? editFormData.makerworld_url : null,
+             // Não editamos o STL aqui
          })
          .eq('id', editingProductId);
 
@@ -237,7 +234,6 @@ export default function MiningProducts() {
        toast({ title: "Produto atualizado!" });
        setEditingProductId(null);
        fetchProducts();
-
     } catch (error: any) {
          toast({ title: "Erro ao atualizar", description: error.message, variant: "destructive" });
     } finally {
@@ -247,7 +243,6 @@ export default function MiningProducts() {
 
   // ----- Renderização -----
 
-  // Indicador de Loading inicial
   if (loading && products.length === 0) {
      return (
         <div className="flex items-center justify-center min-h-[60vh]">
@@ -276,34 +271,57 @@ export default function MiningProducts() {
                     <DialogHeader> <DialogTitle>Novo Produto Minerado</DialogTitle> <DialogDescription> Registre um novo produto minerado </DialogDescription> </DialogHeader>
                     {/* Formulário de ADIÇÃO Atualizado */}
                     <form onSubmit={handleSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
-                        {/* Nome, Qtd, Unidade, Custo */}
+                        {/* Campos (Nome, Qtd, Unidade, Custo) */}
                          <div className="grid md:grid-cols-2 gap-4">
                             <div className="space-y-2"> <Label htmlFor="add-name">Nome *</Label> <Input id="add-name" value={addFormData.name} onChange={(e) => setAddFormData({ ...addFormData, name: e.target.value })} required placeholder="Ex: Filamento PLA Azul..." /> </div>
+                            <div className="space-y-2"> <Label htmlFor="add-quantity">Quantidade *</Label> <Input id="add-quantity" type="number" step="any" value={addFormData.quantity} onChange={(e) => setAddFormData({ ...addFormData, quantity: e.target.value })} required placeholder="0.00" /> </div>
                         </div>
-                        <div className="grid md:grid-cols-2 gap-4"></div>
+                        <div className="grid md:grid-cols-2 gap-4">
+                             <div className="space-y-2"> <Label htmlFor="add-unit">Unidade</Label> <Input id="add-unit" value={addFormData.unit} onChange={(e) => setAddFormData({ ...addFormData, unit: e.target.value })} placeholder="Ex: Kg, Rolo, Peça" /> </div>
+                            <div className="space-y-2"> <Label htmlFor="add-cost">Custo Unitário (R$)</Label> <Input id="add-cost" type="number" step="0.01" value={addFormData.cost} onChange={(e) => setAddFormData({ ...addFormData, cost: e.target.value })} placeholder="0.00" /> </div>
+                        </div>
 
-                        {/* Link Geral, AddBy, MW Status */}
-                        <div className="space-y-2"> <Label htmlFor="add-source_url">Link </Label> <Input id="add-source_url" type="url" value={addFormData.source_url} onChange={(e) => setAddFormData({ ...addFormData, source_url: e.target.value })} placeholder="Link da loja, modelo, etc." /> </div>
+                        {/* Campos (Link Geral, AddBy, MW Status) */}
+                        <div className="space-y-2"> <Label htmlFor="add-source_url">Link Geral (Opcional)</Label> <Input id="add-source_url" type="url" value={addFormData.source_url} onChange={(e) => setAddFormData({ ...addFormData, source_url: e.target.value })} placeholder="Link da loja, modelo, etc." /> </div>
                         <div className="grid md:grid-cols-2 gap-4">
                             <div className="space-y-2"> <Label htmlFor="add-added_by">Adicionado Por *</Label> <Select required value={addFormData.added_by} onValueChange={(value) => setAddFormData({ ...addFormData, added_by: value })} > <SelectTrigger id="add-added_by"> <SelectValue placeholder="Selecione..." /> </SelectTrigger> <SelectContent> <SelectItem value="Gabriel">Gabriel</SelectItem> <SelectItem value="Kaique">Kaique</SelectItem> <SelectItem value="Outro">Outro</SelectItem> </SelectContent> </Select> </div>
-                            <div className="space-y-2"> <Label htmlFor="add-makerworld_checked">Status MakerWorld</Label> <Select value={addFormData.makerworld_checked ?? 'pending'} onValueChange={(value) => setAddFormData({ ...addFormData, makerworld_checked: value as MiningProduct['makerworld_checked'] })} > <SelectTrigger id="add-makerworld_checked"> <SelectValue placeholder="Status..." /> </SelectTrigger> <SelectContent> <SelectItem value="pending">{makerworldStatusMap.pending}</SelectItem> <SelectItem value="checked_not_found">{makerworldStatusMap.checked_not_found}</SelectItem> <SelectItem value="checked_found">{makerworldStatusMap.checked_found}</SelectItem> </SelectContent> </Select> </div>
+                            <div className="space-y-2"> <Label htmlFor="add-makerworld_checked">Status MakerWorld</Label>
+                                <Select
+                                    value={addFormData.makerworld_checked ?? 'pending'}
+                                    onValueChange={(value) => setAddFormData({
+                                        ...addFormData,
+                                        makerworld_checked: value as MiningProduct['makerworld_checked'],
+                                        // Limpar campos se mudar de 'achou' para outro
+                                        makerworld_url: value === 'checked_found' ? addFormData.makerworld_url : "",
+                                        // stlFile é limpo no submit ou manualmente
+                                    })}
+                                >
+                                    <SelectTrigger id="add-makerworld_checked"> <SelectValue placeholder="Status..." /> </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="pending">{makerworldStatusMap.pending}</SelectItem>
+                                        <SelectItem value="checked_not_found">{makerworldStatusMap.checked_not_found}</SelectItem>
+                                        <SelectItem value="checked_found">{makerworldStatusMap.checked_found}</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
 
-                        {/* Campos Condicionais: Link MW e STL */}
+                        {/* Campos Condicionais: Link MW e STL (SÓ APARECEM SE 'checked_found') */}
                         {addFormData.makerworld_checked === 'checked_found' && (
-                            <>
+                            <div className="p-4 border border-primary/30 rounded-md space-y-4 bg-background/30">
                                 <div className="space-y-2">
-                                    <Label htmlFor="add-makerworld_url">Link Específico MakerWorld</Label>
+                                    <Label htmlFor="add-makerworld_url" className="text-primary">Link Específico MakerWorld *</Label>
                                     <Input
                                     id="add-makerworld_url"
                                     type="url"
                                     value={addFormData.makerworld_url}
                                     onChange={(e) => setAddFormData({ ...addFormData, makerworld_url: e.target.value })}
                                     placeholder="https://makerworld.com/..."
+                                    required // Pode ser obrigatório se 'achou'
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="add-stl">Arquivo STL (Opcional)</Label>
+                                    <Label htmlFor="add-stl" className="text-primary">Arquivo STL (Opcional)</Label>
                                     <Input
                                         id="add-stl"
                                         type="file"
@@ -314,10 +332,10 @@ export default function MiningProducts() {
                                     />
                                     {stlFile && <p className="text-xs text-muted-foreground mt-1">Arquivo: {stlFile.name}</p>}
                                 </div>
-                          </>
+                          </div>
                         )}
 
-                        {/* Descrição, Notas */}
+                        {/* Campos (Descrição, Notas) */}
                         <div className="space-y-2"> <Label htmlFor="add-description">Descrição</Label> <Textarea id="add-description" value={addFormData.description} onChange={(e) => setAddFormData({ ...addFormData, description: e.target.value })} placeholder="Breve descrição do produto..." rows={2} /> </div>
                         <div className="space-y-2"> <Label htmlFor="add-notes">Observações</Label> <Textarea id="add-notes" value={addFormData.notes} onChange={(e) => setAddFormData({ ...addFormData, notes: e.target.value })} placeholder="Localização, fornecedor..." rows={3} /> </div>
 
@@ -343,8 +361,10 @@ export default function MiningProducts() {
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {products.map((product) => {
+              // 4. Lógica de Edição: 'isEditing' controla qual visualização mostrar
               const isEditing = editingProductId === product.id;
               const canEdit = currentUserId === product.user_id;
+              
               const borderColorClass = product.added_by && addedByBorderColorMap[product.added_by] ? `${addedByBorderColorMap[product.added_by]} border-2` : "border-border/50";
               let badgeVariant: "secondary" | "destructive" | "outline" = "outline";
               let badgeText = makerworldStatusMap.pending;
@@ -354,19 +374,20 @@ export default function MiningProducts() {
               return (
                   <Card key={product.id} className={cn("card-gradient hover:shadow-lg transition-all flex flex-col", borderColorClass)}>
                     <CardHeader>
+                        {/* Botões de Edição (lápis/deletar) ou (salvar/cancelar) */}
                         <div className="flex items-start justify-between gap-2">
                             <div className="flex-1">
                                 <CardTitle className="text-xl">{product.name}</CardTitle>
                                 {!isEditing && product.description && ( <CardDescription className="mt-1 text-sm">{product.description}</CardDescription> )}
                             </div>
-                            {/* Botões Edit/Delete */}
+                            {/* Botões de Visualização (Editar/Deletar) */}
                             {canEdit && !isEditing && (
                                 <div className="flex gap-1">
                                     <Button variant="ghost" size="icon" onClick={() => handleEditClick(product)} className="text-muted-foreground hover:text-primary size-8 shrink-0" aria-label="Editar produto" disabled={loading}> <Edit className="h-4 w-4" /> </Button>
                                     <Button variant="ghost" size="icon" onClick={() => handleDelete(product.id)} className="text-muted-foreground hover:text-destructive size-8 shrink-0" aria-label="Remover produto" disabled={loading}> <Trash2 className="h-4 w-4" /> </Button>
                                 </div>
                             )}
-                            {/* Botões Salvar/Cancelar */}
+                            {/* Botões do Modo Edição (Salvar/Cancelar) */}
                             {isEditing && (
                                 <div className="flex gap-1">
                                     <Button variant="ghost" size="icon" onClick={handleUpdate} className="text-muted-foreground hover:text-green-500 size-8 shrink-0" aria-label="Salvar alterações" disabled={loading}> <Save className="h-4 w-4" /> </Button>
@@ -375,7 +396,7 @@ export default function MiningProducts() {
                             )}
                         </div>
                     </CardHeader>
-                    {/* Conteúdo do Card: Modo Visualização ou Modo Edição */}
+                    {/* Conteúdo do Card: Alterna entre Edição e Visualização */}
                     <CardContent className="space-y-2 text-sm flex-1 flex flex-col justify-between">
                       {isEditing ? (
                           // ---- MODO EDIÇÃO ----
@@ -396,7 +417,15 @@ export default function MiningProducts() {
                                {/* Status MakerWorld */}
                                 <div className="space-y-1">
                                     <Label htmlFor={`edit-makerworld-${product.id}`} className="text-xs">Status MakerWorld</Label>
-                                    <Select value={editFormData.makerworld_checked ?? 'pending'} onValueChange={(value) => setEditFormData({...editFormData, makerworld_checked: value as MiningProduct['makerworld_checked']})} >
+                                    <Select
+                                        value={editFormData.makerworld_checked ?? 'pending'}
+                                        onValueChange={(value) => setEditFormData({
+                                            ...editFormData,
+                                            makerworld_checked: value as MiningProduct['makerworld_checked'],
+                                            // Limpar link MW se mudar status
+                                            makerworld_url: value === 'checked_found' ? editFormData.makerworld_url : null
+                                        })}
+                                    >
                                         <SelectTrigger id={`edit-makerworld-${product.id}`} className="h-8 text-xs"> <SelectValue placeholder="Status..." /> </SelectTrigger>
                                         <SelectContent> <SelectItem value="pending">{makerworldStatusMap.pending}</SelectItem> <SelectItem value="checked_not_found">{makerworldStatusMap.checked_not_found}</SelectItem> <SelectItem value="checked_found">{makerworldStatusMap.checked_found}</SelectItem> </SelectContent>
                                     </Select>
@@ -405,7 +434,7 @@ export default function MiningProducts() {
                                 {/* Input Condicional MakerWorld URL */}
                                {editFormData.makerworld_checked === 'checked_found' && (
                                 <div className="space-y-1">
-                                  <Label htmlFor={`edit-makerworld_url-${product.id}`} className="text-xs">Link Específico MakerWorld</Label>
+                                  <Label htmlFor={`edit-makerworld_url-${product.id}`} className="text-xs text-primary">Link Específico MakerWorld *</Label>
                                   <Input
                                     id={`edit-makerworld_url-${product.id}`}
                                     type="url"
@@ -413,14 +442,16 @@ export default function MiningProducts() {
                                     value={editFormData.makerworld_url ?? ''}
                                     onChange={(e) => setEditFormData({ ...editFormData, makerworld_url: e.target.value })}
                                     className="h-8 text-xs"
+                                    required
                                   />
                                 </div>
                               )}
+                              {/* O upload de STL não é feito na edição rápida */}
                           </div>
                       ) : (
                           // ---- MODO VISUALIZAÇÃO ----
                           <div>
-                            {/* Quantidade, Custo, Data */}
+                            {/* Infos Básicas */}
                             <div className="flex justify-between items-center"> <span className="text-muted-foreground">Quantidade:</span> <span className="font-semibold">{product.quantity}{product.unit ? ` ${product.unit}` : ''}</span> </div>
                             {product.cost !== null && typeof product.cost === 'number' && ( <div className="flex justify-between items-center"> <span className="text-muted-foreground">Custo Unitário:</span> <span className="font-semibold text-primary">R$ {product.cost.toFixed(2)}</span> </div> )}
                             <div className="flex justify-between items-center"> <span className="text-muted-foreground">Adquirido em:</span> <span>{new Date(product.acquisition_date).toLocaleDateString("pt-BR")}</span> </div>
@@ -434,40 +465,52 @@ export default function MiningProducts() {
                                 <Badge variant={badgeVariant} className="text-xs"> {badgeText} </Badge>
                             </div>
 
-                            {/* Link Específico MakerWorld (com ícone) */}
+                            {/* Seção Condicional 'Achado no MW' (Agrupando Link MW e STL) */}
                             {product.makerworld_checked === 'checked_found' && (
-                                <div className="flex justify-between items-center mt-1">
-                                    {product.makerworld_url ? (
-                                        <>
-                                            <span className="text-muted-foreground text-green-500 flex items-center gap-1"><CheckCircle className="h-3 w-3"/> Link MW:</span>
-                                            <a href={product.makerworld_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate max-w-[150px]" title={product.makerworld_url}> <ExternalLink className="inline h-3 w-3 mr-1"/> Ver Link MW </a>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <span className="text-muted-foreground text-yellow-500 flex items-center gap-1"><AlertCircle className="h-3 w-3"/> Link MW:</span>
-                                            <span className="text-xs text-yellow-500">Não fornecido</span>
-                                        </>
-                                    )}
+                                <div className="mt-3 pt-3 border-t border-border/30 space-y-2">
+                                    {/* Link Específico MakerWorld */}
+                                    <div className="flex justify-between items-center">
+                                        {product.makerworld_url ? (
+                                            <>
+                                                <span className="text-muted-foreground text-green-500 flex items-center gap-1"><CheckCircle className="h-3 w-3"/> Link MW:</span>
+                                                <a href={product.makerworld_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate max-w-[150px]" title={product.makerworld_url}> <ExternalLink className="inline h-3 w-3 mr-1"/> Ver Link MW </a>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className="text-muted-foreground text-yellow-500 flex items-center gap-1"><AlertCircle className="h-3 w-3"/> Link MW:</span>
+                                                <span className="text-xs text-yellow-500">Não fornecido</span>
+                                            </>
+                                        )}
+                                    </div>
+                                    
+                                    {/* Botão Download STL */}
+                                    <div className="flex justify-between items-center">
+                                        {product.stl_url ? (
+                                            <>
+                                                <span className="text-muted-foreground text-green-500 flex items-center gap-1"><Download className="h-3 w-3"/> STL:</span>
+                                                <Button asChild size="xs" variant="outline" className="gap-1 text-xs h-6 px-2">
+                                                    <a href={product.stl_url} download target="_blank" rel="noopener noreferrer">
+                                                        Baixar
+                                                    </a>
+                                                </Button>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className="text-muted-foreground text-yellow-500 flex items-center gap-1"><Download className="h-3 w-3"/> STL:</span>
+                                                <span className="text-xs text-yellow-500">Não fornecido</span>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
                             )}
 
                             {/* Adicionado por */}
                             {product.added_by && ( <div className="flex justify-between items-center mt-1"> <span className="text-muted-foreground">Adicionado por:</span> <span className="font-medium flex items-center gap-1"> <User className="h-3 w-3"/>{product.added_by} </span> </div> )}
 
-                            {/* Botão Download STL (se houver link) */}
-                            {product.stl_url && (
-                                <div className="mt-3 pt-3 border-t border-border/30">
-                                    <Button asChild size="sm" variant="outline" className="w-full gap-2 text-xs">
-                                        <a href={product.stl_url} download target="_blank" rel="noopener noreferrer">
-                                            <Download className="h-3 w-3"/> Baixar STL
-                                        </a>
-                                    </Button>
-                                </div>
-                            )}
-
                             {/* Observações */}
                              {product.notes && (
-                                <div className={cn("pt-3 mt-3", product.stl_url ? "" : "border-t border-border/30")}> {/* Adiciona borda só se não houver botão STL */}
+                                // A borda superior SÓ aparece se a seção MW/STL NÃO apareceu
+                                <div className={cn("pt-3 mt-3", (product.makerworld_checked !== 'checked_found') ? "border-t border-border/30" : "")}>
                                      <p className="text-xs text-muted-foreground break-words">{product.notes}</p>
                                 </div>
                              )}
