@@ -10,7 +10,8 @@ All colors MUST be HSL.
   :root {
     --background: 0 0% 4%;
     --foreground: 0 0% 98%;
-
+    --success: 140 70% 45%; /* Um tom de verde - ajuste HSL conforme preferir */
+    --success-foreground: 0 0% 98%; /* Cor do texto para contraste com o verde */
     --card: 0 0% 7%;
     --card-foreground: 0 0% 98%;
 
@@ -49,13 +50,17 @@ All colors MUST be HSL.
     --sidebar-ring: 217 91% 60%;
 
     /* Custom gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(217 91% 60%), hsl(217 91% 70%));
+    --gradient-primary: linear-gradient(
+      135deg,
+      hsl(217 91% 60%),
+      hsl(217 91% 70%)
+    );
     --gradient-card: linear-gradient(180deg, hsl(0 0% 7%), hsl(0 0% 5%));
-    
+
     /* Custom shadows */
     --shadow-glow: 0 0 40px hsl(217 91% 60% / 0.3);
     --shadow-card: 0 10px 30px -10px hsl(0 0% 0% / 0.5);
-    
+
     /* Animations */
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
@@ -71,7 +76,12 @@ All colors MUST be HSL.
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     @apply font-semibold tracking-tight;
   }
 }
@@ -80,7 +90,7 @@ All colors MUST be HSL.
   .glow-primary {
     box-shadow: var(--shadow-glow);
   }
-  
+
   .card-gradient {
     background: var(--gradient-card);
   }
