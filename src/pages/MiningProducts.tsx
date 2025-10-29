@@ -274,11 +274,8 @@ export default function MiningProducts() {
                         {/* Campos (Nome, Qtd, Unidade, Custo) */}
                          <div className="grid md:grid-cols-2 gap-4">
                             <div className="space-y-2"> <Label htmlFor="add-name">Nome *</Label> <Input id="add-name" value={addFormData.name} onChange={(e) => setAddFormData({ ...addFormData, name: e.target.value })} required placeholder="Ex: Filamento PLA Azul..." /> </div>
-                            <div className="space-y-2"> <Label htmlFor="add-quantity">Quantidade *</Label> <Input id="add-quantity" type="number" step="any" value={addFormData.quantity} onChange={(e) => setAddFormData({ ...addFormData, quantity: e.target.value })} required placeholder="0.00" /> </div>
                         </div>
                         <div className="grid md:grid-cols-2 gap-4">
-                             <div className="space-y-2"> <Label htmlFor="add-unit">Unidade</Label> <Input id="add-unit" value={addFormData.unit} onChange={(e) => setAddFormData({ ...addFormData, unit: e.target.value })} placeholder="Ex: Kg, Rolo, Peça" /> </div>
-                            <div className="space-y-2"> <Label htmlFor="add-cost">Custo Unitário (R$)</Label> <Input id="add-cost" type="number" step="0.01" value={addFormData.cost} onChange={(e) => setAddFormData({ ...addFormData, cost: e.target.value })} placeholder="0.00" /> </div>
                         </div>
 
                         {/* Campos (Link Geral, AddBy, MW Status) */}
@@ -452,7 +449,6 @@ export default function MiningProducts() {
                           // ---- MODO VISUALIZAÇÃO ----
                           <div>
                             {/* Infos Básicas */}
-                            <div className="flex justify-between items-center"> <span className="text-muted-foreground">Quantidade:</span> <span className="font-semibold">{product.quantity}{product.unit ? ` ${product.unit}` : ''}</span> </div>
                             {product.cost !== null && typeof product.cost === 'number' && ( <div className="flex justify-between items-center"> <span className="text-muted-foreground">Custo Unitário:</span> <span className="font-semibold text-primary">R$ {product.cost.toFixed(2)}</span> </div> )}
                             <div className="flex justify-between items-center"> <span className="text-muted-foreground">Adquirido em:</span> <span>{new Date(product.acquisition_date).toLocaleDateString("pt-BR")}</span> </div>
 
