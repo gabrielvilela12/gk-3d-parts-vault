@@ -1,3 +1,4 @@
+// src/integrations/supabase/types.ts
 export type Json =
   | string
   | number
@@ -63,6 +64,14 @@ export type Database = {
           unit: string | null
           updated_at: string
           user_id: string
+          // Campos que parecem estar faltando na sua 'types.ts' original, mas estão em 'MiningProducts.tsx'
+          source_url: string | null
+          makerworld_checked: "pending" | "checked_not_found" | "checked_found" | null
+          makerworld_url: string | null
+          stl_url: string | null
+          added_by: string | null
+          // Novo campo adicionado
+          is_selling: boolean | null
         }
         Insert: {
           acquisition_date?: string
@@ -76,6 +85,14 @@ export type Database = {
           unit?: string | null
           updated_at?: string
           user_id: string
+          // Campos que parecem estar faltando na sua 'types.ts' original
+          source_url?: string | null
+          makerworld_checked?: "pending" | "checked_not_found" | "checked_found" | null
+          makerworld_url?: string | null
+          stl_url?: string | null
+          added_by?: string | null
+          // Novo campo adicionado
+          is_selling?: boolean | null
         }
         Update: {
           acquisition_date?: string
@@ -89,6 +106,14 @@ export type Database = {
           unit?: string | null
           updated_at?: string
           user_id?: string
+          // Campos que parecem estar faltando na sua 'types.ts' original
+          source_url?: string | null
+          makerworld_checked?: "pending" | "checked_not_found" | "checked_found" | null
+          makerworld_url?: string | null
+          stl_url?: string | null
+          added_by?: string | null
+          // Novo campo adicionado
+          is_selling?: boolean | null
         }
         Relationships: []
       }
