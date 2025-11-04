@@ -44,9 +44,8 @@ interface MiningProduct {
   makerworld_url: string | null; 
   stl_url: string | null; 
   added_by: string | null;
-  is_selling: boolean | null; // Novo campo
+  is_selling: boolean | null;
   user_id: string;
-  profiles?: { full_name: string | null } | null;
 }
 
 // Mapas (sem alterações)
@@ -144,11 +143,11 @@ export default function MiningProducts() {
     try {
       const { data, error } = await supabase
         .from("mining_products")
-        .select("*, profiles ( full_name )")
+        .select("*")
         .order("created_at", { ascending: false });
       if (error) throw error;
       setProducts(data || []);
-      setFilteredProducts(data || []); // Inicializa produtos filtrados
+      setFilteredProducts(data || []);
     } catch (error: any) {
       toast({ title: "Erro ao carregar produtos", description: error.message, variant: "destructive", });
     } finally {
@@ -620,7 +619,7 @@ export default function MiningProducts() {
                                         {product.stl_url ? (
                                             <>
                                                 <span className="text-muted-foreground text-green-500 flex items-center gap-1"><Download className="h-3 w-3"/> STL:</span>
-                                                <Button asChild size="xs" variant="outline" className="gap-1 text-xs h-6 px-2">
+                                                <Button asChild size="sm" variant="outline" className="gap-1 text-xs h-6 px-2">
                                                     <a href={product.stl_url} download target="_blank" rel="noopener noreferrer">
                                                         Baixar
                                                     </a>
