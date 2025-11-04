@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Box, Package, Layers } from "lucide-react";
+import { Box, Package, Layers, Radio } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 
 interface DashboardStats {
   totalPieces: number;
@@ -23,6 +24,31 @@ export default function Dashboard() {
   useEffect(() => {
     fetchStats();
   }, []);
+
+  const togglePrintStatus = async (pieceId: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'live' ? 'pending' : 'live';
+    try {
+      const { error } = await supabase
+        .from("pieces")
+        .update({ print_status: newStatus } as any)
+        .eq("id", pieceId);
+
+      if (error) throw error;
+
+      toast({
+        title: newStatus === 'live' ? "Peça colocada no ar!" : "Peça retirada do ar",
+        description: newStatus === 'live' ? "A peça agora está disponível" : "A peça não está mais disponível",
+      });
+
+      fetchStats();
+    } catch (error: any) {
+      toast({
+        title: "Erro ao atualizar status",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
 
   const fetchStats = async () => {
     try {
@@ -160,12 +186,14 @@ export default function Dashboard() {
             <CardContent>
               <div className="space-y-2">
                 {stats.recentPieces.map((piece) => (
-                  <Link
+                  <div
                     key={piece.id}
-                    to={`/piece/${piece.id}`}
                     className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/30 transition-colors"
                   >
-                    <div className="flex items-center gap-3">
+                    <Link
+                      to={`/piece/${piece.id}`}
+                      className="flex items-center gap-3 flex-1"
+                    >
                       {piece.image_url ? (
                         <img
                           src={piece.image_url}
@@ -181,11 +209,25 @@ export default function Dashboard() {
                         <p className="font-medium">{piece.name}</p>
                         <p className="text-sm text-muted-foreground">{piece.material || "Sem material"}</p>
                       </div>
+                    </Link>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant={piece.print_status === 'live' ? 'default' : 'outline'}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          togglePrintStatus(piece.id, piece.print_status || 'pending');
+                        }}
+                        className="gap-2"
+                      >
+                        <Radio className="h-4 w-4" />
+                        {piece.print_status === 'live' ? 'No Ar' : 'Colocar no Ar'}
+                      </Button>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(piece.created_at).toLocaleDateString("pt-BR")}
+                      </span>
                     </div>
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(piece.created_at).toLocaleDateString("pt-BR")}
-                    </span>
-                  </Link>
+                  </div>
                 ))}
               </div>
             </CardContent>

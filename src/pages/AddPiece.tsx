@@ -52,6 +52,7 @@ export default function AddPiece() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [stlFile, setStlFile] = useState<File | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
   
   const [formData, setFormData] = useState<FormData>({
     name: "",
@@ -164,6 +165,7 @@ export default function AddPiece() {
       if (!user) throw new Error("Usuário não autenticado");
 
       let stlUrl = "";
+      let imageUrl = "";
 
       if (stlFile) {
         const stlPath = `${user.id}/${Date.now()}-${stlFile.name}`;
@@ -177,17 +179,29 @@ export default function AddPiece() {
         stlUrl = stlData.publicUrl;
       }
 
+      if (imageFile) {
+        const imagePath = `${user.id}/${Date.now()}-${imageFile.name}`;
+        const { error: imageError } = await supabase.storage
+          .from("piece-images")
+          .upload(imagePath, imageFile);
+
+        if (imageError) throw imageError;
+
+        const { data: imageData } = supabase.storage.from("piece-images").getPublicUrl(imagePath);
+        imageUrl = imageData.publicUrl;
+      }
+
       const { error: insertError } = await supabase.from("pieces").insert({
         user_id: user.id,
         name: formData.name,
         material: formData.material,
         cost: costs.custoUnitario,
         stl_url: stlUrl,
+        image_url: imageUrl,
         notes: `Peso: ${formData.pesoEstimadoG}g, Tempo: ${formData.tempoImpressaoHoras}h ${formData.tempoImpressaoMinutos}m, Markup: ${formData.markup}x`,
         width: null,
         height: null,
         depth: null,
-        image_url: null,
       });
 
       if (insertError) throw insertError;
@@ -282,10 +296,14 @@ export default function AddPiece() {
                 <Input id="pesoEstimadoG" type="number" step="0.1" value={formData.pesoEstimadoG} onChange={handleInputChange} placeholder="0" />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="stl">Arquivo STL (Opcional)</Label>
-              <Input id="stl" type="file" accept=".stl" onChange={(e) => setStlFile(e.target.files?.[0] || null)} />
-            </div>
+         <div className="space-y-2">
+            <Label htmlFor="stl">Arquivo STL (Opcional)</Label>
+            <Input id="stl" type="file" accept=".stl" onChange={(e) => setStlFile(e.target.files?.[0] || null)} />
+         </div>
+         <div className="space-y-2">
+            <Label htmlFor="image">Foto da Peça (Opcional)</Label>
+            <Input id="image" type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] || null)} />
+         </div>
           </CardContent>
         </Card>
         
