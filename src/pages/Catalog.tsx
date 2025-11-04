@@ -3,9 +3,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Box, Plus } from "lucide-react";
+import { Search, Box, Plus, Radio } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Piece {
   id: string;
@@ -14,12 +16,15 @@ interface Piece {
   material: string;
   image_url: string;
   created_at: string;
+  is_selling: boolean | null; // CORREÇÃO: Usando a coluna booleana correta
 }
 
 export default function Catalog() {
   const [pieces, setPieces] = useState<Piece[]>([]);
   const [filteredPieces, setFilteredPieces] = useState<Piece[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  // CORREÇÃO: O valor do filtro agora é string 'true' ou 'false'
+  const [filterStatus, setFilterStatus] = useState("all"); // 'all', 'true', 'false'
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
@@ -28,17 +33,26 @@ export default function Catalog() {
   }, []);
 
   useEffect(() => {
+    let filtered = [...pieces];
+
     if (searchTerm) {
-      const filtered = pieces.filter(
+      filtered = filtered.filter(
         (piece) =>
           piece.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
           piece.material?.toLowerCase().includes(searchTerm.toLowerCase())
       );
-      setFilteredPieces(filtered);
-    } else {
-      setFilteredPieces(pieces);
     }
-  }, [searchTerm, pieces]);
+
+    // CORREÇÃO: Lógica de filtro para booleano
+    if (filterStatus !== "all") {
+      const isSelling = filterStatus === 'true'; // Converte string 'true' para booleano true
+      filtered = filtered.filter(
+        (piece) => (piece.is_selling || false) === isSelling
+      );
+    }
+
+    setFilteredPieces(filtered);
+  }, [searchTerm, filterStatus, pieces]);
 
   const fetchPieces = async () => {
     try {
@@ -91,17 +105,38 @@ export default function Catalog() {
           </Button>
         </div>
 
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            type="text"
-            placeholder="Buscar por nome ou material..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
+        {/* Search & Filter */}
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Buscar por nome ou material..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <div className="w-full md:w-48">
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger>
+                <SelectValue placeholder="Filtrar por status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os Status</SelectItem>
+                {/* CORREÇÃO: Valor é 'true' (string) */}
+                <SelectItem value="true">
+                  <div className="flex items-center gap-2">
+                    <Radio className="h-4 w-4 text-green-500" /> No Ar (À Venda)
+                  </div>
+                </SelectItem>
+                {/* CORREÇÃO: Valor é 'false' (string) */}
+                <SelectItem value="false">Fora do Ar</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
+
 
         {/* Pieces Grid */}
         {filteredPieces.length === 0 ? (
@@ -110,8 +145,8 @@ export default function Catalog() {
               <Box className="h-16 w-16 text-muted-foreground mb-4" />
               <h3 className="text-xl font-semibold mb-2">Nenhuma peça encontrada</h3>
               <p className="text-muted-foreground mb-4">
-                {searchTerm
-                  ? "Tente buscar com outros termos"
+                {searchTerm || filterStatus !== 'all'
+                  ? "Tente ajustar sua busca ou filtros"
                   : "Comece adicionando sua primeira peça"}
               </p>
               <Button asChild>
@@ -123,7 +158,14 @@ export default function Catalog() {
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredPieces.map((piece) => (
               <Link key={piece.id} to={`/piece/${piece.id}`}>
-                <Card className="card-gradient border-border/50 hover:border-primary/50 transition-all hover:glow-primary overflow-hidden group">
+                <Card className="card-gradient border-border/50 hover:border-primary/50 transition-all hover:glow-primary overflow-hidden group relative">
+                  {/* CORREÇÃO: Lógica booleana para is_selling */}
+                  {piece.is_selling === true && (
+                    <Badge className="absolute top-4 right-4 z-10 bg-green-600 shadow-lg">
+                      No Ar
+                    </Badge>
+                  )}
+                  
                   {/* Image */}
                   <div className="aspect-video bg-muted/30 overflow-hidden">
                     {piece.image_url ? (
@@ -140,7 +182,7 @@ export default function Catalog() {
                   </div>
 
                   <CardHeader>
-                    <CardTitle className="line-clamp-1">{piece.name}</CardTitle>
+                    <CardTitle className="line-clamp-1 pr-16">{piece.name}</CardTitle>
                     <CardDescription className="line-clamp-2">
                       {piece.description || "Sem descrição"}
                     </CardDescription>

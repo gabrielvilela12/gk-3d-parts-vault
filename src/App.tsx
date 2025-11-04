@@ -76,6 +76,11 @@ function AppContent() {
             path="/add"
             element={user ? <AddPiece /> : <Navigate to="/auth" replace />}
           />
+          {/* ROTA DE EDIÇÃO ADICIONADA */}
+          <Route
+            path="/piece/:id/edit"
+            element={user ? <AddPiece isEditMode={true} /> : <Navigate to="/auth" replace />}
+          />
           <Route
             path="/mining"
             element={user ? <MiningProducts /> : <Navigate to="/auth" replace />}

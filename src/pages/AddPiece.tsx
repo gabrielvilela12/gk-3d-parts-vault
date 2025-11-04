@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Switch } from "@/components/ui/switch";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
-import { Save, DollarSign, Box, Timer, Bolt, TrendingDown, Settings, Percent, Package, ChevronDown } from "lucide-react";
+import { Save, DollarSign, Box, Timer, Bolt, TrendingDown, Settings, Percent, Package, ChevronDown, Edit } from "lucide-react";
 
 // Interface para os inputs do formulário
 interface FormData {
@@ -31,6 +31,7 @@ interface FormData {
   imposto: string;
   taxaPagamento: string;
   incluirImpostos: boolean;
+  notes: string; 
 }
 
 // Interface para os valores calculados
@@ -47,13 +48,36 @@ interface CalculatedCosts {
   lucroLiquido: number;
 }
 
-export default function AddPiece() {
+// Interface para as props do componente
+interface AddPieceProps {
+  isEditMode?: boolean;
+}
+
+// URLs para manter o estado dos arquivos existentes
+interface ExistingFiles {
+  stl_url: string | null;
+  image_url: string | null;
+}
+
+// Interface para os produtos minerados (para o autocomplete)
+interface MiningProduct {
+  id: string;
+  name: string;
+}
+
+export default function AddPiece({ isEditMode = false }: AddPieceProps) {
   const navigate = useNavigate();
+  const { id } = useParams(); 
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [stlFile, setStlFile] = useState<File | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [existingFiles, setExistingFiles] = useState<ExistingFiles>({ stl_url: null, image_url: null });
+  const [originalNotes, setOriginalNotes] = useState(""); 
   
+  // --- NOVO ESTADO PARA OS PRODUTOS MINERADOS ---
+  const [miningProducts, setMiningProducts] = useState<MiningProduct[]>([]);
+
   const [formData, setFormData] = useState<FormData>({
     name: "",
     quantidade: 1,
@@ -62,18 +86,19 @@ export default function AddPiece() {
     pesoEstimadoG: "",
     material: "PLA",
     custoKgFilamento: "",
-    potenciaImpressoraW: "",
-    custoKWh: "",
+    potenciaImpressoraW: "1300",
+    custoKWh: "0.5",
     custoFixoMes: "",
     unidadesMes: "",
-    valorImpressora: "",
-    vidaUtilHoras: "",
-    percentualFalhas: "",
+    valorImpressora: "5000",
+    vidaUtilHoras: "15000",
+    percentualFalhas: "2",
     custoAcessorios: "",
     markup: "",
     imposto: "",
     taxaPagamento: "",
     incluirImpostos: true,
+    notes: "",
   });
 
   const [costs, setCosts] = useState<CalculatedCosts>({
@@ -88,6 +113,75 @@ export default function AddPiece() {
     lucroBruto: 0,
     lucroLiquido: 0,
   });
+
+  const [tempoTotalMinutos, setTempoTotalMinutos] = useState(0);
+
+  // --- NOVO useEffect PARA BUSCAR PRODUTOS MINERADOS ---
+  useEffect(() => {
+    const fetchMiningProducts = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("mining_products")
+          .select("id, name")
+          .order("name", { ascending: true });
+        
+        if (error) throw error;
+        setMiningProducts(data || []);
+      } catch (error: any) {
+        console.error("Erro ao buscar produtos minerados:", error.message);
+      }
+    };
+    
+    fetchMiningProducts();
+  }, []);
+
+  // Busca dados da peça se estiver em modo de edição
+  useEffect(() => {
+    if (isEditMode && id) {
+      const fetchPiece = async () => {
+        setLoading(true);
+        try {
+          const { data, error } = await supabase
+            .from("pieces")
+            .select("*")
+            .eq("id", id)
+            .single();
+  
+          if (error) throw error;
+  
+          if (data) {
+            const totalMinutes = data.tempo_impressao_min || 0;
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+  
+            setFormData(prev => ({
+              ...prev, 
+              name: data.name || "",
+              material: data.material || "PLA",
+              pesoEstimadoG: data.peso_g?.toString() || "",
+              tempoImpressaoHoras: hours > 0 ? hours.toString() : "",
+              tempoImpressaoMinutos: minutes > 0 ? minutes.toString() : "",
+              notes: data.notes || "",
+            }));
+            
+            setOriginalNotes(data.notes || "");
+            setExistingFiles({ stl_url: data.stl_url, image_url: data.image_url });
+          }
+        } catch (error: any) {
+          toast({
+            title: "Erro ao carregar dados da peça",
+            description: error.message,
+            variant: "destructive",
+          });
+          navigate("/catalog");
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchPiece();
+    }
+  }, [isEditMode, id, toast, navigate]);
+
 
   useEffect(() => {
     const p = (value: string) => parseFloat(value) || 0;
@@ -111,6 +205,8 @@ export default function AddPiece() {
     const quantidade = p(String(formData.quantidade)) || 1;
 
     const tempoTotalHoras = horas + (minutos / 60);
+    setTempoTotalMinutos(tempoTotalHoras * 60); 
+    
     const custoMaterial = (peso / 1000) * custoKg;
     const custoEnergia = (potenciaW / 1000) * tempoTotalHoras * custoKWh;
     const custoFixoUnitario = unidades > 0 ? custoFixo / unidades : 0;
@@ -146,13 +242,19 @@ export default function AddPiece() {
     });
   }, [formData]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => { 
     const { id, value, type } = e.target;
+    // @ts-ignore
     setFormData(prev => ({
       ...prev,
       [id]: type === "number" ? value : value
     }));
   };
+  
+  const handleSwitchChange = (checked: boolean) => {
+    setFormData(prev => ({ ...prev, incluirImpostos: checked }));
+  };
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -164,17 +266,15 @@ export default function AddPiece() {
       } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não autenticado");
 
-      let stlUrl = "";
-      let imageUrl = "";
+      let stlUrl = existingFiles.stl_url; 
+      let imageUrl = existingFiles.image_url;
 
       if (stlFile) {
         const stlPath = `${user.id}/${Date.now()}-${stlFile.name}`;
         const { error: stlError } = await supabase.storage
           .from("stl-files")
           .upload(stlPath, stlFile);
-
         if (stlError) throw stlError;
-
         const { data: stlData } = supabase.storage.from("stl-files").getPublicUrl(stlPath);
         stlUrl = stlData.publicUrl;
       }
@@ -184,37 +284,61 @@ export default function AddPiece() {
         const { error: imageError } = await supabase.storage
           .from("piece-images")
           .upload(imagePath, imageFile);
-
         if (imageError) throw imageError;
-
         const { data: imageData } = supabase.storage.from("piece-images").getPublicUrl(imagePath);
         imageUrl = imageData.publicUrl;
       }
 
-      const { error: insertError } = await supabase.from("pieces").insert({
+      const pieceData = {
         user_id: user.id,
         name: formData.name,
         material: formData.material,
-        cost: costs.custoUnitario,
         stl_url: stlUrl,
         image_url: imageUrl,
-        notes: `Peso: ${formData.pesoEstimadoG}g, Tempo: ${formData.tempoImpressaoHoras}h ${formData.tempoImpressaoMinutos}m, Markup: ${formData.markup}x`,
-        width: null,
-        height: null,
-        depth: null,
-      });
+        notes: formData.notes,
+        cost: costs.custoUnitario,
+        peso_g: parseFloat(formData.pesoEstimadoG) || null,
+        tempo_impressao_min: tempoTotalMinutos || null,
+        custo_material: costs.custoMaterial || null,
+        custo_energia: costs.custoEnergia || null,
+        preco_venda: costs.precoConsumidor || null,
+        lucro_liquido: costs.lucroLiquido || null,
+      };
 
-      if (insertError) throw insertError;
+      if (isEditMode && id) {
+        const { error: updateError } = await supabase
+          .from("pieces")
+          .update(pieceData)
+          .eq("id", id);
+  
+        if (updateError) throw updateError;
+  
+        toast({
+          title: "Peça atualizada!",
+          description: "As alterações foram salvas com sucesso.",
+        });
+        navigate(`/piece/${id}`); 
 
-      toast({
-        title: "Peça cadastrada!",
-        description: "A peça foi adicionada ao catálogo com sucesso",
-      });
+      } else {
+        const { error: insertError } = await supabase.from("pieces").insert({
+          ...pieceData,
+          width: null,
+          height: null,
+          depth: null,
+        });
+  
+        if (insertError) throw insertError;
+  
+        toast({
+          title: "Peça cadastrada!",
+          description: "A peça foi adicionada ao catálogo com sucesso",
+        });
+        navigate("/catalog");
+      }
 
-      navigate("/catalog");
     } catch (error: any) {
       toast({
-        title: "Erro ao cadastrar peça",
+        title: isEditMode ? "Erro ao atualizar peça" : "Erro ao cadastrar peça",
         description: error.message,
         variant: "destructive",
       });
@@ -229,10 +353,11 @@ export default function AddPiece() {
         
         {/* Card Resumo de Preços */}
         <Card className="card-gradient border-border/50 sticky top-16 z-40 backdrop-blur-lg">
-          <CardHeader><CardTitle>Resumo de Preços</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle>{isEditMode ? "Recalcular Preços" : "Resumo de Preços"}</CardTitle>
+          </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
             
-            {/* Custo Unitário Detalhado */}
             <Collapsible asChild>
               <div className="p-4 bg-muted/30 rounded-lg">
                 <CollapsibleTrigger className="w-full text-left flex flex-col items-start">
@@ -252,7 +377,6 @@ export default function AddPiece() {
               </div>
             </Collapsible>
 
-            {/* Preço Consumidor Detalhado */}
             <Collapsible asChild>
               <div className="p-4 bg-muted/30 rounded-lg">
                 <CollapsibleTrigger className="w-full text-left flex flex-col items-start">
@@ -273,11 +397,30 @@ export default function AddPiece() {
 
         {/* Card Modelo */}
         <Card className="card-gradient border-border/50">
-          <CardHeader><CardTitle className="flex items-center gap-2"><Box className="h-5 w-5 text-primary" /> Modelo</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              {isEditMode ? <Edit className="h-5 w-5 text-primary" /> : <Box className="h-5 w-5 text-primary" />}
+              {isEditMode ? "Editar Modelo" : "Modelo"}
+            </CardTitle>
+          </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="name">Nome do STL *</Label>
-              <Input id="name" value={formData.name} onChange={handleInputChange} required />
+              {/* --- INPUT MODIFICADO COM DATALIST --- */}
+              <Input 
+                id="name" 
+                value={formData.name} 
+                onChange={handleInputChange} 
+                required 
+                list="mining-products-list" 
+                placeholder="Digite ou selecione um produto minerado..."
+              />
+              <datalist id="mining-products-list">
+                {miningProducts.map((product) => (
+                  <option key={product.id} value={product.name} />
+                ))}
+              </datalist>
+              {/* --- FIM DA MODIFICAÇÃO --- */}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
@@ -296,20 +439,40 @@ export default function AddPiece() {
                 <Input id="pesoEstimadoG" type="number" step="0.1" value={formData.pesoEstimadoG} onChange={handleInputChange} placeholder="0" />
               </div>
             </div>
-         <div className="space-y-2">
-            <Label htmlFor="stl">Arquivo STL (Opcional)</Label>
-            <Input id="stl" type="file" accept=".stl" onChange={(e) => setStlFile(e.target.files?.[0] || null)} />
-         </div>
-         <div className="space-y-2">
-            <Label htmlFor="image">Foto da Peça (Opcional)</Label>
-            <Input id="image" type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] || null)} />
-         </div>
+            <div className="space-y-2">
+              <Label htmlFor="stl">Arquivo STL (Opcional)</Label>
+              <Input id="stl" type="file" accept=".stl" onChange={(e) => setStlFile(e.target.files?.[0] || null)} />
+              {isEditMode && existingFiles.stl_url && !stlFile && (
+                <p className="text-xs text-muted-foreground">Arquivo atual: <a href={existingFiles.stl_url} target="_blank" rel="noopener noreferrer" className="text-primary underline">Ver STL</a></p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="image">Foto da Peça (Opcional)</Label>
+              <Input id="image" type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] || null)} />
+              {isEditMode && existingFiles.image_url && !imageFile && (
+                <img src={existingFiles.image_url} alt="Preview" className="w-20 h-20 rounded-md object-cover mt-2" />
+              )}
+            </div>
+             <div className="space-y-2">
+              <Label htmlFor="notes">Observações Técnicas</Label>
+              <Input id="notes" value={formData.notes} onChange={handleInputChange} placeholder="Ex: Markup: 1.5x, Imposto: 5%" />
+              {isEditMode && !formData.notes && originalNotes && (
+                 <p className="text-xs text-muted-foreground">Observação antiga: "{originalNotes}"</p>
+              )}
+            </div>
           </CardContent>
         </Card>
         
         {/* Card Custos */}
         <Card className="card-gradient border-border/50">
-          <CardHeader><CardTitle className="flex items-center gap-2"><DollarSign className="h-5 w-5 text-primary" /> Custos</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><DollarSign className="h-5 w-5 text-primary" /> Custos</CardTitle>
+            {isEditMode && (
+              <CardDescription>
+                Insira os dados de custo para recalcular a precificação.
+              </CardDescription>
+            )}
+          </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -369,7 +532,14 @@ export default function AddPiece() {
 
         {/* Card Configuração de Preços */}
         <Card className="card-gradient border-border/50">
-          <CardHeader><CardTitle className="flex items-center gap-2"><Settings className="h-5 w-5 text-primary" /> Configuração de Preços</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Settings className="h-5 w-5 text-primary" /> Configuração de Preços</CardTitle>
+             {isEditMode && (
+              <CardDescription>
+                Insira a margem e taxas para recalcular o preço final.
+              </CardDescription>
+            )}
+          </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
@@ -386,7 +556,7 @@ export default function AddPiece() {
               </div>
             </div>
             <div className="flex items-center space-x-2 pt-2">
-              <Switch id="incluirImpostos" checked={formData.incluirImpostos} onCheckedChange={(checked) => setFormData(prev => ({...prev, incluirImpostos: checked}))} />
+              <Switch id="incluirImpostos" checked={formData.incluirImpostos} onCheckedChange={handleSwitchChange} />
               <Label htmlFor="incluirImpostos">Incluir imposto e taxa de pagamento no preço final</Label>
             </div>
           </CardContent>
@@ -395,7 +565,7 @@ export default function AddPiece() {
         {/* Botão Salvar */}
         <Button type="submit" className="w-full gap-2" disabled={loading}>
           <Save className="h-4 w-4" />
-          {loading ? "Salvando..." : "Salvar no GK"}
+          {loading ? "Salvando..." : (isEditMode ? "Salvar Alterações" : "Salvar no GK")}
         </Button>
       </form>
     </div>

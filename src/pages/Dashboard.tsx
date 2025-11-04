@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Box, Package, Layers, Radio } from "lucide-react";
+import { Box, Package, Layers, Radio, DollarSign } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 interface DashboardStats {
   totalPieces: number;
   materialCounts: { [key: string]: number };
-  recentPieces: any[];
+  recentPieces: any[]; // 'any' é mantido para simplicidade, mas agora inclui 'is_selling'
+  totalCost: number;
 }
 
 export default function Dashboard() {
@@ -17,6 +18,7 @@ export default function Dashboard() {
     totalPieces: 0,
     materialCounts: {},
     recentPieces: [],
+    totalCost: 0,
   });
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -25,19 +27,21 @@ export default function Dashboard() {
     fetchStats();
   }, []);
 
-  const togglePrintStatus = async (pieceId: string, currentStatus: string) => {
-    const newStatus = currentStatus === 'live' ? 'pending' : 'live';
+  // CORREÇÃO: currentStatus agora é um booleano
+  const toggleSaleStatus = async (pieceId: string, currentStatus: boolean) => {
+    const newStatus = !currentStatus;
     try {
       const { error } = await supabase
         .from("pieces")
-        .update({ print_status: newStatus } as any)
+        // CORREÇÃO: Atualiza a coluna 'is_selling'
+        .update({ is_selling: newStatus })
         .eq("id", pieceId);
 
       if (error) throw error;
 
       toast({
-        title: newStatus === 'live' ? "Peça colocada no ar!" : "Peça retirada do ar",
-        description: newStatus === 'live' ? "A peça agora está disponível" : "A peça não está mais disponível",
+        title: newStatus ? "Peça colocada no ar!" : "Peça retirada do ar",
+        description: newStatus ? "A peça agora está disponível" : "A peça não está mais disponível",
       });
 
       fetchStats();
@@ -59,18 +63,20 @@ export default function Dashboard() {
 
       if (error) throw error;
 
-      // Calculate stats
       const materialCounts: { [key: string]: number } = {};
+      let totalCost = 0;
       pieces?.forEach((piece) => {
         if (piece.material) {
           materialCounts[piece.material] = (materialCounts[piece.material] || 0) + 1;
         }
+        totalCost += piece.cost || 0;
       });
 
       setStats({
         totalPieces: pieces?.length || 0,
         materialCounts,
         recentPieces: pieces?.slice(0, 5) || [],
+        totalCost,
       });
     } catch (error: any) {
       toast({
@@ -107,7 +113,7 @@ export default function Dashboard() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid md:grid-cols-3 gap-6">
+        <div className="grid md:grid-cols-4 gap-6">
           <Card className="card-gradient border-border/50 glow-primary">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total de Peças</CardTitle>
@@ -117,6 +123,19 @@ export default function Dashboard() {
               <div className="text-3xl font-bold">{stats.totalPieces}</div>
               <p className="text-xs text-muted-foreground mt-1">
                 {stats.totalPieces === 1 ? "peça cadastrada" : "peças cadastradas"}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="card-gradient border-border/50">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Custo Total do Inventário</CardTitle>
+              <DollarSign className="h-4 w-4 text-primary" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">R$ {stats.totalCost.toFixed(2)}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                soma do custo de todas as peças
               </p>
             </CardContent>
           </Card>
@@ -207,21 +226,34 @@ export default function Dashboard() {
                       )}
                       <div>
                         <p className="font-medium">{piece.name}</p>
-                        <p className="text-sm text-muted-foreground">{piece.material || "Sem material"}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {piece.material || "Sem material"}
+                          {piece.cost > 0 && (
+                            <>
+                              {" · "}
+                              <span className="text-primary font-medium">
+                                R$ {piece.cost.toFixed(2)}
+                              </span>
+                            </>
+                          )}
+                        </p>
                       </div>
                     </Link>
                     <div className="flex items-center gap-2">
                       <Button
                         size="sm"
-                        variant={piece.print_status === 'live' ? 'default' : 'outline'}
+                        // CORREÇÃO: Lógica booleana para is_selling
+                        variant={piece.is_selling ? 'default' : 'outline'}
                         onClick={(e) => {
                           e.preventDefault();
-                          togglePrintStatus(piece.id, piece.print_status || 'pending');
+                          // CORREÇÃO: Passa o booleano 'is_selling'
+                          toggleSaleStatus(piece.id, piece.is_selling || false);
                         }}
                         className="gap-2"
                       >
                         <Radio className="h-4 w-4" />
-                        {piece.print_status === 'live' ? 'No Ar' : 'Colocar no Ar'}
+                        {/* CORREÇÃO: Lógica booleana para is_selling */}
+                        {piece.is_selling ? 'No Ar' : 'Colocar no Ar'}
                       </Button>
                       <span className="text-xs text-muted-foreground">
                         {new Date(piece.created_at).toLocaleDateString("pt-BR")}
