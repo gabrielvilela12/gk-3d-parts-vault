@@ -120,7 +120,7 @@ export default function PieceDetail() {
         .single();
 
       if (error) throw error;
-      setPiece(data);
+      setPiece(data as any);
     } catch (error: any) {
       toast({
         title: "Erro ao carregar peça",
@@ -139,7 +139,7 @@ export default function PieceDetail() {
     try {
       const { error } = await supabase
         .from("pieces")
-        .update({ is_selling: newStatus })
+        .update({ is_selling: newStatus } as any)
         .eq("id", piece.id);
 
       if (error) throw error;

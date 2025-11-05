@@ -62,8 +62,8 @@ export default function Catalog() {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setPieces(data || []);
-      setFilteredPieces(data || []);
+      setPieces((data as any) || []);
+      setFilteredPieces((data as any) || []);
     } catch (error: any) {
       toast({
         title: "Erro ao carregar peças",

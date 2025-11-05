@@ -31,7 +31,8 @@ interface FormData {
   imposto: string;
   taxaPagamento: string;
   incluirImpostos: boolean;
-  notes: string; 
+  notes: string;
+  makerworldUrl: string;
 }
 
 // Interface para os valores calculados
@@ -99,6 +100,7 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
     taxaPagamento: "",
     incluirImpostos: true,
     notes: "",
+    makerworldUrl: "",
   });
 
   const [costs, setCosts] = useState<CalculatedCosts>({
@@ -150,7 +152,7 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
           if (error) throw error;
   
           if (data) {
-            const totalMinutes = data.tempo_impressao_min || 0;
+            const totalMinutes = (data as any).tempo_impressao_min || 0;
             const hours = Math.floor(totalMinutes / 60);
             const minutes = totalMinutes % 60;
   
@@ -158,10 +160,11 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
               ...prev, 
               name: data.name || "",
               material: data.material || "PLA",
-              pesoEstimadoG: data.peso_g?.toString() || "",
+              pesoEstimadoG: (data as any).peso_g?.toString() || "",
               tempoImpressaoHoras: hours > 0 ? hours.toString() : "",
               tempoImpressaoMinutos: minutes > 0 ? minutes.toString() : "",
               notes: data.notes || "",
+              makerworldUrl: (data as any).makerworld_url || "",
             }));
             
             setOriginalNotes(data.notes || "");
@@ -303,7 +306,8 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
         custo_energia: costs.custoEnergia || null,
         preco_venda: costs.precoConsumidor || null,
         lucro_liquido: costs.lucroLiquido || null,
-      };
+        makerworld_url: formData.makerworldUrl || null,
+      } as any;
 
       if (isEditMode && id) {
         const { error: updateError } = await supabase
@@ -452,6 +456,10 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
               {isEditMode && existingFiles.image_url && !imageFile && (
                 <img src={existingFiles.image_url} alt="Preview" className="w-20 h-20 rounded-md object-cover mt-2" />
               )}
+            </div>
+             <div className="space-y-2">
+              <Label htmlFor="makerworldUrl">Link do Makerworld (Opcional)</Label>
+              <Input id="makerworldUrl" type="url" value={formData.makerworldUrl} onChange={handleInputChange} placeholder="https://makerworld.com/..." />
             </div>
              <div className="space-y-2">
               <Label htmlFor="notes">Observações Técnicas</Label>

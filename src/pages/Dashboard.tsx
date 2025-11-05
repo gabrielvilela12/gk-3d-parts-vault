@@ -34,7 +34,7 @@ export default function Dashboard() {
       const { error } = await supabase
         .from("pieces")
         // CORREÇÃO: Atualiza a coluna 'is_selling'
-        .update({ is_selling: newStatus })
+        .update({ is_selling: newStatus } as any)
         .eq("id", pieceId);
 
       if (error) throw error;
@@ -65,7 +65,7 @@ export default function Dashboard() {
 
       const materialCounts: { [key: string]: number } = {};
       let totalCost = 0;
-      pieces?.forEach((piece) => {
+      (pieces as any)?.forEach((piece: any) => {
         if (piece.material) {
           materialCounts[piece.material] = (materialCounts[piece.material] || 0) + 1;
         }
@@ -239,21 +239,21 @@ export default function Dashboard() {
                         </p>
                       </div>
                     </Link>
-                    <div className="flex items-center gap-2">
+                     <div className="flex items-center gap-2">
                       <Button
                         size="sm"
                         // CORREÇÃO: Lógica booleana para is_selling
-                        variant={piece.is_selling ? 'default' : 'outline'}
+                        variant={(piece as any).is_selling ? 'default' : 'outline'}
                         onClick={(e) => {
                           e.preventDefault();
                           // CORREÇÃO: Passa o booleano 'is_selling'
-                          toggleSaleStatus(piece.id, piece.is_selling || false);
+                          toggleSaleStatus(piece.id, (piece as any).is_selling || false);
                         }}
                         className="gap-2"
                       >
                         <Radio className="h-4 w-4" />
                         {/* CORREÇÃO: Lógica booleana para is_selling */}
-                        {piece.is_selling ? 'No Ar' : 'Colocar no Ar'}
+                        {(piece as any).is_selling ? 'No Ar' : 'Colocar no Ar'}
                       </Button>
                       <span className="text-xs text-muted-foreground">
                         {new Date(piece.created_at).toLocaleDateString("pt-BR")}
