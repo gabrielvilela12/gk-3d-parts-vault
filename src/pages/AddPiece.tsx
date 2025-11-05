@@ -18,6 +18,7 @@ interface FormData {
   tempoImpressaoMinutos: string;
   pesoEstimadoG: string;
   material: string;
+  category: string;
   custoKgFilamento: string;
   potenciaImpressoraW: string;
   custoKWh: string;
@@ -86,6 +87,7 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
     tempoImpressaoMinutos: "",
     pesoEstimadoG: "",
     material: "PLA",
+    category: "",
     custoKgFilamento: "",
     potenciaImpressoraW: "1300",
     custoKWh: "0.5",
@@ -156,15 +158,37 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
             const hours = Math.floor(totalMinutes / 60);
             const minutes = totalMinutes % 60;
   
+            // Extrair valores das notes se existirem
+            let extractedMarkup = "";
+            let extractedImposto = "";
+            let extractedTaxa = "";
+            if (data.notes) {
+              const markupMatch = data.notes.match(/Markup:\s*([0-9.]+)/i);
+              const impostoMatch = data.notes.match(/Imposto:\s*([0-9.]+)/i);
+              const taxaMatch = data.notes.match(/Taxa:\s*([0-9.]+)/i);
+              
+              if (markupMatch) extractedMarkup = markupMatch[1];
+              if (impostoMatch) extractedImposto = impostoMatch[1];
+              if (taxaMatch) extractedTaxa = taxaMatch[1];
+            }
+
             setFormData(prev => ({
               ...prev, 
               name: data.name || "",
               material: data.material || "PLA",
+              category: (data as any).category || "",
               pesoEstimadoG: (data as any).peso_g?.toString() || "",
               tempoImpressaoHoras: hours > 0 ? hours.toString() : "",
               tempoImpressaoMinutos: minutes > 0 ? minutes.toString() : "",
               notes: data.notes || "",
               makerworldUrl: (data as any).makerworld_url || "",
+              custoKgFilamento: "",
+              custoFixoMes: "",
+              unidadesMes: "",
+              custoAcessorios: (data as any).custo_acessorios?.toString() || "",
+              markup: extractedMarkup,
+              imposto: extractedImposto,
+              taxaPagamento: extractedTaxa,
             }));
             
             setOriginalNotes(data.notes || "");
@@ -296,6 +320,7 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
         user_id: user.id,
         name: formData.name,
         material: formData.material,
+        category: formData.category || null,
         stl_url: stlUrl,
         image_url: imageUrl,
         notes: formData.notes,
@@ -307,6 +332,7 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
         preco_venda: costs.precoConsumidor || null,
         lucro_liquido: costs.lucroLiquido || null,
         makerworld_url: formData.makerworldUrl || null,
+        custo_acessorios: costs.custoAcessorios || null,
       } as any;
 
       if (isEditMode && id) {
@@ -426,11 +452,34 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
               </datalist>
               {/* --- FIM DA MODIFICAÇÃO --- */}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="category">Categoria</Label>
+                <Input 
+                  id="category" 
+                  value={formData.category} 
+                  onChange={handleInputChange} 
+                  placeholder="Ex: Decoração, Utilidades, Ferramentas..." 
+                  list="category-suggestions"
+                />
+                <datalist id="category-suggestions">
+                  <option value="Decoração" />
+                  <option value="Utilidades" />
+                  <option value="Ferramentas" />
+                  <option value="Brinquedos" />
+                  <option value="Protótipos" />
+                  <option value="Peças de Reposição" />
+                  <option value="Arte" />
+                  <option value="Organização" />
+                  <option value="Outros" />
+                </datalist>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="quantidade">Quantidade</Label>
                 <Input id="quantidade" type="number" value={formData.quantidade} onChange={handleInputChange} min="1" step="1" />
               </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Tempo de Impressão</Label>
                 <div className="flex gap-2">

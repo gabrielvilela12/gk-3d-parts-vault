@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 interface DashboardStats {
   totalPieces: number;
   materialCounts: { [key: string]: number };
-  recentPieces: any[]; // 'any' é mantido para simplicidade, mas agora inclui 'is_selling'
+  categoryCounts: { [key: string]: number };
+  recentPieces: any[];
   totalCost: number;
 }
 
@@ -17,6 +18,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats>({
     totalPieces: 0,
     materialCounts: {},
+    categoryCounts: {},
     recentPieces: [],
     totalCost: 0,
   });
@@ -64,10 +66,14 @@ export default function Dashboard() {
       if (error) throw error;
 
       const materialCounts: { [key: string]: number } = {};
+      const categoryCounts: { [key: string]: number } = {};
       let totalCost = 0;
       (pieces as any)?.forEach((piece: any) => {
         if (piece.material) {
           materialCounts[piece.material] = (materialCounts[piece.material] || 0) + 1;
+        }
+        if (piece.category) {
+          categoryCounts[piece.category] = (categoryCounts[piece.category] || 0) + 1;
         }
         totalCost += piece.cost || 0;
       });
@@ -75,6 +81,7 @@ export default function Dashboard() {
       setStats({
         totalPieces: pieces?.length || 0,
         materialCounts,
+        categoryCounts,
         recentPieces: pieces?.slice(0, 5) || [],
         totalCost,
       });
@@ -90,6 +97,10 @@ export default function Dashboard() {
   };
 
   const topMaterials = Object.entries(stats.materialCounts)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 3);
+
+  const topCategories = Object.entries(stats.categoryCounts)
     .sort(([, a], [, b]) => b - a)
     .slice(0, 3);
 
@@ -166,34 +177,65 @@ export default function Dashboard() {
         </div>
 
         {/* Material Usage */}
-        {topMaterials.length > 0 && (
-          <Card className="card-gradient border-border/50">
-            <CardHeader>
-              <CardTitle>Materiais Mais Usados</CardTitle>
-              <CardDescription>Top 3 materiais do seu catálogo</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {topMaterials.map(([material, count]) => (
-                  <div key={material}>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium">{material}</span>
-                      <span className="text-sm text-muted-foreground">
-                        {count} {count === 1 ? "peça" : "peças"}
-                      </span>
+        <div className="grid md:grid-cols-2 gap-6">
+          {topMaterials.length > 0 && (
+            <Card className="card-gradient border-border/50">
+              <CardHeader>
+                <CardTitle>Materiais Mais Usados</CardTitle>
+                <CardDescription>Top 3 materiais do seu catálogo</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {topMaterials.map(([material, count]) => (
+                    <div key={material}>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium">{material}</span>
+                        <span className="text-sm text-muted-foreground">
+                          {count} {count === 1 ? "peça" : "peças"}
+                        </span>
+                      </div>
+                      <div className="h-2 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-primary transition-all"
+                          style={{ width: `${(count / stats.totalPieces) * 100}%` }}
+                        />
+                      </div>
                     </div>
-                    <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-primary transition-all"
-                        style={{ width: `${(count / stats.totalPieces) * 100}%` }}
-                      />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {topCategories.length > 0 && (
+            <Card className="card-gradient border-border/50">
+              <CardHeader>
+                <CardTitle>Categorias Mais Populares</CardTitle>
+                <CardDescription>Top 3 categorias do seu catálogo</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {topCategories.map(([category, count]) => (
+                    <div key={category}>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium">{category}</span>
+                        <span className="text-sm text-muted-foreground">
+                          {count} {count === 1 ? "peça" : "peças"}
+                        </span>
+                      </div>
+                      <div className="h-2 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-primary to-primary/60 transition-all"
+                          style={{ width: `${(count / stats.totalPieces) * 100}%` }}
+                        />
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
 
         {/* Recent Pieces */}
         {stats.recentPieces.length > 0 && (

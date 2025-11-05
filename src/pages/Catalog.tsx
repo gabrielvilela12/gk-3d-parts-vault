@@ -14,19 +14,21 @@ interface Piece {
   name: string;
   description: string;
   material: string;
+  category: string | null;
   image_url: string;
   created_at: string;
-  is_selling: boolean | null; // CORREÇÃO: Usando a coluna booleana correta
+  is_selling: boolean | null;
 }
 
 export default function Catalog() {
   const [pieces, setPieces] = useState<Piece[]>([]);
   const [filteredPieces, setFilteredPieces] = useState<Piece[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  // CORREÇÃO: O valor do filtro agora é string 'true' ou 'false'
-  const [filterStatus, setFilterStatus] = useState("all"); // 'all', 'true', 'false'
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterCategory, setFilterCategory] = useState("all");
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const [categories, setCategories] = useState<string[]>([]);
 
   useEffect(() => {
     fetchPieces();
@@ -39,20 +41,26 @@ export default function Catalog() {
       filtered = filtered.filter(
         (piece) =>
           piece.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          piece.material?.toLowerCase().includes(searchTerm.toLowerCase())
+          piece.material?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          piece.category?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
-    // CORREÇÃO: Lógica de filtro para booleano
     if (filterStatus !== "all") {
-      const isSelling = filterStatus === 'true'; // Converte string 'true' para booleano true
+      const isSelling = filterStatus === 'true';
       filtered = filtered.filter(
         (piece) => (piece.is_selling || false) === isSelling
       );
     }
 
+    if (filterCategory !== "all") {
+      filtered = filtered.filter(
+        (piece) => piece.category === filterCategory
+      );
+    }
+
     setFilteredPieces(filtered);
-  }, [searchTerm, filterStatus, pieces]);
+  }, [searchTerm, filterStatus, filterCategory, pieces]);
 
   const fetchPieces = async () => {
     try {
@@ -64,6 +72,10 @@ export default function Catalog() {
       if (error) throw error;
       setPieces((data as any) || []);
       setFilteredPieces((data as any) || []);
+      
+      // Extrair categorias únicas
+      const uniqueCategories = [...new Set((data as any)?.map((p: any) => p.category).filter(Boolean))] as string[];
+      setCategories(uniqueCategories);
     } catch (error: any) {
       toast({
         title: "Erro ao carregar peças",
@@ -111,26 +123,39 @@ export default function Catalog() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               type="text"
-              placeholder="Buscar por nome ou material..."
+              placeholder="Buscar por nome, material ou categoria..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
             />
           </div>
           <div className="w-full md:w-48">
+            <Select value={filterCategory} onValueChange={setFilterCategory}>
+              <SelectTrigger>
+                <SelectValue placeholder="Categoria" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas Categorias</SelectItem>
+                {categories.map((category) => (
+                  <SelectItem key={category} value={category}>
+                    {category}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="w-full md:w-48">
             <Select value={filterStatus} onValueChange={setFilterStatus}>
               <SelectTrigger>
-                <SelectValue placeholder="Filtrar por status" />
+                <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os Status</SelectItem>
-                {/* CORREÇÃO: Valor é 'true' (string) */}
                 <SelectItem value="true">
                   <div className="flex items-center gap-2">
-                    <Radio className="h-4 w-4 text-green-500" /> No Ar (À Venda)
+                    <Radio className="h-4 w-4 text-green-500" /> No Ar
                   </div>
                 </SelectItem>
-                {/* CORREÇÃO: Valor é 'false' (string) */}
                 <SelectItem value="false">Fora do Ar</SelectItem>
               </SelectContent>
             </Select>
@@ -189,11 +214,19 @@ export default function Catalog() {
                   </CardHeader>
 
                   <CardContent>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Material:</span>
-                      <span className="font-medium text-primary">
-                        {piece.material || "Não especificado"}
-                      </span>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Material:</span>
+                        <span className="font-medium text-primary">
+                          {piece.material || "Não especificado"}
+                        </span>
+                      </div>
+                      {piece.category && (
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Categoria:</span>
+                          <Badge variant="outline">{piece.category}</Badge>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

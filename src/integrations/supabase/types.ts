@@ -1,4 +1,3 @@
-// src/integrations/supabase/types.ts
 export type Json =
   | string
   | number
@@ -54,116 +53,205 @@ export type Database = {
       mining_products: {
         Row: {
           acquisition_date: string
+          added_by: string | null
           cost: number | null
           created_at: string
           description: string | null
           id: string
+          is_selling: boolean | null
+          makerworld_checked: string | null
+          makerworld_status: string | null
+          makerworld_url: string | null
           name: string
           notes: string | null
           quantity: number
+          source_url: string | null
+          stl_url: string | null
           unit: string | null
           updated_at: string
           user_id: string
-          // Campos que parecem estar faltando na sua 'types.ts' original, mas estão em 'MiningProducts.tsx'
-          source_url: string | null
-          makerworld_checked: "pending" | "checked_not_found" | "checked_found" | null
-          makerworld_url: string | null
-          stl_url: string | null
-          added_by: string | null
-          // Novo campo adicionado
-          is_selling: boolean | null
         }
         Insert: {
           acquisition_date?: string
+          added_by?: string | null
           cost?: number | null
           created_at?: string
           description?: string | null
           id?: string
+          is_selling?: boolean | null
+          makerworld_checked?: string | null
+          makerworld_status?: string | null
+          makerworld_url?: string | null
           name: string
           notes?: string | null
           quantity?: number
+          source_url?: string | null
+          stl_url?: string | null
           unit?: string | null
           updated_at?: string
           user_id: string
-          // Campos que parecem estar faltando na sua 'types.ts' original
-          source_url?: string | null
-          makerworld_checked?: "pending" | "checked_not_found" | "checked_found" | null
-          makerworld_url?: string | null
-          stl_url?: string | null
-          added_by?: string | null
-          // Novo campo adicionado
-          is_selling?: boolean | null
         }
         Update: {
           acquisition_date?: string
+          added_by?: string | null
           cost?: number | null
           created_at?: string
           description?: string | null
           id?: string
+          is_selling?: boolean | null
+          makerworld_checked?: string | null
+          makerworld_status?: string | null
+          makerworld_url?: string | null
           name?: string
           notes?: string | null
           quantity?: number
+          source_url?: string | null
+          stl_url?: string | null
           unit?: string | null
           updated_at?: string
           user_id?: string
-          // Campos que parecem estar faltando na sua 'types.ts' original
-          source_url?: string | null
-          makerworld_checked?: "pending" | "checked_not_found" | "checked_found" | null
-          makerworld_url?: string | null
-          stl_url?: string | null
-          added_by?: string | null
-          // Novo campo adicionado
-          is_selling?: boolean | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "mining_products_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pieces: {
         Row: {
+          category: string | null
           cost: number | null
           created_at: string | null
+          custo_energia: number | null
+          custo_material: number | null
           depth: number | null
           description: string | null
           height: number | null
           id: string
           image_url: string | null
+          is_selling: boolean | null
+          lucro_liquido: number | null
           material: string | null
           name: string
           notes: string | null
+          peso_g: number | null
+          preco_venda: number | null
+          print_status: string | null
           stl_url: string | null
+          tempo_impressao_min: number | null
           user_id: string
           width: number | null
         }
         Insert: {
+          category?: string | null
           cost?: number | null
           created_at?: string | null
+          custo_energia?: number | null
+          custo_material?: number | null
           depth?: number | null
           description?: string | null
           height?: number | null
           id?: string
           image_url?: string | null
+          is_selling?: boolean | null
+          lucro_liquido?: number | null
           material?: string | null
           name: string
           notes?: string | null
+          peso_g?: number | null
+          preco_venda?: number | null
+          print_status?: string | null
           stl_url?: string | null
+          tempo_impressao_min?: number | null
           user_id: string
           width?: number | null
         }
         Update: {
+          category?: string | null
           cost?: number | null
           created_at?: string | null
+          custo_energia?: number | null
+          custo_material?: number | null
           depth?: number | null
           description?: string | null
           height?: number | null
           id?: string
           image_url?: string | null
+          is_selling?: boolean | null
+          lucro_liquido?: number | null
           material?: string | null
           name?: string
           notes?: string | null
+          peso_g?: number | null
+          preco_venda?: number | null
+          print_status?: string | null
           stl_url?: string | null
+          tempo_impressao_min?: number | null
           user_id?: string
           width?: number | null
         }
         Relationships: []
+      }
+      print_history: {
+        Row: {
+          created_at: string | null
+          duration_minutes: number | null
+          id: string
+          material_amount_used: number | null
+          material_id: string | null
+          notes: string | null
+          piece_id: string
+          printed_at: string | null
+          printer_used: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          duration_minutes?: number | null
+          id?: string
+          material_amount_used?: number | null
+          material_id?: string | null
+          notes?: string | null
+          piece_id: string
+          printed_at?: string | null
+          printer_used?: string | null
+          status: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          duration_minutes?: number | null
+          id?: string
+          material_amount_used?: number | null
+          material_id?: string | null
+          notes?: string | null
+          piece_id?: string
+          printed_at?: string | null
+          printer_used?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "print_history_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "mining_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "print_history_piece_id_fkey"
+            columns: ["piece_id"]
+            isOneToOne: false
+            referencedRelation: "pieces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {

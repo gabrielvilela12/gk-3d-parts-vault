@@ -146,8 +146,8 @@ export default function MiningProducts() {
         .select("*")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      setProducts(data || []);
-      setFilteredProducts(data || []);
+      setProducts((data as any) || []);
+      setFilteredProducts((data as any) || []);
     } catch (error: any) {
       toast({ title: "Erro ao carregar produtos", description: error.message, variant: "destructive", });
     } finally {
