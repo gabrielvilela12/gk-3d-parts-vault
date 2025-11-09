@@ -32,6 +32,8 @@ interface FormData {
   imposto: string;
   taxaPagamento: string;
   incluirImpostos: boolean;
+  modoShopee: boolean;
+  freteGratisShopee: boolean;
   notes: string;
   makerworldUrl: string;
 }
@@ -101,6 +103,8 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
     imposto: "",
     taxaPagamento: "15",
     incluirImpostos: true,
+    modoShopee: false,
+    freteGratisShopee: false,
     notes: "",
     makerworldUrl: "",
   });
@@ -230,6 +234,8 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
     const taxa = p(formData.taxaPagamento);
     const incluirImpostos = formData.incluirImpostos;
     const quantidade = p(String(formData.quantidade)) || 1;
+    const modoShopee = formData.modoShopee;
+    const freteGratisShopee = formData.freteGratisShopee;
 
     const tempoTotalHoras = horas + (minutos / 60);
     setTempoTotalMinutos(tempoTotalHoras * 60); 
@@ -245,15 +251,56 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
 
     const precoBase = (custoUnitario * markup) * quantidade;
     let precoConsumidor = precoBase;
-    if (incluirImpostos && (imposto > 0 || taxa > 0)) {
-      const divisor = 1 - (imposto / 100) - (taxa / 100);
-      precoConsumidor = divisor > 0 ? precoBase / divisor : precoBase;
+    let lucroLiquido = 0;
+
+    if (modoShopee) {
+      // Lógica da Shopee
+      const COMISSAO_PADRAO = 0.14; // 14%
+      const COMISSAO_FRETE_GRATIS = 0.20; // 20%
+      const TAXA_FIXA_PADRAO = 4.00;
+      const TAXA_FIXA_MINIMA = 2.00;
+      const LIMITE_PRECO_TAXA_MINIMA = 8.00;
+      const LIMITE_COMISSAO_REAIS = 100.00;
+
+      const comissaoPercentual = freteGratisShopee ? COMISSAO_FRETE_GRATIS : COMISSAO_PADRAO;
+      
+      // Cálculo inicial do preço
+      let taxaFixa = TAXA_FIXA_PADRAO;
+      precoConsumidor = (precoBase + taxaFixa) / (1 - comissaoPercentual);
+      
+      // Exceção 1: Se preço < R$ 8,00, usar taxa mínima
+      if (precoConsumidor < LIMITE_PRECO_TAXA_MINIMA) {
+        taxaFixa = TAXA_FIXA_MINIMA;
+        precoConsumidor = (precoBase + taxaFixa) / (1 - comissaoPercentual);
+      }
+      
+      // Calcular comissão em reais
+      let comissaoEmReais = precoConsumidor * comissaoPercentual;
+      
+      // Exceção 2: Teto de R$ 100 na comissão
+      if (comissaoEmReais > LIMITE_COMISSAO_REAIS) {
+        comissaoEmReais = LIMITE_COMISSAO_REAIS;
+        // Recalcular preço com o teto aplicado
+        precoConsumidor = (custoUnitario * quantidade) + comissaoEmReais + taxaFixa;
+      }
+      
+      // Lucro líquido no modo Shopee
+      lucroLiquido = precoConsumidor - (custoUnitario * quantidade) - comissaoEmReais - taxaFixa;
+      
+    } else {
+      // Lógica normal
+      if (incluirImpostos && (imposto > 0 || taxa > 0)) {
+        const divisor = 1 - (imposto / 100) - (taxa / 100);
+        precoConsumidor = divisor > 0 ? precoBase / divisor : precoBase;
+      }
+
+      const lucroBruto = precoConsumidor - (custoUnitario * quantidade);
+      const impostoPago = precoConsumidor * (imposto / 100);
+      const taxaPaga = precoConsumidor * (taxa / 100);
+      lucroLiquido = lucroBruto - impostoPago - taxaPaga;
     }
 
     const lucroBruto = precoConsumidor - (custoUnitario * quantidade);
-    const impostoPago = precoConsumidor * (imposto / 100);
-    const taxaPaga = precoConsumidor * (taxa / 100);
-    const lucroLiquido = lucroBruto - impostoPago - taxaPaga;
 
     setCosts({
       custoMaterial,
@@ -598,24 +645,57 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
             )}
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="markup">Markup (x)</Label>
-                <Input id="markup" type="number" step="0.1" value={formData.markup} onChange={handleInputChange} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="imposto">Imposto (%)</Label>
-                <Input id="imposto" type="number" value={formData.imposto} onChange={handleInputChange} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="taxaPagamento">Taxa de Pagamento (%)</Label>
-                <Input id="taxaPagamento" type="number" value={formData.taxaPagamento} onChange={handleInputChange} />
-              </div>
+            {/* Switch para Modo Shopee */}
+            <div className="flex items-center space-x-2 p-4 bg-muted/30 rounded-lg">
+              <Switch 
+                id="modoShopee" 
+                checked={formData.modoShopee} 
+                onCheckedChange={(checked) => setFormData(prev => ({ ...prev, modoShopee: checked }))} 
+              />
+              <Label htmlFor="modoShopee" className="font-semibold">Calcular com Taxas da Shopee</Label>
             </div>
-            <div className="flex items-center space-x-2 pt-2">
-              <Switch id="incluirImpostos" checked={formData.incluirImpostos} onCheckedChange={handleSwitchChange} />
-              <Label htmlFor="incluirImpostos">Incluir imposto e taxa de pagamento no preço final</Label>
-            </div>
+
+            {/* Campos condicionais baseados no modo */}
+            {!formData.modoShopee ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="markup">Markup (x)</Label>
+                    <Input id="markup" type="number" step="0.1" value={formData.markup} onChange={handleInputChange} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="imposto">Imposto (%)</Label>
+                    <Input id="imposto" type="number" value={formData.imposto} onChange={handleInputChange} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="taxaPagamento">Taxa de Pagamento (%)</Label>
+                    <Input id="taxaPagamento" type="number" value={formData.taxaPagamento} onChange={handleInputChange} />
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2 pt-2">
+                  <Switch id="incluirImpostos" checked={formData.incluirImpostos} onCheckedChange={handleSwitchChange} />
+                  <Label htmlFor="incluirImpostos">Incluir imposto e taxa de pagamento no preço final</Label>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="markup">Markup (x)</Label>
+                  <Input id="markup" type="number" step="0.1" value={formData.markup} onChange={handleInputChange} />
+                </div>
+                <div className="flex items-center space-x-2 p-4 bg-primary/10 rounded-lg border border-primary/20">
+                  <Switch 
+                    id="freteGratisShopee" 
+                    checked={formData.freteGratisShopee} 
+                    onCheckedChange={(checked) => setFormData(prev => ({ ...prev, freteGratisShopee: checked }))} 
+                  />
+                  <div>
+                    <Label htmlFor="freteGratisShopee" className="font-semibold">Participa do Programa de Frete Grátis</Label>
+                    <p className="text-xs text-muted-foreground">Comissão de {formData.freteGratisShopee ? '20%' : '14%'} + Taxa fixa de R$ 4,00</p>
+                  </div>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 
