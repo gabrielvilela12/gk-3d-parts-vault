@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Switch } from "@/components/ui/switch";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
-import { Save, DollarSign, Box, Timer, Bolt, TrendingDown, Settings, Percent, Package, ChevronDown, Edit } from "lucide-react";
+import { Save, DollarSign, Box, Timer, Bolt, TrendingDown, Settings, Percent, Package, ChevronDown, Edit, Plus, Trash } from "lucide-react";
 
 // Interface para os inputs do formulário
 interface FormData {
@@ -69,6 +69,15 @@ interface MiningProduct {
   name: string;
 }
 
+// Interface para variações de preço
+interface PriceVariation {
+  id?: string;
+  variation_name: string;
+  custo_kg_filamento: string;
+  calculated_cost: number;
+  calculated_price: number;
+}
+
 export default function AddPiece({ isEditMode = false }: AddPieceProps) {
   const navigate = useNavigate();
   const { id } = useParams(); 
@@ -81,6 +90,9 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
   
   // --- NOVO ESTADO PARA OS PRODUTOS MINERADOS ---
   const [miningProducts, setMiningProducts] = useState<MiningProduct[]>([]);
+  
+  // --- ESTADO PARA VARIAÇÕES DE PREÇO ---
+  const [priceVariations, setPriceVariations] = useState<PriceVariation[]>([]);
 
   const [formData, setFormData] = useState<FormData>({
     name: "",
@@ -158,6 +170,21 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
           if (error) throw error;
   
           if (data) {
+            // Buscar variações de preço existentes
+            const { data: variations, error: variationsError } = await supabase
+              .from("piece_price_variations" as any)
+              .select("*")
+              .eq("piece_id", id);
+            
+            if (!variationsError && variations) {
+              setPriceVariations(variations.map((v: any) => ({
+                id: v.id,
+                variation_name: v.variation_name,
+                custo_kg_filamento: v.custo_kg_filamento?.toString() || "",
+                calculated_cost: v.calculated_cost || 0,
+                calculated_price: v.calculated_price || 0,
+              })));
+            }
             const totalMinutes = (data as any).tempo_impressao_min || 0;
             const hours = Math.floor(totalMinutes / 60);
             const minutes = totalMinutes % 60;
@@ -329,6 +356,100 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
     setFormData(prev => ({ ...prev, incluirImpostos: checked }));
   };
 
+  // Adicionar nova variação
+  const addPriceVariation = () => {
+    setPriceVariations([...priceVariations, {
+      variation_name: "",
+      custo_kg_filamento: "",
+      calculated_cost: 0,
+      calculated_price: 0,
+    }]);
+  };
+
+  // Remover variação
+  const removePriceVariation = (index: number) => {
+    setPriceVariations(priceVariations.filter((_, i) => i !== index));
+  };
+
+  // Função para calcular custos de uma variação
+  const calculateVariationCosts = (variation: PriceVariation) => {
+    const p = (value: string) => parseFloat(value) || 0;
+    const peso = p(formData.pesoEstimadoG);
+    const horas = p(formData.tempoImpressaoHoras);
+    const minutos = p(formData.tempoImpressaoMinutos);
+    const potenciaW = p(formData.potenciaImpressoraW);
+    const custoKWh = p(formData.custoKWh);
+    const custoFixo = p(formData.custoFixoMes);
+    const unidades = p(formData.unidadesMes);
+    const valorImpressora = p(formData.valorImpressora);
+    const vidaUtil = p(formData.vidaUtilHoras);
+    const custoAcessorios = p(formData.custoAcessorios);
+    const percentualFalhas = p(formData.percentualFalhas);
+    const markup = p(formData.markup);
+    const quantidade = p(String(formData.quantidade)) || 1;
+
+    const tempoTotalHoras = horas + (minutos / 60);
+    const custoEnergia = (potenciaW / 1000) * tempoTotalHoras * custoKWh;
+    const custoFixoUnitario = unidades > 0 ? custoFixo / unidades : 0;
+    const custoAmortizacao = vidaUtil > 0 ? (valorImpressora / vidaUtil) * tempoTotalHoras : 0;
+
+    const custoKgVar = p(variation.custo_kg_filamento);
+    const custoMaterialVar = (peso / 1000) * custoKgVar;
+    const custoVariavel = custoMaterialVar + custoEnergia;
+    const custoFalhas = custoVariavel * (percentualFalhas / 100);
+    
+    const custoUnitarioVar = custoMaterialVar + custoEnergia + custoFixoUnitario + custoAmortizacao + custoAcessorios + custoFalhas;
+    const precoBaseVar = (custoUnitarioVar * markup) * quantidade;
+
+    let precoConsumidorVar = precoBaseVar;
+    
+    if (formData.modoShopee) {
+      const COMISSAO_PADRAO = 0.14;
+      const COMISSAO_FRETE_GRATIS = 0.20;
+      const TAXA_FIXA_PADRAO = 4.00;
+      const TAXA_FIXA_MINIMA = 2.00;
+      const LIMITE_PRECO_TAXA_MINIMA = 8.00;
+      const LIMITE_COMISSAO_REAIS = 100.00;
+
+      const comissaoPercentual = formData.freteGratisShopee ? COMISSAO_FRETE_GRATIS : COMISSAO_PADRAO;
+      let taxaFixa = TAXA_FIXA_PADRAO;
+      precoConsumidorVar = (precoBaseVar + taxaFixa) / (1 - comissaoPercentual);
+      
+      if (precoConsumidorVar < LIMITE_PRECO_TAXA_MINIMA) {
+        taxaFixa = TAXA_FIXA_MINIMA;
+        precoConsumidorVar = (precoBaseVar + taxaFixa) / (1 - comissaoPercentual);
+      }
+      
+      let comissaoEmReais = precoConsumidorVar * comissaoPercentual;
+      if (comissaoEmReais > LIMITE_COMISSAO_REAIS) {
+        comissaoEmReais = LIMITE_COMISSAO_REAIS;
+        precoConsumidorVar = (custoUnitarioVar * quantidade) + comissaoEmReais + taxaFixa;
+      }
+    } else if (formData.incluirImpostos) {
+      const imposto = p(formData.imposto);
+      const taxa = p(formData.taxaPagamento);
+      const divisor = 1 - (imposto / 100) - (taxa / 100);
+      precoConsumidorVar = divisor > 0 ? precoBaseVar / divisor : precoBaseVar;
+    }
+
+    return {
+      calculated_cost: custoUnitarioVar,
+      calculated_price: precoConsumidorVar,
+    };
+  };
+
+  // Atualizar variação
+  const updatePriceVariation = (index: number, field: string, value: string) => {
+    const updated = [...priceVariations];
+    updated[index] = { ...updated[index], [field]: value };
+    
+    // Recalcular custos sempre que houver alteração
+    const calculated = calculateVariationCosts(updated[index]);
+    updated[index] = { ...updated[index], ...calculated };
+    
+    setPriceVariations(updated);
+  };
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -389,6 +510,27 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
           .eq("id", id);
   
         if (updateError) throw updateError;
+
+        // Deletar variações antigas e inserir as novas
+        await supabase
+          .from("piece_price_variations" as any)
+          .delete()
+          .eq("piece_id", id);
+
+        if (priceVariations.length > 0) {
+          const variationsToInsert = priceVariations.map(v => ({
+            user_id: user.id,
+            piece_id: id,
+            variation_name: v.variation_name,
+            custo_kg_filamento: parseFloat(v.custo_kg_filamento) || 0,
+            calculated_cost: v.calculated_cost,
+            calculated_price: v.calculated_price,
+          }));
+
+          await supabase
+            .from("piece_price_variations" as any)
+            .insert(variationsToInsert as any);
+        }
   
         toast({
           title: "Peça atualizada!",
@@ -397,14 +539,30 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
         navigate(`/piece/${id}`); 
 
       } else {
-        const { error: insertError } = await supabase.from("pieces").insert({
+        const { data: insertedPiece, error: insertError } = await supabase.from("pieces").insert({
           ...pieceData,
           width: null,
           height: null,
           depth: null,
-        });
+        }).select().single();
   
         if (insertError) throw insertError;
+
+        // Salvar variações de preço
+        if (priceVariations.length > 0 && insertedPiece) {
+          const variationsToInsert = priceVariations.map(v => ({
+            user_id: user.id,
+            piece_id: insertedPiece.id,
+            variation_name: v.variation_name,
+            custo_kg_filamento: parseFloat(v.custo_kg_filamento) || 0,
+            calculated_cost: v.calculated_cost,
+            calculated_price: v.calculated_price,
+          }));
+
+          await supabase
+            .from("piece_price_variations" as any)
+            .insert(variationsToInsert as any);
+        }
   
         toast({
           title: "Peça cadastrada!",
@@ -695,6 +853,85 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
                   </div>
                 </div>
               </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Card Variações de Preço */}
+        <Card className="card-gradient border-border/50">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Package className="h-5 w-5 text-primary" />
+                  Variações de Preço
+                </CardTitle>
+                <CardDescription className="mt-1">
+                  Adicione variações por cor, material, tamanho ou outros atributos
+                </CardDescription>
+              </div>
+              <Button type="button" onClick={addPriceVariation} size="sm" className="gap-2">
+                <Plus className="h-4 w-4" />
+                Adicionar
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {priceVariations.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                Nenhuma variação cadastrada. Clique em "Adicionar" para criar variações de preço.
+              </p>
+            ) : (
+              priceVariations.map((variation, index) => (
+                <Card key={index} className="border-border/50">
+                  <CardContent className="pt-6 space-y-4">
+                    <div className="flex justify-between items-start">
+                      <Label className="text-base">Variação #{index + 1}</Label>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removePriceVariation(index)}
+                        className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                      >
+                        <Trash className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Nome da Variação</Label>
+                        <Input
+                          placeholder="Ex: PETG Preto, Tamanho Grande..."
+                          value={variation.variation_name}
+                          onChange={(e) => updatePriceVariation(index, 'variation_name', e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Custo por Kg (R$)</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={variation.custo_kg_filamento}
+                          onChange={(e) => updatePriceVariation(index, 'custo_kg_filamento', e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-border/50">
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Custo de Produção</Label>
+                        <p className="text-lg font-semibold">R$ {variation.calculated_cost.toFixed(2)}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Preço de Venda</Label>
+                        <p className="text-lg font-semibold text-primary">R$ {variation.calculated_price.toFixed(2)}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
             )}
           </CardContent>
         </Card>

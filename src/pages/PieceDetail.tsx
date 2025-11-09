@@ -40,10 +40,19 @@ interface Piece {
   lucro_liquido: number | null;
 }
 
+interface PriceVariation {
+  id: string;
+  variation_name: string;
+  custo_kg_filamento: number;
+  calculated_cost: number;
+  calculated_price: number;
+}
+
 export default function PieceDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [piece, setPiece] = useState<Piece | null>(null);
+  const [priceVariations, setPriceVariations] = useState<PriceVariation[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const { toast } = useToast();
@@ -121,6 +130,16 @@ export default function PieceDetail() {
 
       if (error) throw error;
       setPiece(data as any);
+
+      // Buscar variações de preço
+      const { data: variations } = await supabase
+        .from("piece_price_variations" as any)
+        .select("*")
+        .eq("piece_id", id);
+      
+      if (variations) {
+        setPriceVariations(variations as any);
+      }
     } catch (error: any) {
       toast({
         title: "Erro ao carregar peça",
@@ -257,9 +276,9 @@ export default function PieceDetail() {
               </CardHeader>
               <CardContent className="space-y-4">
                 
-                {/* --- 1. Valores Salvos --- */}
+                {/* --- 1. Valores Salvos (Padrão) --- */}
                 <div className="space-y-3">
-                  <Label className="text-base font-medium">Valores Salvos</Label>
+                  <Label className="text-base font-medium">Valores Padrão</Label>
                   {(piece.cost != null || piece.preco_venda != null) ? (
                     <>
                       {piece.cost != null && (
@@ -296,6 +315,41 @@ export default function PieceDetail() {
                     </p>
                   )}
                 </div>
+
+                {/* --- Variações de Preço --- */}
+                {priceVariations.length > 0 && (
+                  <div className="space-y-3 pt-4 border-t border-border/50">
+                    <Label className="text-base font-medium">Variações de Preço</Label>
+                    <div className="space-y-2">
+                      {priceVariations.map((variation) => (
+                        <Card key={variation.id} className="border-border/50 bg-muted/20">
+                          <CardContent className="p-4">
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <Badge variant="outline" className="font-medium">
+                                  {variation.variation_name}
+                                </Badge>
+                                <span className="text-xs text-muted-foreground">
+                                  R$ {variation.custo_kg_filamento.toFixed(2)}/kg
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                  <span className="text-muted-foreground">Custo:</span>
+                                  <p className="font-semibold">R$ {variation.calculated_cost.toFixed(2)}</p>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Preço:</span>
+                                  <p className="font-semibold text-primary">R$ {variation.calculated_price.toFixed(2)}</p>
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* --- 2. Simulador --- */}
                 {piece.cost != null && ( // Só mostra o simulador se o custo existir
