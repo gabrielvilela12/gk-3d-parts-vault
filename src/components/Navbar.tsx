@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Box, LayoutDashboard, Plus, Info, LogOut, Pickaxe, DollarSign } from "lucide-react";
+import { Box, LayoutDashboard, Plus, Info, LogOut, Pickaxe, DollarSign, Kanban as KanbanIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
@@ -26,6 +26,7 @@ export function Navbar({ user }: NavbarProps) {
   const navItems = [
     { path: "/catalog", label: "Catálogo", icon: Box },
     { path: "/add", label: "Adicionar Peça", icon: Plus },
+    { path: "/kanban", label: "Kanban", icon: KanbanIcon },
     { path: "/mining", label: "Produtos Minerados", icon: Pickaxe },
     { path: "/financial", label: "Financeiro", icon: DollarSign },
     { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },

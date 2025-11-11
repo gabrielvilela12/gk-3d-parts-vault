@@ -16,6 +16,7 @@ import AddPiece from "./pages/AddPiece";
 import MiningProducts from "./pages/MiningProducts";
 import FinancialControl from "./pages/FinancialControl";
 import Dashboard from "./pages/Dashboard";
+import Kanban from "./pages/Kanban";
 import About from "./pages/About";
 import NotFound from "./pages/NotFound";
 
@@ -92,6 +93,10 @@ function AppContent() {
           <Route
             path="/dashboard"
             element={user ? <Dashboard /> : <Navigate to="/auth" replace />}
+          />
+          <Route
+            path="/kanban"
+            element={user ? <Kanban /> : <Navigate to="/auth" replace />}
           />
           <Route path="*" element={<NotFound />} />
         </Routes>
