@@ -6,14 +6,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { ClipboardList, Clock, CheckCircle2, Plus, Trash2 } from "lucide-react";
+import { ClipboardList, Clock, CheckCircle2, Plus, Trash2, AlertCircle, Timer } from "lucide-react";
 
 interface Task {
   id: string;
   title: string;
   description: string | null;
   status: string;
+  priority: string;
+  estimated_hours: number | null;
 }
 
 const columns = [
@@ -22,12 +26,28 @@ const columns = [
   { id: "completed", title: "Concluído", icon: CheckCircle2, color: "text-green-500" },
 ];
 
+const priorityConfig = {
+  low: { label: "Baixa", color: "bg-blue-500/10 text-blue-500 border-blue-500/20" },
+  medium: { label: "Média", color: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20" },
+  high: { label: "Alta", color: "bg-red-500/10 text-red-500 border-red-500/20" },
+};
+
 export default function Kanban() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [draggedTask, setDraggedTask] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [newTask, setNewTask] = useState({ title: "", description: "" });
+  const [newTask, setNewTask] = useState<{
+    title: string;
+    description: string;
+    priority: "low" | "medium" | "high";
+    estimated_hours: string;
+  }>({ 
+    title: "", 
+    description: "", 
+    priority: "medium",
+    estimated_hours: "" 
+  });
   const { toast } = useToast();
 
   useEffect(() => {
@@ -80,6 +100,8 @@ export default function Kanban() {
           title: newTask.title,
           description: newTask.description || null,
           status: "pending",
+          priority: newTask.priority,
+          estimated_hours: newTask.estimated_hours ? parseFloat(newTask.estimated_hours) : null,
         });
 
       if (error) throw error;
@@ -89,7 +111,7 @@ export default function Kanban() {
         description: "A tarefa foi criada com sucesso.",
       });
 
-      setNewTask({ title: "", description: "" });
+      setNewTask({ title: "", description: "", priority: "medium", estimated_hours: "" });
       setIsDialogOpen(false);
       fetchTasks();
     } catch (error) {
@@ -221,6 +243,33 @@ export default function Kanban() {
                   rows={4}
                 />
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="priority">Prioridade *</Label>
+                  <Select value={newTask.priority} onValueChange={(value) => setNewTask({ ...newTask, priority: value as "low" | "medium" | "high" })}>
+                    <SelectTrigger id="priority">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Baixa</SelectItem>
+                      <SelectItem value="medium">Média</SelectItem>
+                      <SelectItem value="high">Alta</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="estimated_hours">Tempo Estimado (horas)</Label>
+                  <Input
+                    id="estimated_hours"
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    value={newTask.estimated_hours}
+                    onChange={(e) => setNewTask({ ...newTask, estimated_hours: e.target.value })}
+                    placeholder="Ex: 2.5"
+                  />
+                </div>
+              </div>
               <Button onClick={handleCreateTask} className="w-full">
                 Criar Tarefa
               </Button>
@@ -267,11 +316,26 @@ export default function Kanban() {
                         <CardContent className="p-4">
                           <div className="flex items-start justify-between gap-3">
                             <div className="flex-1 min-w-0">
-                              <h3 className="font-semibold mb-1">{task.title}</h3>
+                              <div className="flex items-center gap-2 mb-2">
+                                <h3 className="font-semibold">{task.title}</h3>
+                                <Badge 
+                                  variant="outline" 
+                                  className={priorityConfig[task.priority as keyof typeof priorityConfig].color}
+                                >
+                                  <AlertCircle className="h-3 w-3 mr-1" />
+                                  {priorityConfig[task.priority as keyof typeof priorityConfig].label}
+                                </Badge>
+                              </div>
                               {task.description && (
-                                <p className="text-sm text-muted-foreground line-clamp-2">
+                                <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
                                   {task.description}
                                 </p>
+                              )}
+                              {task.estimated_hours && (
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                  <Timer className="h-3 w-3" />
+                                  {task.estimated_hours}h estimadas
+                                </div>
                               )}
                             </div>
                             <Button
