@@ -14,6 +14,63 @@ export type Database = {
   }
   public: {
     Tables: {
+      calculation_presets: {
+        Row: {
+          created_at: string
+          custo_acessorios: number
+          custo_fixo_mes: number | null
+          custo_kwh: number
+          id: string
+          imposto: number | null
+          markup: number
+          percentual_falhas: number
+          potencia_impressora_w: number
+          preset_name: string
+          taxa_pagamento: number
+          unidades_mes: number | null
+          updated_at: string
+          user_id: string
+          valor_impressora: number
+          vida_util_horas: number
+        }
+        Insert: {
+          created_at?: string
+          custo_acessorios?: number
+          custo_fixo_mes?: number | null
+          custo_kwh?: number
+          id?: string
+          imposto?: number | null
+          markup?: number
+          percentual_falhas?: number
+          potencia_impressora_w?: number
+          preset_name: string
+          taxa_pagamento?: number
+          unidades_mes?: number | null
+          updated_at?: string
+          user_id: string
+          valor_impressora?: number
+          vida_util_horas?: number
+        }
+        Update: {
+          created_at?: string
+          custo_acessorios?: number
+          custo_fixo_mes?: number | null
+          custo_kwh?: number
+          id?: string
+          imposto?: number | null
+          markup?: number
+          percentual_falhas?: number
+          potencia_impressora_w?: number
+          preset_name?: string
+          taxa_pagamento?: number
+          unidades_mes?: number | null
+          updated_at?: string
+          user_id?: string
+          valor_impressora?: number
+          vida_util_horas?: number
+        }
+        Relationships: []
+      }
       financial_transactions: {
         Row: {
           amount: number
@@ -121,11 +178,56 @@ export type Database = {
           },
         ]
       }
+      piece_price_variations: {
+        Row: {
+          calculated_cost: number
+          calculated_price: number
+          created_at: string
+          custo_kg_filamento: number
+          id: string
+          piece_id: string
+          updated_at: string
+          user_id: string
+          variation_name: string
+        }
+        Insert: {
+          calculated_cost: number
+          calculated_price: number
+          created_at?: string
+          custo_kg_filamento: number
+          id?: string
+          piece_id: string
+          updated_at?: string
+          user_id: string
+          variation_name: string
+        }
+        Update: {
+          calculated_cost?: number
+          calculated_price?: number
+          created_at?: string
+          custo_kg_filamento?: number
+          id?: string
+          piece_id?: string
+          updated_at?: string
+          user_id?: string
+          variation_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "piece_price_variations_piece_id_fkey"
+            columns: ["piece_id"]
+            isOneToOne: false
+            referencedRelation: "pieces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pieces: {
         Row: {
           category: string | null
           cost: number | null
           created_at: string | null
+          custo_acessorios: number | null
           custo_energia: number | null
           custo_material: number | null
           depth: number | null
@@ -135,6 +237,7 @@ export type Database = {
           image_url: string | null
           is_selling: boolean | null
           lucro_liquido: number | null
+          makerworld_url: string | null
           material: string | null
           name: string
           notes: string | null
@@ -150,6 +253,7 @@ export type Database = {
           category?: string | null
           cost?: number | null
           created_at?: string | null
+          custo_acessorios?: number | null
           custo_energia?: number | null
           custo_material?: number | null
           depth?: number | null
@@ -159,6 +263,7 @@ export type Database = {
           image_url?: string | null
           is_selling?: boolean | null
           lucro_liquido?: number | null
+          makerworld_url?: string | null
           material?: string | null
           name: string
           notes?: string | null
@@ -174,6 +279,7 @@ export type Database = {
           category?: string | null
           cost?: number | null
           created_at?: string | null
+          custo_acessorios?: number | null
           custo_energia?: number | null
           custo_material?: number | null
           depth?: number | null
@@ -183,6 +289,7 @@ export type Database = {
           image_url?: string | null
           is_selling?: boolean | null
           lucro_liquido?: number | null
+          makerworld_url?: string | null
           material?: string | null
           name?: string
           notes?: string | null
@@ -268,6 +375,36 @@ export type Database = {
           created_at?: string | null
           full_name?: string | null
           id?: string
+        }
+        Relationships: []
+      }
+      tasks: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          status: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          status?: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          status?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
