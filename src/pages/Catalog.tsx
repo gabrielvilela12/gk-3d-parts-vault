@@ -230,17 +230,11 @@ export default function Catalog() {
                         </div>
                       )}
                       {piece.cost !== null && (
-                        <div className="pt-2 mt-2 border-t border-border/50 space-y-1">
+                        <div className="pt-2 mt-2 border-t border-border/50">
                           <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">Custo:</span>
-                            <span className="font-semibold">R$ {piece.cost.toFixed(2)}</span>
+                            <span className="text-muted-foreground">Custo Base (no zero):</span>
+                            <span className="font-semibold text-primary">R$ {piece.cost.toFixed(2)}</span>
                           </div>
-                          {piece.preco_venda !== null && (
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-muted-foreground">Venda:</span>
-                              <span className="font-semibold text-primary">R$ {piece.preco_venda.toFixed(2)}</span>
-                            </div>
-                          )}
                         </div>
                       )}
                     </div>

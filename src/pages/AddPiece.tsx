@@ -738,6 +738,118 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
           </CardContent>
         </Card>
         
+        {/* Card Variações de Preço */}
+        <Card className="card-gradient border-border/50">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Package className="h-5 w-5 text-primary" />
+                  Variações de Preço
+                </CardTitle>
+                <CardDescription className="mt-1">
+                  Adicione variações por cor, material, tamanho ou outros atributos
+                </CardDescription>
+              </div>
+              <Button type="button" onClick={addPriceVariation} size="sm" className="gap-2">
+                <Plus className="h-4 w-4" />
+                Adicionar
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {priceVariations.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                Nenhuma variação cadastrada. Clique em "Adicionar" para criar variações de preço.
+              </p>
+            ) : (
+              priceVariations.map((variation, index) => (
+                <Card key={index} className="border-border/50">
+                  <CardContent className="pt-6 space-y-4">
+                    <div className="flex justify-between items-start">
+                      <Label className="text-base">Variação #{index + 1}</Label>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removePriceVariation(index)}
+                        className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                      >
+                        <Trash className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>Nome da Variação</Label>
+                        <Input
+                          placeholder="Ex: PETG Preto, Tamanho Grande..."
+                          value={variation.variation_name}
+                          onChange={(e) => updatePriceVariation(index, 'variation_name', e.target.value)}
+                        />
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                          <Label>Custo por Kg (R$)</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={variation.custo_kg_filamento}
+                            onChange={(e) => updatePriceVariation(index, 'custo_kg_filamento', e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Peso (g)</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={variation.peso_g}
+                            onChange={(e) => updatePriceVariation(index, 'peso_g', e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Tempo de Impressão</Label>
+                          <div className="flex gap-2">
+                            <Input
+                              type="number"
+                              placeholder="h"
+                              value={variation.tempo_impressao_horas}
+                              onChange={(e) => updatePriceVariation(index, 'tempo_impressao_horas', e.target.value)}
+                              className="w-20"
+                            />
+                            <span className="flex items-center text-muted-foreground">:</span>
+                            <Input
+                              type="number"
+                              placeholder="min"
+                              value={variation.tempo_impressao_minutos}
+                              onChange={(e) => updatePriceVariation(index, 'tempo_impressao_minutos', e.target.value)}
+                              className="w-20"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-border/50">
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Custo de Produção</Label>
+                        <p className="text-lg font-semibold">R$ {variation.calculated_cost.toFixed(2)}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Preço de Venda</Label>
+                        <p className="text-lg font-semibold text-primary">R$ {variation.calculated_price.toFixed(2)}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </CardContent>
+        </Card>
+        
         {/* Card Custos */}
         <Card className="card-gradient border-border/50">
           <CardHeader>
@@ -866,118 +978,6 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
                   </div>
                 </div>
               </>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Card Variações de Preço */}
-        <Card className="card-gradient border-border/50">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Package className="h-5 w-5 text-primary" />
-                  Variações de Preço
-                </CardTitle>
-                <CardDescription className="mt-1">
-                  Adicione variações por cor, material, tamanho ou outros atributos
-                </CardDescription>
-              </div>
-              <Button type="button" onClick={addPriceVariation} size="sm" className="gap-2">
-                <Plus className="h-4 w-4" />
-                Adicionar
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {priceVariations.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                Nenhuma variação cadastrada. Clique em "Adicionar" para criar variações de preço.
-              </p>
-            ) : (
-              priceVariations.map((variation, index) => (
-                <Card key={index} className="border-border/50">
-                  <CardContent className="pt-6 space-y-4">
-                    <div className="flex justify-between items-start">
-                      <Label className="text-base">Variação #{index + 1}</Label>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removePriceVariation(index)}
-                        className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                      >
-                        <Trash className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <Label>Nome da Variação</Label>
-                        <Input
-                          placeholder="Ex: PETG Preto, Tamanho Grande..."
-                          value={variation.variation_name}
-                          onChange={(e) => updatePriceVariation(index, 'variation_name', e.target.value)}
-                        />
-                      </div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="space-y-2">
-                          <Label>Custo por Kg (R$)</Label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            placeholder="0.00"
-                            value={variation.custo_kg_filamento}
-                            onChange={(e) => updatePriceVariation(index, 'custo_kg_filamento', e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Peso (g)</Label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            placeholder="0.00"
-                            value={variation.peso_g}
-                            onChange={(e) => updatePriceVariation(index, 'peso_g', e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Tempo de Impressão</Label>
-                          <div className="flex gap-2">
-                            <Input
-                              type="number"
-                              placeholder="h"
-                              value={variation.tempo_impressao_horas}
-                              onChange={(e) => updatePriceVariation(index, 'tempo_impressao_horas', e.target.value)}
-                              className="w-20"
-                            />
-                            <span className="flex items-center text-muted-foreground">:</span>
-                            <Input
-                              type="number"
-                              placeholder="min"
-                              value={variation.tempo_impressao_minutos}
-                              onChange={(e) => updatePriceVariation(index, 'tempo_impressao_minutos', e.target.value)}
-                              className="w-20"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-border/50">
-                      <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">Custo de Produção</Label>
-                        <p className="text-lg font-semibold">R$ {variation.calculated_cost.toFixed(2)}</p>
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">Preço de Venda</Label>
-                        <p className="text-lg font-semibold text-primary">R$ {variation.calculated_price.toFixed(2)}</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
             )}
           </CardContent>
         </Card>
