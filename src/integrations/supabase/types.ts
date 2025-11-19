@@ -185,7 +185,9 @@ export type Database = {
           created_at: string
           custo_kg_filamento: number
           id: string
+          peso_g: number | null
           piece_id: string
+          tempo_impressao_min: number | null
           updated_at: string
           user_id: string
           variation_name: string
@@ -196,7 +198,9 @@ export type Database = {
           created_at?: string
           custo_kg_filamento: number
           id?: string
+          peso_g?: number | null
           piece_id: string
+          tempo_impressao_min?: number | null
           updated_at?: string
           user_id: string
           variation_name: string
@@ -207,7 +211,9 @@ export type Database = {
           created_at?: string
           custo_kg_filamento?: number
           id?: string
+          peso_g?: number | null
           piece_id?: string
+          tempo_impressao_min?: number | null
           updated_at?: string
           user_id?: string
           variation_name?: string
