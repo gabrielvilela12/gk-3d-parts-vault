@@ -74,6 +74,9 @@ interface PriceVariation {
   id?: string;
   variation_name: string;
   custo_kg_filamento: string;
+  peso_g: string;
+  tempo_impressao_horas: string;
+  tempo_impressao_minutos: string;
   calculated_cost: number;
   calculated_price: number;
 }
@@ -181,6 +184,9 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
                 id: v.id,
                 variation_name: v.variation_name,
                 custo_kg_filamento: v.custo_kg_filamento?.toString() || "",
+                peso_g: v.peso_g?.toString() || "",
+                tempo_impressao_horas: Math.floor((v.tempo_impressao_min || 0) / 60).toString(),
+                tempo_impressao_minutos: ((v.tempo_impressao_min || 0) % 60).toString(),
                 calculated_cost: v.calculated_cost || 0,
                 calculated_price: v.calculated_price || 0,
               })));
@@ -360,7 +366,10 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
   const addPriceVariation = () => {
     setPriceVariations([...priceVariations, {
       variation_name: "",
-      custo_kg_filamento: "",
+      custo_kg_filamento: formData.custoKgFilamento,
+      peso_g: formData.pesoEstimadoG,
+      tempo_impressao_horas: formData.tempoImpressaoHoras,
+      tempo_impressao_minutos: formData.tempoImpressaoMinutos,
       calculated_cost: 0,
       calculated_price: 0,
     }]);
@@ -523,6 +532,8 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
             piece_id: id,
             variation_name: v.variation_name,
             custo_kg_filamento: parseFloat(v.custo_kg_filamento) || 0,
+            peso_g: parseFloat(v.peso_g) || null,
+            tempo_impressao_min: (parseInt(v.tempo_impressao_horas) * 60 || 0) + (parseInt(v.tempo_impressao_minutos) || 0),
             calculated_cost: v.calculated_cost,
             calculated_price: v.calculated_price,
           }));
@@ -555,6 +566,8 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
             piece_id: insertedPiece.id,
             variation_name: v.variation_name,
             custo_kg_filamento: parseFloat(v.custo_kg_filamento) || 0,
+            peso_g: parseFloat(v.peso_g) || null,
+            tempo_impressao_min: (parseInt(v.tempo_impressao_horas) * 60 || 0) + (parseInt(v.tempo_impressao_minutos) || 0),
             calculated_cost: v.calculated_cost,
             calculated_price: v.calculated_price,
           }));
@@ -898,7 +911,7 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
                       </Button>
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-4">
                       <div className="space-y-2">
                         <Label>Nome da Variação</Label>
                         <Input
@@ -907,15 +920,48 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
                           onChange={(e) => updatePriceVariation(index, 'variation_name', e.target.value)}
                         />
                       </div>
-                      <div className="space-y-2">
-                        <Label>Custo por Kg (R$)</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          placeholder="0.00"
-                          value={variation.custo_kg_filamento}
-                          onChange={(e) => updatePriceVariation(index, 'custo_kg_filamento', e.target.value)}
-                        />
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                          <Label>Custo por Kg (R$)</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={variation.custo_kg_filamento}
+                            onChange={(e) => updatePriceVariation(index, 'custo_kg_filamento', e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Peso (g)</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={variation.peso_g}
+                            onChange={(e) => updatePriceVariation(index, 'peso_g', e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Tempo de Impressão</Label>
+                          <div className="flex gap-2">
+                            <Input
+                              type="number"
+                              placeholder="h"
+                              value={variation.tempo_impressao_horas}
+                              onChange={(e) => updatePriceVariation(index, 'tempo_impressao_horas', e.target.value)}
+                              className="w-20"
+                            />
+                            <span className="flex items-center text-muted-foreground">:</span>
+                            <Input
+                              type="number"
+                              placeholder="min"
+                              value={variation.tempo_impressao_minutos}
+                              onChange={(e) => updatePriceVariation(index, 'tempo_impressao_minutos', e.target.value)}
+                              className="w-20"
+                            />
+                          </div>
+                        </div>
                       </div>
                     </div>
 

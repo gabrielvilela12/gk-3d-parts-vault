@@ -18,6 +18,8 @@ interface Piece {
   image_url: string;
   created_at: string;
   is_selling: boolean | null;
+  cost: number | null;
+  preco_venda: number | null;
 }
 
 export default function Catalog() {
@@ -225,6 +227,20 @@ export default function Catalog() {
                         <div className="flex items-center justify-between text-sm">
                           <span className="text-muted-foreground">Categoria:</span>
                           <Badge variant="outline">{piece.category}</Badge>
+                        </div>
+                      )}
+                      {piece.cost !== null && (
+                        <div className="pt-2 mt-2 border-t border-border/50 space-y-1">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Custo:</span>
+                            <span className="font-semibold">R$ {piece.cost.toFixed(2)}</span>
+                          </div>
+                          {piece.preco_venda !== null && (
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">Venda:</span>
+                              <span className="font-semibold text-primary">R$ {piece.preco_venda.toFixed(2)}</span>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
