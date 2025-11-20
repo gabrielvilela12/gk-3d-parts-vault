@@ -46,6 +46,8 @@ interface PriceVariation {
   custo_kg_filamento: number;
   calculated_cost: number;
   calculated_price: number;
+  peso_g: number | null;
+  tempo_impressao_min: number | null;
 }
 
 export default function PieceDetail() {
@@ -321,32 +323,42 @@ export default function PieceDetail() {
                   <div className="space-y-3 pt-4 border-t border-border/50">
                     <Label className="text-base font-medium">Variações de Preço</Label>
                     <div className="space-y-2">
-                      {priceVariations.map((variation) => (
-                        <Card key={variation.id} className="border-border/50 bg-muted/20">
-                          <CardContent className="p-4">
-                            <div className="space-y-2">
-                              <div className="flex items-center justify-between">
-                                <Badge variant="outline" className="font-medium">
-                                  {variation.variation_name}
-                                </Badge>
-                                <span className="text-xs text-muted-foreground">
-                                  R$ {variation.custo_kg_filamento.toFixed(2)}/kg
-                                </span>
-                              </div>
-                              <div className="grid grid-cols-2 gap-4 text-sm">
-                                <div>
-                                  <span className="text-muted-foreground">Custo:</span>
-                                  <p className="font-semibold">R$ {variation.calculated_cost.toFixed(2)}</p>
+                      {priceVariations.map((variation) => {
+                        // Calcula o custo base mínimo: (custo + 4) / 0.8
+                        const custoBaseMinimo = (variation.calculated_cost + 4) / 0.8;
+                        
+                        return (
+                          <Card key={variation.id} className="border-border/50 bg-muted/20">
+                            <CardContent className="p-4">
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <Badge variant="outline" className="font-medium">
+                                    {variation.variation_name}
+                                  </Badge>
+                                  <span className="text-xs text-muted-foreground">
+                                    R$ {variation.custo_kg_filamento.toFixed(2)}/kg
+                                  </span>
                                 </div>
-                                <div>
-                                  <span className="text-muted-foreground">Preço:</span>
-                                  <p className="font-semibold text-primary">R$ {variation.calculated_price.toFixed(2)}</p>
+                                {variation.peso_g && (
+                                  <div className="text-xs text-muted-foreground">
+                                    {variation.peso_g}g • {variation.tempo_impressao_min ? `${Math.floor(variation.tempo_impressao_min / 60)}h ${variation.tempo_impressao_min % 60}min` : ''}
+                                  </div>
+                                )}
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                  <div>
+                                    <span className="text-muted-foreground">Custo:</span>
+                                    <p className="font-semibold">R$ {variation.calculated_cost.toFixed(2)}</p>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground">Custo Base (no zero):</span>
+                                    <p className="font-semibold text-primary">R$ {custoBaseMinimo.toFixed(2)}</p>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
