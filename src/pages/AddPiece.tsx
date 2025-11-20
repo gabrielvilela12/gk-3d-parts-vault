@@ -349,7 +349,34 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
     });
   }, [formData]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => { 
+  // Recalcular variações quando parâmetros globais mudarem
+  useEffect(() => {
+    if (priceVariations.length > 0) {
+      const updated = priceVariations.map(v => {
+        const calculated = calculateVariationCosts(v);
+        return { ...v, ...calculated };
+      });
+      setPriceVariations(updated);
+    }
+  }, [
+    formData.markup,
+    formData.custoKWh,
+    formData.custoFixoMes,
+    formData.unidadesMes,
+    formData.valorImpressora,
+    formData.vidaUtilHoras,
+    formData.custoAcessorios,
+    formData.percentualFalhas,
+    formData.potenciaImpressoraW,
+    formData.incluirImpostos,
+    formData.imposto,
+    formData.taxaPagamento,
+    formData.modoShopee,
+    formData.freteGratisShopee,
+    formData.quantidade
+  ]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { id, value, type } = e.target;
     // @ts-ignore
     setFormData(prev => ({
@@ -364,7 +391,7 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
 
   // Adicionar nova variação
   const addPriceVariation = () => {
-    setPriceVariations([...priceVariations, {
+    const newVariation = {
       variation_name: "",
       custo_kg_filamento: formData.custoKgFilamento,
       peso_g: formData.pesoEstimadoG,
@@ -372,6 +399,14 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
       tempo_impressao_minutos: formData.tempoImpressaoMinutos,
       calculated_cost: 0,
       calculated_price: 0,
+    };
+    
+    // Calcular custos imediatamente
+    const calculated = calculateVariationCosts(newVariation);
+    
+    setPriceVariations([...priceVariations, {
+      ...newVariation,
+      ...calculated
     }]);
   };
 
@@ -527,16 +562,21 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
           .eq("piece_id", id);
 
         if (priceVariations.length > 0) {
-          const variationsToInsert = priceVariations.map(v => ({
-            user_id: user.id,
-            piece_id: id,
-            variation_name: v.variation_name,
-            custo_kg_filamento: parseFloat(v.custo_kg_filamento) || 0,
-            peso_g: parseFloat(v.peso_g) || null,
-            tempo_impressao_min: (parseInt(v.tempo_impressao_horas) * 60 || 0) + (parseInt(v.tempo_impressao_minutos) || 0),
-            calculated_cost: v.calculated_cost,
-            calculated_price: v.calculated_price,
-          }));
+          const variationsToInsert = priceVariations.map(v => {
+            // Recalcular custos com base nos valores atuais
+            const calculated = calculateVariationCosts(v);
+            
+            return {
+              user_id: user.id,
+              piece_id: id,
+              variation_name: v.variation_name,
+              custo_kg_filamento: parseFloat(v.custo_kg_filamento) || 0,
+              peso_g: parseFloat(v.peso_g) || null,
+              tempo_impressao_min: (parseInt(v.tempo_impressao_horas) * 60 || 0) + (parseInt(v.tempo_impressao_minutos) || 0),
+              calculated_cost: calculated.calculated_cost,
+              calculated_price: calculated.calculated_price,
+            };
+          });
 
           await supabase
             .from("piece_price_variations" as any)
@@ -561,16 +601,21 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
 
         // Salvar variações de preço
         if (priceVariations.length > 0 && insertedPiece) {
-          const variationsToInsert = priceVariations.map(v => ({
-            user_id: user.id,
-            piece_id: insertedPiece.id,
-            variation_name: v.variation_name,
-            custo_kg_filamento: parseFloat(v.custo_kg_filamento) || 0,
-            peso_g: parseFloat(v.peso_g) || null,
-            tempo_impressao_min: (parseInt(v.tempo_impressao_horas) * 60 || 0) + (parseInt(v.tempo_impressao_minutos) || 0),
-            calculated_cost: v.calculated_cost,
-            calculated_price: v.calculated_price,
-          }));
+          const variationsToInsert = priceVariations.map(v => {
+            // Recalcular custos com base nos valores atuais
+            const calculated = calculateVariationCosts(v);
+            
+            return {
+              user_id: user.id,
+              piece_id: insertedPiece.id,
+              variation_name: v.variation_name,
+              custo_kg_filamento: parseFloat(v.custo_kg_filamento) || 0,
+              peso_g: parseFloat(v.peso_g) || null,
+              tempo_impressao_min: (parseInt(v.tempo_impressao_horas) * 60 || 0) + (parseInt(v.tempo_impressao_minutos) || 0),
+              calculated_cost: calculated.calculated_cost,
+              calculated_price: calculated.calculated_price,
+            };
+          });
 
           await supabase
             .from("piece_price_variations" as any)
