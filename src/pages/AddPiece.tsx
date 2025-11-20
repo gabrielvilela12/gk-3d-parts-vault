@@ -383,9 +383,9 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
   // Função para calcular custos de uma variação
   const calculateVariationCosts = (variation: PriceVariation) => {
     const p = (value: string) => parseFloat(value) || 0;
-    const peso = p(formData.pesoEstimadoG);
-    const horas = p(formData.tempoImpressaoHoras);
-    const minutos = p(formData.tempoImpressaoMinutos);
+    const peso = p(variation.peso_g);
+    const horas = p(variation.tempo_impressao_horas);
+    const minutos = p(variation.tempo_impressao_minutos);
     const potenciaW = p(formData.potenciaImpressoraW);
     const custoKWh = p(formData.custoKWh);
     const custoFixo = p(formData.custoFixoMes);
