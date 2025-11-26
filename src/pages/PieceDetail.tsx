@@ -322,15 +322,21 @@ export default function PieceDetail() {
                 {priceVariations.length > 0 && (
                   <div className="space-y-3 pt-4 border-t border-border/50">
                     <Label className="text-base font-medium">Variações de Preço</Label>
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {priceVariations.map((variation) => {
-                        // Calcula o custo base mínimo: (custo + 4) / 0.8
-                        const custoBaseMinimo = (variation.calculated_cost + 4) / 0.8;
+                        // Breakdown do cálculo
+                        const custoBase = variation.calculated_cost;
+                        const taxaShopee = 4.00;
+                        const subtotal = custoBase + taxaShopee;
+                        const precoConsumidor = subtotal / 0.8; // Divide por 0.8 = adiciona 25% para compensar 20% de comissão
+                        const comissaoShopee = precoConsumidor * 0.20; // 20% de comissão
+                        const lucroLiquido = precoConsumidor - custoBase - taxaShopee - comissaoShopee;
                         
                         return (
                           <Card key={variation.id} className="border-border/50 bg-muted/20">
                             <CardContent className="p-4">
-                              <div className="space-y-2">
+                              <div className="space-y-3">
+                                {/* Header da variação */}
                                 <div className="flex items-center justify-between">
                                   <Badge variant="outline" className="font-medium">
                                     {variation.variation_name}
@@ -339,19 +345,66 @@ export default function PieceDetail() {
                                     R$ {variation.custo_kg_filamento.toFixed(2)}/kg
                                   </span>
                                 </div>
+                                
+                                {/* Info de peso e tempo */}
                                 {variation.peso_g && (
                                   <div className="text-xs text-muted-foreground">
                                     {variation.peso_g}g • {variation.tempo_impressao_min ? `${Math.floor(variation.tempo_impressao_min / 60)}h ${variation.tempo_impressao_min % 60}min` : ''}
                                   </div>
                                 )}
-                                <div className="grid grid-cols-2 gap-4 text-sm">
-                                  <div>
-                                    <span className="text-muted-foreground">Custo:</span>
-                                    <p className="font-semibold">R$ {variation.calculated_cost.toFixed(2)}</p>
+
+                                <Separator className="my-2" />
+
+                                {/* Breakdown detalhado */}
+                                <div className="space-y-2 text-sm">
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-muted-foreground">Custo de Produção:</span>
+                                    <span className="font-medium">R$ {custoBase.toFixed(2)}</span>
                                   </div>
-                                  <div>
-                                    <span className="text-muted-foreground">Custo Base (no zero):</span>
-                                    <p className="font-semibold text-primary">R$ {custoBaseMinimo.toFixed(2)}</p>
+                                  
+                                  <div className="flex justify-between items-center text-xs">
+                                    <span className="text-muted-foreground">+ Taxa Fixa Shopee:</span>
+                                    <span>R$ {taxaShopee.toFixed(2)}</span>
+                                  </div>
+                                  
+                                  <div className="flex justify-between items-center border-t border-border/30 pt-2">
+                                    <span className="text-muted-foreground">= Subtotal:</span>
+                                    <span className="font-medium">R$ {subtotal.toFixed(2)}</span>
+                                  </div>
+                                  
+                                  <div className="flex justify-between items-center text-xs">
+                                    <span className="text-muted-foreground">÷ 0.8 (compensar 20% comissão):</span>
+                                    <span className="text-muted-foreground">÷ 0.8</span>
+                                  </div>
+                                  
+                                  <div className="flex justify-between items-center bg-primary/10 -mx-4 px-4 py-2 rounded">
+                                    <span className="font-semibold text-primary">Preço Consumidor:</span>
+                                    <span className="font-bold text-lg text-primary">R$ {precoConsumidor.toFixed(2)}</span>
+                                  </div>
+
+                                  <Separator className="my-2" />
+
+                                  {/* Resumo de lucros */}
+                                  <div className="space-y-1 text-xs pt-1">
+                                    <div className="flex justify-between items-center text-muted-foreground">
+                                      <span>- Comissão Shopee (20%):</span>
+                                      <span className="text-red-500">-R$ {comissaoShopee.toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-muted-foreground">
+                                      <span>- Taxa Fixa:</span>
+                                      <span className="text-red-500">-R$ {taxaShopee.toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-muted-foreground">
+                                      <span>- Custo Produção:</span>
+                                      <span className="text-red-500">-R$ {custoBase.toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center border-t border-border/30 pt-1 mt-1">
+                                      <span className="font-semibold flex items-center gap-1">
+                                        <TrendingUp className="h-3 w-3" />
+                                        Lucro Líquido:
+                                      </span>
+                                      <span className="font-bold text-green-500">R$ {lucroLiquido.toFixed(2)}</span>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
