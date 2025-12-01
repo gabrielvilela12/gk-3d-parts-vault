@@ -178,6 +178,63 @@ export type Database = {
           },
         ]
       }
+      orders: {
+        Row: {
+          created_at: string
+          id: string
+          is_printed: boolean
+          notes: string | null
+          piece_id: string
+          printed_at: string | null
+          printed_by: string | null
+          quantity: number
+          updated_at: string
+          user_id: string
+          variation_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_printed?: boolean
+          notes?: string | null
+          piece_id: string
+          printed_at?: string | null
+          printed_by?: string | null
+          quantity?: number
+          updated_at?: string
+          user_id: string
+          variation_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_printed?: boolean
+          notes?: string | null
+          piece_id?: string
+          printed_at?: string | null
+          printed_by?: string | null
+          quantity?: number
+          updated_at?: string
+          user_id?: string
+          variation_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_piece_id_fkey"
+            columns: ["piece_id"]
+            isOneToOne: false
+            referencedRelation: "pieces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_variation_id_fkey"
+            columns: ["variation_id"]
+            isOneToOne: false
+            referencedRelation: "piece_price_variations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       piece_price_variations: {
         Row: {
           calculated_cost: number

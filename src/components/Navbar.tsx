@@ -25,9 +25,9 @@ export function Navbar({ user }: NavbarProps) {
 
   const navItems = [
     { path: "/catalog", label: "Catálogo", icon: Box },
-    { path: "/add", label: "Adicionar Peça", icon: Plus },
-    { path: "/kanban", label: "Kanban", icon: KanbanIcon },
-    { path: "/mining", label: "Produtos Minerados", icon: Pickaxe },
+    { path: "/add", label: "Adicionar", icon: Plus },
+    { path: "/orders", label: "Pedidos", icon: KanbanIcon },
+    { path: "/mining", label: "Minerados", icon: Pickaxe },
     { path: "/financial", label: "Financeiro", icon: DollarSign },
     { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { path: "/about", label: "Sobre", icon: Info },
