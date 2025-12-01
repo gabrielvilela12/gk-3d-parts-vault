@@ -180,6 +180,7 @@ export type Database = {
       }
       orders: {
         Row: {
+          color: string | null
           created_at: string
           id: string
           is_printed: boolean
@@ -193,6 +194,7 @@ export type Database = {
           variation_id: string | null
         }
         Insert: {
+          color?: string | null
           created_at?: string
           id?: string
           is_printed?: boolean
@@ -206,6 +208,7 @@ export type Database = {
           variation_id?: string | null
         }
         Update: {
+          color?: string | null
           created_at?: string
           id?: string
           is_printed?: boolean
