@@ -64,6 +64,7 @@ export default function Orders() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [filterPrintStatus, setFilterPrintStatus] = useState<string>("all");
   const [filterMaxHours, setFilterMaxHours] = useState<string>("");
+  const [filterColor, setFilterColor] = useState<string>("all");
   const [newOrder, setNewOrder] = useState({
     piece_id: "",
     variation_id: "",
@@ -249,11 +250,17 @@ export default function Orders() {
     if (filterPrintStatus === "printed" && !order.is_printed) return false;
     if (filterPrintStatus === "not_printed" && order.is_printed) return false;
 
-    // Filter by max hours
+    // Filter by color
+    if (filterColor !== "all") {
+      if (filterColor === "no_color" && order.color) return false;
+      if (filterColor !== "no_color" && order.color !== filterColor) return false;
+    }
+
+    // Filter by max hours (exact hours, not decimals)
     if (filterMaxHours) {
       const printTime = getPrintTime(order);
       if (printTime === null) return false;
-      const maxMinutes = parseFloat(filterMaxHours) * 60;
+      const maxMinutes = parseInt(filterMaxHours) * 60; // Exact hours only
       if (printTime > maxMinutes) return false;
     }
 
@@ -273,6 +280,11 @@ export default function Orders() {
   };
 
   const availableVariations = variations.filter(v => v.piece_id === newOrder.piece_id);
+
+  // Get unique colors from orders
+  const availableColors = Array.from(
+    new Set(orders.map(o => o.color).filter(Boolean))
+  ).sort();
 
   if (loading) {
     return (
@@ -403,7 +415,7 @@ export default function Orders() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="filterStatus">Status de Impressão</Label>
                 <Select value={filterPrintStatus} onValueChange={setFilterPrintStatus}>
@@ -418,15 +430,32 @@ export default function Orders() {
                 </Select>
               </div>
               <div className="space-y-2">
+                <Label htmlFor="filterColor">Cor</Label>
+                <Select value={filterColor} onValueChange={setFilterColor}>
+                  <SelectTrigger id="filterColor">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as cores</SelectItem>
+                    <SelectItem value="no_color">Sem cor</SelectItem>
+                    {availableColors.map(color => (
+                      <SelectItem key={color} value={color!}>
+                        {color}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="filterHours">Máximo de Horas (por unidade)</Label>
                 <Input
                   id="filterHours"
                   type="number"
-                  min="0"
-                  step="0.5"
+                  min="1"
+                  step="1"
                   value={filterMaxHours}
                   onChange={(e) => setFilterMaxHours(e.target.value)}
-                  placeholder="Ex: 2.5"
+                  placeholder="Ex: 2 (horas exatas)"
                 />
               </div>
             </div>
