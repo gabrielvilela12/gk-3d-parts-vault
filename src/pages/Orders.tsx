@@ -29,10 +29,12 @@ interface Order {
   printed_at: string | null;
   printed_by: string | null;
   notes: string | null;
+  color: string | null;
   created_at: string;
   pieces: {
     name: string;
     tempo_impressao_min: number | null;
+    image_url: string | null;
   };
   piece_price_variations?: {
     variation_name: string;
@@ -44,6 +46,7 @@ interface Piece {
   id: string;
   name: string;
   tempo_impressao_min: number | null;
+  image_url: string | null;
 }
 
 interface Variation {
@@ -65,6 +68,7 @@ export default function Orders() {
     piece_id: "",
     variation_id: "",
     quantity: "1",
+    color: "",
     notes: "",
   });
   const { toast } = useToast();
@@ -83,7 +87,7 @@ export default function Orders() {
         .from("orders")
         .select(`
           *,
-          pieces(name, tempo_impressao_min),
+          pieces(name, tempo_impressao_min, image_url),
           piece_price_variations(variation_name, tempo_impressao_min)
         `)
         .eq("user_id", user.id)
@@ -95,7 +99,7 @@ export default function Orders() {
       // Fetch pieces
       const { data: piecesData, error: piecesError } = await supabase
         .from("pieces")
-        .select("id, name, tempo_impressao_min")
+        .select("id, name, tempo_impressao_min, image_url")
         .eq("user_id", user.id)
         .order("name");
 
@@ -144,6 +148,7 @@ export default function Orders() {
           piece_id: newOrder.piece_id,
           variation_id: newOrder.variation_id || null,
           quantity: parseInt(newOrder.quantity),
+          color: newOrder.color || null,
           notes: newOrder.notes || null,
         });
 
@@ -154,7 +159,7 @@ export default function Orders() {
         description: "O pedido foi criado com sucesso.",
       });
 
-      setNewOrder({ piece_id: "", variation_id: "", quantity: "1", notes: "" });
+      setNewOrder({ piece_id: "", variation_id: "", quantity: "1", color: "", notes: "" });
       setIsDialogOpen(false);
       fetchData();
     } catch (error) {
@@ -309,7 +314,20 @@ export default function Orders() {
                     <SelectContent>
                       {pieces.map(piece => (
                         <SelectItem key={piece.id} value={piece.id}>
-                          {piece.name}
+                          <div className="flex items-center gap-3">
+                            {piece.image_url ? (
+                              <img 
+                                src={piece.image_url} 
+                                alt={piece.name}
+                                className="h-10 w-10 rounded object-cover"
+                              />
+                            ) : (
+                              <div className="h-10 w-10 rounded bg-muted flex items-center justify-center">
+                                <Package className="h-5 w-5 text-muted-foreground" />
+                              </div>
+                            )}
+                            <span>{piece.name}</span>
+                          </div>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -335,15 +353,26 @@ export default function Orders() {
                   </div>
                 )}
 
-                <div className="space-y-2">
-                  <Label htmlFor="quantity">Quantidade *</Label>
-                  <Input
-                    id="quantity"
-                    type="number"
-                    min="1"
-                    value={newOrder.quantity}
-                    onChange={(e) => setNewOrder({ ...newOrder, quantity: e.target.value })}
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="quantity">Quantidade *</Label>
+                    <Input
+                      id="quantity"
+                      type="number"
+                      min="1"
+                      value={newOrder.quantity}
+                      onChange={(e) => setNewOrder({ ...newOrder, quantity: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="color">Cor</Label>
+                    <Input
+                      id="color"
+                      value={newOrder.color}
+                      onChange={(e) => setNewOrder({ ...newOrder, color: e.target.value })}
+                      placeholder="Ex: Preto, Branco"
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -455,7 +484,8 @@ export default function Orders() {
                 <TableHead className="w-[50px]">Impresso</TableHead>
                 <TableHead>Peça</TableHead>
                 <TableHead>Variação</TableHead>
-                <TableHead className="text-center">Quantidade</TableHead>
+                <TableHead>Cor</TableHead>
+                <TableHead className="text-center">Qtd</TableHead>
                 <TableHead className="text-center">Tempo/Un.</TableHead>
                 <TableHead className="text-center">Tempo Total</TableHead>
                 <TableHead>Observações</TableHead>
@@ -465,7 +495,7 @@ export default function Orders() {
             <TableBody>
               {filteredOrders.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                     Nenhum pedido encontrado
                   </TableCell>
                 </TableRow>
@@ -478,12 +508,34 @@ export default function Orders() {
                         onCheckedChange={() => handleTogglePrinted(order.id, order.is_printed)}
                       />
                     </TableCell>
-                    <TableCell className="font-medium">{order.pieces.name}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        {order.pieces.image_url ? (
+                          <img 
+                            src={order.pieces.image_url} 
+                            alt={order.pieces.name}
+                            className="h-10 w-10 rounded object-cover"
+                          />
+                        ) : (
+                          <div className="h-10 w-10 rounded bg-muted flex items-center justify-center">
+                            <Package className="h-5 w-5 text-muted-foreground" />
+                          </div>
+                        )}
+                        <span className="font-medium">{order.pieces.name}</span>
+                      </div>
+                    </TableCell>
                     <TableCell>
                       {order.piece_price_variations ? (
                         <Badge variant="outline">{order.piece_price_variations.variation_name}</Badge>
                       ) : (
                         <span className="text-muted-foreground text-sm">Sem variação</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {order.color ? (
+                        <Badge variant="secondary">{order.color}</Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">-</span>
                       )}
                     </TableCell>
                     <TableCell className="text-center">{order.quantity}</TableCell>
