@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Box, LayoutDashboard, Plus, Info, LogOut, Pickaxe, DollarSign, Kanban as KanbanIcon } from "lucide-react";
+import { Box, LayoutDashboard, Plus, Info, LogOut, Pickaxe, DollarSign, Kanban as KanbanIcon, BotMessageSquare } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
@@ -30,6 +30,7 @@ export function Navbar({ user }: NavbarProps) {
     { path: "/mining", label: "Minerados", icon: Pickaxe },
     { path: "/financial", label: "Financeiro", icon: DollarSign },
     { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { path: "/gpts", label: "GPTs", icon: BotMessageSquare },
     { path: "/about", label: "Sobre", icon: Info },
   ];
 
