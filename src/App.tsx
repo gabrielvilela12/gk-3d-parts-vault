@@ -18,6 +18,7 @@ import FinancialControl from "./pages/FinancialControl";
 import Dashboard from "./pages/Dashboard";
 import Orders from "./pages/Orders";
 import About from "./pages/About";
+import GptLinks from "./pages/GptLinks";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -97,6 +98,10 @@ function AppContent() {
           <Route
             path="/orders"
             element={user ? <Orders /> : <Navigate to="/auth" replace />}
+          />
+          <Route
+            path="/gpts"
+            element={user ? <GptLinks /> : <Navigate to="/auth" replace />}
           />
           <Route path="*" element={<NotFound />} />
         </Routes>
