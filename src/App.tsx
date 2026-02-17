@@ -14,9 +14,8 @@ import Catalog from "./pages/Catalog";
 import PieceDetail from "./pages/PieceDetail";
 import AddPiece from "./pages/AddPiece";
 import MiningProducts from "./pages/MiningProducts";
-import FinancialControl from "./pages/FinancialControl";
 import Dashboard from "./pages/Dashboard";
-import Orders from "./pages/Orders";
+import Accounts from "./pages/Accounts";
 import About from "./pages/About";
 import GptLinks from "./pages/GptLinks";
 import NotFound from "./pages/NotFound";
@@ -88,16 +87,12 @@ function AppContent() {
             element={user ? <MiningProducts /> : <Navigate to="/auth" replace />}
           />
           <Route
-            path="/financial"
-            element={user ? <FinancialControl /> : <Navigate to="/auth" replace />}
+            path="/accounts"
+            element={user ? <Accounts /> : <Navigate to="/auth" replace />}
           />
           <Route
             path="/dashboard"
             element={user ? <Dashboard /> : <Navigate to="/auth" replace />}
-          />
-          <Route
-            path="/orders"
-            element={user ? <Orders /> : <Navigate to="/auth" replace />}
           />
           <Route
             path="/gpts"
