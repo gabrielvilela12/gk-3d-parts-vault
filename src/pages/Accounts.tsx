@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { KeyRound, Plus, Trash2, Copy, Mail } from "lucide-react";
+import { KeyRound, Plus, Trash2, Copy, Mail, Link } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface Account {
@@ -13,6 +13,7 @@ interface Account {
   title: string;
   email: string;
   encrypted_password: string;
+  url: string | null;
   created_at: string;
 }
 
@@ -26,6 +27,7 @@ export default function Accounts() {
     title: "",
     email: "",
     password: "",
+    url: "",
   });
 
   useEffect(() => {
@@ -63,12 +65,13 @@ export default function Accounts() {
         title: formData.title,
         email: formData.email,
         encrypted_password: encoded,
+        url: formData.url || null,
       } as any);
 
       if (error) throw error;
 
       toast({ title: "Conta adicionada!", description: `Conta "${formData.title}" salva com sucesso.` });
-      setFormData({ title: "", email: "", password: "" });
+      setFormData({ title: "", email: "", password: "", url: "" });
       setDialogOpen(false);
       fetchAccounts();
     } catch (error: any) {
@@ -163,6 +166,15 @@ export default function Accounts() {
                     placeholder="••••••••"
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="url">Link (opcional)</Label>
+                  <Input
+                    id="url"
+                    value={formData.url}
+                    onChange={(e) => setFormData({ ...formData, url: e.target.value })}
+                    placeholder="https://exemplo.com"
+                  />
+                </div>
                 <Button type="submit" className="w-full">Salvar Conta</Button>
               </form>
             </DialogContent>
@@ -198,6 +210,21 @@ export default function Accounts() {
                   </Button>
                 </CardHeader>
                 <CardContent className="space-y-3">
+                  {/* URL row */}
+                  {account.url && (
+                    <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/30">
+                      <Link className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <a
+                        href={account.url.startsWith("http") ? account.url : `https://${account.url}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm truncate text-primary hover:underline"
+                      >
+                        {account.url}
+                      </a>
+                    </div>
+                  )}
+
                   {/* Email row */}
                   <div className="flex items-center justify-between gap-2 p-3 rounded-lg bg-muted/30">
                     <div className="flex items-center gap-2 min-w-0">
