@@ -290,7 +290,7 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
       // Lógica da Shopee
       const COMISSAO_PADRAO = 0.14; // 14%
       const COMISSAO_FRETE_GRATIS = 0.20; // 20%
-      const TAXA_FIXA_PADRAO = 4.00;
+      const TAXA_FIXA_PADRAO = 7.00;
       const TAXA_FIXA_MINIMA = 2.00;
       const LIMITE_PRECO_TAXA_MINIMA = 8.00;
       const LIMITE_COMISSAO_REAIS = 100.00;
@@ -450,7 +450,7 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
     if (formData.modoShopee) {
       const COMISSAO_PADRAO = 0.14;
       const COMISSAO_FRETE_GRATIS = 0.20;
-      const TAXA_FIXA_PADRAO = 4.00;
+      const TAXA_FIXA_PADRAO = 7.00;
       const TAXA_FIXA_MINIMA = 2.00;
       const LIMITE_PRECO_TAXA_MINIMA = 8.00;
       const LIMITE_COMISSAO_REAIS = 100.00;
@@ -1019,7 +1019,7 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
                   />
                   <div>
                     <Label htmlFor="freteGratisShopee" className="font-semibold">Participa do Programa de Frete Grátis</Label>
-                    <p className="text-xs text-muted-foreground">Comissão de {formData.freteGratisShopee ? '20%' : '14%'} + Taxa fixa de R$ 4,00</p>
+                    <p className="text-xs text-muted-foreground">Comissão de {formData.freteGratisShopee ? '20%' : '14%'} + Taxa fixa de R$ 7,00</p>
                   </div>
                 </div>
               </>
