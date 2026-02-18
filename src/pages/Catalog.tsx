@@ -234,7 +234,7 @@ export default function Catalog() {
                           <div className="flex items-center justify-between text-sm">
                             <span className="text-muted-foreground">Custo Base (no zero):</span>
                             <span className="font-semibold text-primary">
-                              R$ {((piece.cost + 4) / 0.80).toFixed(2)}
+                              R$ {((piece.cost + 7) / 0.80).toFixed(2)}
                             </span>
                           </div>
                         </div>

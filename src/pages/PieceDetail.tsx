@@ -326,7 +326,7 @@ export default function PieceDetail() {
                       {priceVariations.map((variation) => {
                         // Breakdown do cálculo
                         const custoBase = variation.calculated_cost;
-                        const taxaShopee = 4.00;
+                        const taxaShopee = 7.00;
                         const subtotal = custoBase + taxaShopee;
                         const precoConsumidor = subtotal / 0.8; // Divide por 0.8 = adiciona 25% para compensar 20% de comissão
                         const comissaoShopee = precoConsumidor * 0.20; // 20% de comissão
