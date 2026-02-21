@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Box, LayoutDashboard, Plus, Info, LogOut, Pickaxe, KeyRound, BotMessageSquare } from "lucide-react";
+import { Box, LayoutDashboard, Plus, Info, LogOut, Pickaxe, KeyRound, BotMessageSquare, Settings } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
@@ -30,6 +30,7 @@ export function Navbar({ user }: NavbarProps) {
     { path: "/accounts", label: "Contas", icon: KeyRound },
     { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { path: "/gpts", label: "GPTs", icon: BotMessageSquare },
+    { path: "/settings", label: "Configurações", icon: Settings },
     { path: "/about", label: "Sobre", icon: Info },
   ];
 
