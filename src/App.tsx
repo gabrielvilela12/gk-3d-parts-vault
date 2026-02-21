@@ -18,6 +18,7 @@ import Dashboard from "./pages/Dashboard";
 import Accounts from "./pages/Accounts";
 import About from "./pages/About";
 import GptLinks from "./pages/GptLinks";
+import SettingsPage from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -97,6 +98,10 @@ function AppContent() {
           <Route
             path="/gpts"
             element={user ? <GptLinks /> : <Navigate to="/auth" replace />}
+          />
+          <Route
+            path="/settings"
+            element={user ? <SettingsPage /> : <Navigate to="/auth" replace />}
           />
           <Route path="*" element={<NotFound />} />
         </Routes>

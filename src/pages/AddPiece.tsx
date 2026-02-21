@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Switch } from "@/components/ui/switch";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
-import { Save, DollarSign, Box, Timer, Bolt, TrendingDown, Settings, Percent, Package, ChevronDown, Edit, Plus, Trash } from "lucide-react";
+import { Save, DollarSign, Box, Timer, Bolt, TrendingDown, Settings, Percent, Package, ChevronDown, Edit, Plus, Trash, Palette } from "lucide-react";
 
 // Interface para os inputs do formulário
 interface FormData {
@@ -69,6 +69,14 @@ interface MiningProduct {
   name: string;
 }
 
+// Interface para filamentos cadastrados
+interface Filament {
+  id: string;
+  name: string;
+  color: string | null;
+  custo_kg: number;
+}
+
 // Interface para variações de preço
 interface PriceVariation {
   id?: string;
@@ -93,6 +101,9 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
   
   // --- NOVO ESTADO PARA OS PRODUTOS MINERADOS ---
   const [miningProducts, setMiningProducts] = useState<MiningProduct[]>([]);
+  
+  // --- ESTADO PARA FILAMENTOS CADASTRADOS ---
+  const [filaments, setFilaments] = useState<Filament[]>([]);
   
   // --- ESTADO PARA VARIAÇÕES DE PREÇO ---
   const [priceVariations, setPriceVariations] = useState<PriceVariation[]>([]);
@@ -139,7 +150,7 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
 
   const [tempoTotalMinutos, setTempoTotalMinutos] = useState(0);
 
-  // --- NOVO useEffect PARA BUSCAR PRODUTOS MINERADOS ---
+  // --- NOVO useEffect PARA BUSCAR PRODUTOS MINERADOS E FILAMENTOS ---
   useEffect(() => {
     const fetchMiningProducts = async () => {
       try {
@@ -154,8 +165,22 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
         console.error("Erro ao buscar produtos minerados:", error.message);
       }
     };
+
+    const fetchFilaments = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("filaments")
+          .select("*")
+          .order("name", { ascending: true });
+        if (error) throw error;
+        setFilaments((data as any[]) || []);
+      } catch (error: any) {
+        console.error("Erro ao buscar filamentos:", error.message);
+      }
+    };
     
     fetchMiningProducts();
+    fetchFilaments();
   }, []);
 
   // Busca dados da peça se estiver em modo de edição
@@ -388,6 +413,62 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
   const handleSwitchChange = (checked: boolean) => {
     setFormData(prev => ({ ...prev, incluirImpostos: checked }));
   };
+
+  // Calcular custo para cada filamento cadastrado
+  const calculateFilamentCosts = () => {
+    const p = (value: string) => parseFloat(value) || 0;
+    const peso = p(formData.pesoEstimadoG);
+    const horas = p(formData.tempoImpressaoHoras);
+    const minutos = p(formData.tempoImpressaoMinutos);
+    const tempoTotalHoras = horas + (minutos / 60);
+    const potenciaW = p(formData.potenciaImpressoraW);
+    const custoKWh = p(formData.custoKWh);
+    const custoFixo = p(formData.custoFixoMes);
+    const unidades = p(formData.unidadesMes);
+    const valorImpressora = p(formData.valorImpressora);
+    const vidaUtil = p(formData.vidaUtilHoras);
+    const custoAcessorios = p(formData.custoAcessorios);
+    const percentualFalhas = p(formData.percentualFalhas);
+    const markup = p(formData.markup);
+    const quantidade = p(String(formData.quantidade)) || 1;
+
+    if (peso <= 0 && tempoTotalHoras <= 0) return [];
+
+    return filaments.map(filament => {
+      const custoMaterial = (peso / 1000) * filament.custo_kg;
+      const custoEnergia = (potenciaW / 1000) * tempoTotalHoras * custoKWh;
+      const custoFixoUnitario = unidades > 0 ? custoFixo / unidades : 0;
+      const custoAmortizacao = vidaUtil > 0 ? (valorImpressora / vidaUtil) * tempoTotalHoras : 0;
+      const custoVariavel = custoMaterial + custoEnergia;
+      const custoFalhas = custoVariavel * (percentualFalhas / 100);
+      const custoUnitario = custoMaterial + custoEnergia + custoFixoUnitario + custoAmortizacao + custoAcessorios + custoFalhas;
+      const precoBase = (custoUnitario * markup) * quantidade;
+
+      let precoConsumidor = precoBase;
+      if (formData.modoShopee) {
+        const comissao = formData.freteGratisShopee ? 0.20 : 0.14;
+        const taxaFixa = 7.00;
+        precoConsumidor = (precoBase + taxaFixa) / (1 - comissao);
+        if (precoConsumidor < 8.00) {
+          precoConsumidor = (precoBase + 2.00) / (1 - comissao);
+        }
+      } else if (formData.incluirImpostos) {
+        const imposto = p(formData.imposto);
+        const taxa = p(formData.taxaPagamento);
+        const divisor = 1 - (imposto / 100) - (taxa / 100);
+        precoConsumidor = divisor > 0 ? precoBase / divisor : precoBase;
+      }
+
+      return {
+        ...filament,
+        custoMaterial,
+        custoUnitario,
+        precoConsumidor,
+      };
+    });
+  };
+
+  const filamentCosts = calculateFilamentCosts();
 
   // Adicionar nova variação
   const addPriceVariation = () => {
@@ -687,6 +768,41 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
 
           </CardContent>
         </Card>
+
+        {/* Card Relatório de Custos por Filamento */}
+        {filamentCosts.length > 0 && (
+          <Card className="card-gradient border-border/50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Palette className="h-5 w-5 text-primary" />
+                Relatório de Custos por Filamento
+              </CardTitle>
+              <CardDescription>
+                Custo estimado para cada filamento cadastrado com base no peso e tempo informados
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <div className="grid grid-cols-4 gap-2 text-xs font-semibold text-muted-foreground pb-2 border-b border-border">
+                  <span>Filamento</span>
+                  <span className="text-right">Material</span>
+                  <span className="text-right">Custo Unit.</span>
+                  <span className="text-right">Preço Venda</span>
+                </div>
+                {filamentCosts.map((fc) => (
+                  <div key={fc.id} className="grid grid-cols-4 gap-2 text-sm py-2 border-b border-border/30">
+                    <span className="font-medium">
+                      {fc.name}{fc.color ? ` (${fc.color})` : ""}
+                    </span>
+                    <span className="text-right text-muted-foreground">R$ {fc.custoMaterial.toFixed(2)}</span>
+                    <span className="text-right">R$ {fc.custoUnitario.toFixed(2)}</span>
+                    <span className="text-right font-semibold text-primary">R$ {fc.precoConsumidor.toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Card Modelo */}
         <Card className="card-gradient border-border/50">
