@@ -2,199 +2,194 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Download, Trash2, Box, DollarSign, Radio, TrendingUp, Edit, AlertCircle } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator"; // Importado
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import {
+  ArrowLeft, Download, Trash2, Box, DollarSign, Radio,
+  TrendingUp, Edit, Palette, Package, AlertCircle,
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader,
+  AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
+// ── Types ──────────────────────────────────────────────
 interface Piece {
-  id: string;
-  name: string;
-  description: string;
-  width: number;
-  height: number;
-  depth: number;
-  material: string;
-  stl_url: string;
-  image_url: string;
-  notes: string;
-  created_at: string;
-  user_id: string;
-  cost: number | null;
-  is_selling: boolean | null;
-  preco_venda: number | null;
-  lucro_liquido: number | null;
+  id: string; name: string; description: string;
+  material: string; stl_url: string; image_url: string;
+  notes: string; created_at: string; user_id: string;
+  cost: number | null; is_selling: boolean | null;
+  preco_venda: number | null; lucro_liquido: number | null;
+  peso_g: number | null; tempo_impressao_min: number | null;
+  custo_material: number | null; custo_energia: number | null;
+  custo_acessorios: number | null;
+}
+
+interface Filament {
+  id: string; name: string; color: string | null; custo_kg: number;
+}
+
+interface CostDefaults {
+  potenciaImpressoraW: number; custoKWh: number;
+  custoFixoMes: number; unidadesMes: number;
+  valorImpressora: number; vidaUtilHoras: number;
+  percentualFalhas: number; custoAcessorios: number;
+  markup: number;
 }
 
 interface PriceVariation {
-  id: string;
-  variation_name: string;
-  custo_kg_filamento: number;
-  calculated_cost: number;
-  calculated_price: number;
-  peso_g: number | null;
-  tempo_impressao_min: number | null;
+  id: string; variation_name: string; custo_kg_filamento: number;
+  calculated_cost: number; calculated_price: number;
+  peso_g: number | null; tempo_impressao_min: number | null;
 }
 
+// ── Shopee Price Calculator ────────────────────────────
+function calcShopeePrice(custoUnitario: number, markup: number, quantidade = 1) {
+  const COMISSAO = 0.20;
+  const TAXA_FIXA_PADRAO = 7.00;
+  const TAXA_FIXA_MINIMA = 2.00;
+  const LIMITE_PRECO_TAXA_MINIMA = 8.00;
+  const LIMITE_COMISSAO_REAIS = 100.00;
+
+  const precoBase = (custoUnitario * markup) * quantidade;
+  let taxaFixa = TAXA_FIXA_PADRAO;
+  let precoConsumidor = (precoBase + taxaFixa) / (1 - COMISSAO);
+
+  if (precoConsumidor < LIMITE_PRECO_TAXA_MINIMA) {
+    taxaFixa = TAXA_FIXA_MINIMA;
+    precoConsumidor = (precoBase + taxaFixa) / (1 - COMISSAO);
+  }
+
+  let comissaoEmReais = precoConsumidor * COMISSAO;
+  if (comissaoEmReais > LIMITE_COMISSAO_REAIS) {
+    comissaoEmReais = LIMITE_COMISSAO_REAIS;
+    precoConsumidor = (custoUnitario * quantidade) + comissaoEmReais + taxaFixa;
+  }
+
+  const lucroLiquido = precoConsumidor - (custoUnitario * quantidade) - comissaoEmReais - taxaFixa;
+  return { precoConsumidor, comissaoEmReais, taxaFixa, lucroLiquido };
+}
+
+// ── Cost calculator per filament ───────────────────────
+function calcCostForFilament(
+  filament: Filament, pesoG: number, tempoMin: number, d: CostDefaults, markup: number
+) {
+  const tempoH = tempoMin / 60;
+  const custoMaterial = (pesoG / 1000) * filament.custo_kg;
+  const custoEnergia = (d.potenciaImpressoraW / 1000) * tempoH * d.custoKWh;
+  const custoFixoUnit = d.unidadesMes > 0 ? d.custoFixoMes / d.unidadesMes : 0;
+  const custoAmortizacao = d.vidaUtilHoras > 0 ? (d.valorImpressora / d.vidaUtilHoras) * tempoH : 0;
+  const custoVariavel = custoMaterial + custoEnergia;
+  const custoFalhas = custoVariavel * (d.percentualFalhas / 100);
+  const custoUnitario = custoMaterial + custoEnergia + custoFixoUnit + custoAmortizacao + d.custoAcessorios + custoFalhas;
+
+  const shopeeZero = calcShopeePrice(custoUnitario, 1);
+  const shopeeMarkup = calcShopeePrice(custoUnitario, markup);
+
+  return {
+    filament,
+    custoMaterial,
+    custoEnergia,
+    custoAmortizacao,
+    custoFalhas,
+    custoUnitario,
+    precoBaseShopee: shopeeZero.precoConsumidor,
+    precoComMarkup: shopeeMarkup.precoConsumidor,
+    lucroLiquido: shopeeMarkup.lucroLiquido,
+    comissao: shopeeMarkup.comissaoEmReais,
+    taxaFixa: shopeeMarkup.taxaFixa,
+  };
+}
+
+// ── Component ──────────────────────────────────────────
 export default function PieceDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { toast } = useToast();
+
   const [piece, setPiece] = useState<Piece | null>(null);
+  const [filaments, setFilaments] = useState<Filament[]>([]);
+  const [defaults, setDefaults] = useState<CostDefaults>({
+    potenciaImpressoraW: 1300, custoKWh: 0.5, custoFixoMes: 0,
+    unidadesMes: 0, valorImpressora: 5000, vidaUtilHoras: 15000,
+    percentualFalhas: 2, custoAcessorios: 2, markup: 1.5,
+  });
   const [priceVariations, setPriceVariations] = useState<PriceVariation[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const { toast } = useToast();
-
-  // --- Estados para o Simulador de Preço ---
-  const [simulatedMarkup, setSimulatedMarkup] = useState("2.0");
-  const [simulatedTax, setSimulatedTax] = useState("0");
-  const [simulatedPrice, setSimulatedPrice] = useState(0);
-  const [simulatedProfit, setSimulatedProfit] = useState(0);
-  const [profitMargin, setProfitMargin] = useState(0);
+  const [markup, setMarkup] = useState("1.5");
 
   useEffect(() => {
-    fetchPiece();
-    getCurrentUser();
-  }, [id]);
+    const fetchAll = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        setCurrentUserId(user?.id || null);
 
-  useEffect(() => {
-    if (piece) {
-      // Tenta extrair o markup das notas para o simulador
-      let initialMarkup = "2.0";
-      if (piece.notes) {
-        const markupMatch = piece.notes.match(/Markup:\s*([0-9.]+)/i);
-        if (markupMatch && markupMatch[1]) {
-          initialMarkup = markupMatch[1];
+        const [pieceRes, filRes, presetRes, varRes] = await Promise.all([
+          supabase.from("pieces").select("*").eq("id", id).single(),
+          supabase.from("filaments").select("*").order("name"),
+          supabase.from("calculation_presets").select("*").eq("preset_name", "default").maybeSingle(),
+          supabase.from("piece_price_variations" as any).select("*").eq("piece_id", id),
+        ]);
+
+        if (pieceRes.error) throw pieceRes.error;
+        setPiece(pieceRes.data as any);
+        setFilaments((filRes.data as any[]) || []);
+        if (varRes.data) setPriceVariations(varRes.data as any);
+
+        if (presetRes.data) {
+          const d = presetRes.data;
+          const loadedDefaults = {
+            potenciaImpressoraW: d.potencia_impressora_w || 1300,
+            custoKWh: d.custo_kwh || 0.5,
+            custoFixoMes: d.custo_fixo_mes || 0,
+            unidadesMes: d.unidades_mes || 0,
+            valorImpressora: d.valor_impressora || 5000,
+            vidaUtilHoras: d.vida_util_horas || 15000,
+            percentualFalhas: d.percentual_falhas || 2,
+            custoAcessorios: d.custo_acessorios || 2,
+            markup: d.markup || 1.5,
+          };
+          setDefaults(loadedDefaults);
+          setMarkup(loadedDefaults.markup.toString());
         }
+      } catch (error: any) {
+        toast({ title: "Erro ao carregar peça", description: error.message, variant: "destructive" });
+        navigate("/catalog");
+      } finally {
+        setLoading(false);
       }
-      setSimulatedMarkup(initialMarkup);
-
-      // Recalcula o simulador com base no custo da peça
-      if (piece.cost != null) {
-        updateSimulation(initialMarkup, simulatedTax, piece.cost);
-      }
-    }
-  }, [piece]);
-
-  // Efeito para RECALCULAR o simulador
-  useEffect(() => {
-    if (piece && piece.cost != null) {
-      updateSimulation(simulatedMarkup, simulatedTax, piece.cost);
-    }
-  }, [piece, simulatedMarkup, simulatedTax]);
-  
-  // Função helper para centralizar o cálculo da simulação
-  const updateSimulation = (markupStr: string, taxStr: string, cost: number) => {
-    const markup = parseFloat(markupStr) || 1;
-    const taxPercent = parseFloat(taxStr) || 0;
-
-    const precoBase = cost * markup;
-    const divisor = 1 - (taxPercent / 100);
-    const precoFinal = divisor > 0 ? precoBase / divisor : precoBase;
-    
-    const impostoPago = precoFinal * (taxPercent / 100);
-    const lucroLiquido = precoFinal - cost - impostoPago;
-    
-    const margemDeLucro = precoFinal > 0 ? (lucroLiquido / precoFinal) * 100 : 0;
-
-    setSimulatedPrice(precoFinal);
-    setSimulatedProfit(lucroLiquido);
-    setProfitMargin(margemDeLucro);
-  };
-
-
-  const getCurrentUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    setCurrentUserId(user?.id || null);
-  };
-
-  const fetchPiece = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("pieces")
-        .select("*")
-        .eq("id", id)
-        .single();
-
-      if (error) throw error;
-      setPiece(data as any);
-
-      // Buscar variações de preço
-      const { data: variations } = await supabase
-        .from("piece_price_variations" as any)
-        .select("*")
-        .eq("piece_id", id);
-      
-      if (variations) {
-        setPriceVariations(variations as any);
-      }
-    } catch (error: any) {
-      toast({
-        title: "Erro ao carregar peça",
-        description: error.message,
-        variant: "destructive",
-      });
-      navigate("/catalog");
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+    fetchAll();
+  }, [id]);
 
   const toggleSaleStatus = async () => {
     if (!piece) return;
     const newStatus = !(piece.is_selling || false);
     try {
-      const { error } = await supabase
-        .from("pieces")
-        .update({ is_selling: newStatus } as any)
-        .eq("id", piece.id);
-
+      const { error } = await supabase.from("pieces").update({ is_selling: newStatus } as any).eq("id", piece.id);
       if (error) throw error;
-      
       setPiece(prev => prev ? { ...prev, is_selling: newStatus } : null);
-      
-      toast({
-        title: newStatus ? "Peça colocada no ar!" : "Peça retirada do ar",
-      });
+      toast({ title: newStatus ? "Peça colocada no ar!" : "Peça retirada do ar" });
     } catch (error: any) {
       toast({ title: "Erro ao atualizar status", description: error.message, variant: "destructive" });
     }
   };
 
-
   const handleDelete = async () => {
     if (!piece) return;
-
     try {
       const { error } = await supabase.from("pieces").delete().eq("id", piece.id);
-
       if (error) throw error;
-
-      toast({
-        title: "Peça excluída",
-        description: "A peça foi removida do catálogo",
-      });
+      toast({ title: "Peça excluída", description: "A peça foi removida do catálogo" });
       navigate("/catalog");
     } catch (error: any) {
-      toast({
-        title: "Erro ao excluir peça",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "Erro ao excluir peça", description: error.message, variant: "destructive" });
     }
   };
 
@@ -213,35 +208,38 @@ export default function PieceDetail() {
 
   const isOwner = currentUserId === piece.user_id;
   const isLive = piece.is_selling === true;
+  const pesoG = piece.peso_g || 0;
+  const tempoMin = piece.tempo_impressao_min || 0;
+  const tempoH = Math.floor(tempoMin / 60);
+  const tempoM = Math.round(tempoMin % 60);
+  const mkValue = parseFloat(markup) || 1;
+
+  // Calculate costs for all filaments
+  const filamentCosts = (pesoG > 0 || tempoMin > 0)
+    ? filaments.map(f => calcCostForFilament(f, pesoG, tempoMin, defaults, mkValue))
+    : [];
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-5xl mx-auto space-y-6">
         {/* Header */}
-        <div className="mb-6">
-          <Button asChild variant="ghost" className="mb-4">
-            <Link to="/catalog" className="gap-2">
-              <ArrowLeft className="h-4 w-4" />
-              Voltar ao catálogo
-            </Link>
-          </Button>
-        </div>
+        <Button asChild variant="ghost">
+          <Link to="/catalog" className="gap-2">
+            <ArrowLeft className="h-4 w-4" />
+            Voltar ao catálogo
+          </Link>
+        </Button>
 
+        {/* ── Top: Image + Info ── */}
         <div className="grid md:grid-cols-2 gap-6">
           {/* Image */}
           <Card className="card-gradient border-border/50 overflow-hidden relative">
             {isLive && (
-              <Badge className="absolute top-4 right-4 z-10 bg-green-600 shadow-lg">
-                No Ar
-              </Badge>
+              <Badge className="absolute top-4 right-4 z-10 bg-green-600 shadow-lg">No Ar</Badge>
             )}
             <div className="aspect-square bg-muted/30">
               {piece.image_url ? (
-                <img
-                  src={piece.image_url}
-                  alt={piece.name}
-                  className="w-full h-full object-cover"
-                />
+                <img src={piece.image_url} alt={piece.name} className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
                   <Box className="h-24 w-24 text-muted-foreground" />
@@ -250,248 +248,48 @@ export default function PieceDetail() {
             </div>
           </Card>
 
-          {/* Details */}
-          <div className="space-y-6">
+          {/* Info + Actions */}
+          <div className="space-y-4">
             <div>
-              <h1 className="text-4xl font-bold mb-2">{piece.name}</h1>
-              <p className="text-muted-foreground">{piece.description || "Sem descrição"}</p>
+              <h1 className="text-3xl font-bold">{piece.name}</h1>
+              <p className="text-muted-foreground mt-1">{piece.description || "Sem descrição"}</p>
             </div>
 
-            <Card className="card-gradient border-border/50">
-              <CardHeader>
-                <CardTitle>Material</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-primary font-medium">
-                  {piece.material || "Não especificado"}
-                </p>
-              </CardContent>
-            </Card>
+            {/* Quick info badges */}
+            <div className="flex flex-wrap gap-2">
+              {piece.material && <Badge variant="secondary">{piece.material}</Badge>}
+              {pesoG > 0 && <Badge variant="outline">{pesoG}g</Badge>}
+              {tempoMin > 0 && <Badge variant="outline">{tempoH}h {tempoM}min</Badge>}
+            </div>
 
-            {/* --- Card de Precificação ATUALIZADO --- */}
-            <Card className="card-gradient border-border/50">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <DollarSign className="h-5 w-5 text-primary" />
-                  Precificação
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                
-                {/* --- 1. Valores Salvos (Padrão) --- */}
-                <div className="space-y-3">
-                  <Label className="text-base font-medium">Valores Padrão</Label>
-                  {(piece.cost != null || piece.preco_venda != null) ? (
-                    <>
-                      {piece.cost != null && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-muted-foreground">Custo de Produção:</span>
-                          <span className="font-medium text-lg">
-                            R$ {piece.cost.toFixed(2)}
-                          </span>
-                        </div>
-                      )}
-                      {piece.preco_venda != null && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-muted-foreground">Preço de Venda:</span>
-                          <span className="font-medium text-lg text-primary">
-                            R$ {piece.preco_venda.toFixed(2)}
-                          </span>
-                        </div>
-                      )}
-                      {piece.lucro_liquido != null && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-muted-foreground flex items-center gap-1">
-                            <TrendingUp className="h-4 w-4" />
-                            Lucro Líquido:
-                          </span>
-                          <span className="font-bold text-lg text-green-500">
-                            R$ {piece.lucro_liquido.toFixed(2)}
-                          </span>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      Nenhum dado de precificação salvo. Edite a peça para calculá-los.
-                    </p>
-                  )}
-                </div>
-
-                {/* --- Variações de Preço --- */}
-                {priceVariations.length > 0 && (
-                  <div className="space-y-3 pt-4 border-t border-border/50">
-                    <Label className="text-base font-medium">Variações de Preço</Label>
-                    <div className="space-y-3">
-                      {priceVariations.map((variation) => {
-                        // Breakdown do cálculo
-                        const custoBase = variation.calculated_cost;
-                        const taxaShopee = 7.00;
-                        const subtotal = custoBase + taxaShopee;
-                        const precoConsumidor = subtotal / 0.8; // Divide por 0.8 = adiciona 25% para compensar 20% de comissão
-                        const comissaoShopee = precoConsumidor * 0.20; // 20% de comissão
-                        const lucroLiquido = precoConsumidor - custoBase - taxaShopee - comissaoShopee;
-                        
-                        return (
-                          <Card key={variation.id} className="border-border/50 bg-muted/20">
-                            <CardContent className="p-4">
-                              <div className="space-y-3">
-                                {/* Header da variação */}
-                                <div className="flex items-center justify-between">
-                                  <Badge variant="outline" className="font-medium">
-                                    {variation.variation_name}
-                                  </Badge>
-                                  <span className="text-xs text-muted-foreground">
-                                    R$ {variation.custo_kg_filamento.toFixed(2)}/kg
-                                  </span>
-                                </div>
-                                
-                                {/* Info de peso e tempo */}
-                                {variation.peso_g && (
-                                  <div className="text-xs text-muted-foreground">
-                                    {variation.peso_g}g • {variation.tempo_impressao_min ? `${Math.floor(variation.tempo_impressao_min / 60)}h ${variation.tempo_impressao_min % 60}min` : ''}
-                                  </div>
-                                )}
-
-                                <Separator className="my-2" />
-
-                                {/* Breakdown detalhado */}
-                                <div className="space-y-2 text-sm">
-                                  <div className="flex justify-between items-center">
-                                    <span className="text-muted-foreground">Custo de Produção:</span>
-                                    <span className="font-medium">R$ {custoBase.toFixed(2)}</span>
-                                  </div>
-                                  
-                                  <div className="flex justify-between items-center text-xs">
-                                    <span className="text-muted-foreground">+ Taxa Fixa Shopee:</span>
-                                    <span>R$ {taxaShopee.toFixed(2)}</span>
-                                  </div>
-                                  
-                                  <div className="flex justify-between items-center border-t border-border/30 pt-2">
-                                    <span className="text-muted-foreground">= Subtotal:</span>
-                                    <span className="font-medium">R$ {subtotal.toFixed(2)}</span>
-                                  </div>
-                                  
-                                  <div className="flex justify-between items-center text-xs">
-                                    <span className="text-muted-foreground">÷ 0.8 (compensar 20% comissão):</span>
-                                    <span className="text-muted-foreground">÷ 0.8</span>
-                                  </div>
-                                  
-                                  <div className="flex justify-between items-center bg-primary/10 -mx-4 px-4 py-2 rounded">
-                                    <span className="font-semibold text-primary">Preço Consumidor:</span>
-                                    <span className="font-bold text-lg text-primary">R$ {precoConsumidor.toFixed(2)}</span>
-                                  </div>
-
-                                  <Separator className="my-2" />
-
-                                  {/* Resumo de lucros */}
-                                  <div className="space-y-1 text-xs pt-1">
-                                    <div className="flex justify-between items-center text-muted-foreground">
-                                      <span>- Comissão Shopee (20%):</span>
-                                      <span className="text-red-500">-R$ {comissaoShopee.toFixed(2)}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center text-muted-foreground">
-                                      <span>- Taxa Fixa:</span>
-                                      <span className="text-red-500">-R$ {taxaShopee.toFixed(2)}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center text-muted-foreground">
-                                      <span>- Custo Produção:</span>
-                                      <span className="text-red-500">-R$ {custoBase.toFixed(2)}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center border-t border-border/30 pt-1 mt-1">
-                                      <span className="font-semibold flex items-center gap-1">
-                                        <TrendingUp className="h-3 w-3" />
-                                        Lucro Líquido:
-                                      </span>
-                                      <span className="font-bold text-green-500">R$ {lucroLiquido.toFixed(2)}</span>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        );
-                      })}
-                    </div>
+            {/* Custo de Fabricação salvo */}
+            {piece.cost != null && (
+              <Card className="card-gradient border-border/50">
+                <CardContent className="pt-4 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Custo de Fabricação (salvo):</span>
+                    <span className="font-semibold text-lg">R$ {piece.cost.toFixed(2)}</span>
                   </div>
-                )}
-
-                {/* --- 2. Simulador --- */}
-                {piece.cost != null && ( // Só mostra o simulador se o custo existir
-                  <div className="space-y-4 pt-4 border-t border-border/50">
+                  {piece.preco_venda != null && (
                     <div className="flex justify-between items-center">
-                       <Label className="text-base font-medium">Simular Novo Preço</Label>
-                       <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          <AlertCircle className="h-3 w-3" />
-                          Apenas para visualização
-                       </p>
+                      <span className="text-sm text-muted-foreground">Preço de Venda (salvo):</span>
+                      <span className="font-semibold text-lg text-primary">R$ {piece.preco_venda.toFixed(2)}</span>
                     </div>
-
-                    {/* Inputs do Simulador */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <Label htmlFor="sim-markup" className="text-xs">Margem (Markup)</Label>
-                        <Input
-                          id="sim-markup"
-                          type="number"
-                          step="0.1"
-                          value={simulatedMarkup}
-                          onChange={(e) => setSimulatedMarkup(e.target.value)}
-                          className="h-9"
-                          placeholder="ex: 2.0"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="sim-tax" className="text-xs">Taxas / Impostos (%)</Label>
-                        <Input
-                          id="sim-tax"
-                          type="number"
-                          step="0.5"
-                          value={simulatedTax}
-                          onChange={(e) => setSimulatedTax(e.target.value)}
-                          className="h-9"
-                          placeholder="ex: 5"
-                        />
-                      </div>
+                  )}
+                  {piece.lucro_liquido != null && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Lucro Líquido (salvo):</span>
+                      <span className="font-bold text-lg text-green-500">R$ {piece.lucro_liquido.toFixed(2)}</span>
                     </div>
-
-                    {/* Resultados da Simulação */}
-                    <div className="space-y-3 pt-3 border-t border-border/50">
-                      <div className="flex justify-between items-center">
-                        <span className="text-muted-foreground">Preço de Venda (Simulado):</span>
-                        <span className="font-medium text-lg text-primary">
-                          R$ {simulatedPrice.toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-muted-foreground flex items-center gap-1">
-                          <TrendingUp className="h-4 w-4" />
-                          Lucro Líquido (Simulado):
-                        </span>
-                        <span className="font-bold text-lg text-green-500">
-                          R$ {simulatedProfit.toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-muted-foreground">Margem de Lucro:</span>
-                        <span className="font-medium text-green-500">
-                          {profitMargin.toFixed(1)}%
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {piece.notes && (
               <Card className="card-gradient border-border/50">
-                <CardHeader>
-                  <CardTitle>Observações Técnicas</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground whitespace-pre-wrap">{piece.notes}</p>
+                <CardContent className="pt-4">
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">{piece.notes}</p>
                 </CardContent>
               </Card>
             )}
@@ -502,17 +300,11 @@ export default function PieceDetail() {
                 <div className="flex flex-col sm:flex-row gap-2">
                   <Button asChild className="gap-2 flex-1">
                     <Link to={`/piece/${piece.id}/edit`}>
-                      <Edit className="h-4 w-4" />
-                      Editar Peça (Salvar)
+                      <Edit className="h-4 w-4" /> Editar Peça
                     </Link>
                   </Button>
-                  <Button
-                    variant={isLive ? 'default' : 'outline'}
-                    onClick={toggleSaleStatus}
-                    className="gap-2 flex-1"
-                  >
-                    <Radio className="h-4 w-4" />
-                    {isLive ? 'No Ar' : 'Colocar no Ar'}
+                  <Button variant={isLive ? "default" : "outline"} onClick={toggleSaleStatus} className="gap-2 flex-1">
+                    <Radio className="h-4 w-4" /> {isLive ? "No Ar" : "Colocar no Ar"}
                   </Button>
                 </div>
               )}
@@ -520,8 +312,7 @@ export default function PieceDetail() {
                 {piece.stl_url && (
                   <Button asChild variant="outline" className="flex-1 gap-2">
                     <a href={piece.stl_url} download target="_blank" rel="noopener noreferrer">
-                      <Download className="h-4 w-4" />
-                      Baixar STL
+                      <Download className="h-4 w-4" /> Baixar STL
                     </a>
                   </Button>
                 )}
@@ -529,8 +320,7 @@ export default function PieceDetail() {
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button variant="destructive" className="gap-2 flex-1">
-                        <Trash2 className="h-4 w-4" />
-                        Excluir
+                        <Trash2 className="h-4 w-4" /> Excluir
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
@@ -549,9 +339,240 @@ export default function PieceDetail() {
                 )}
               </div>
             </div>
-            
           </div>
         </div>
+
+        {/* ── Markup Control ── */}
+        {(pesoG > 0 || tempoMin > 0) && filaments.length > 0 && (
+          <Card className="card-gradient border-border/50">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <DollarSign className="h-5 w-5 text-primary" />
+                Markup do Produto
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-4">
+                <Label htmlFor="markup-input" className="text-sm text-muted-foreground whitespace-nowrap">
+                  Multiplicador de Markup:
+                </Label>
+                <Input
+                  id="markup-input"
+                  type="number"
+                  step="0.1"
+                  min="1"
+                  value={markup}
+                  onChange={(e) => setMarkup(e.target.value)}
+                  className="w-28 h-9"
+                />
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <AlertCircle className="h-3 w-3" />
+                  Simulação em tempo real — não salva automaticamente
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ── Relatório de Preços por Filamento ── */}
+        {filamentCosts.length > 0 && (
+          <Card className="card-gradient border-border/50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Palette className="h-5 w-5 text-primary" />
+                Preço por Filamento / Cor
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Cálculo automático com Shopee (20% comissão + R$ 7,00 taxa fixa) • Markup: {mkValue}x
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-2">
+                {filamentCosts.map((fc) => (
+                  <Card key={fc.filament.id} className="border-border/50 bg-muted/10">
+                    <CardContent className="p-4 space-y-3">
+                      {/* Header */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="font-semibold">
+                            {fc.filament.name}
+                          </Badge>
+                          {fc.filament.color && (
+                            <span className="text-xs text-muted-foreground">{fc.filament.color}</span>
+                          )}
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          R$ {fc.filament.custo_kg.toFixed(2)}/kg
+                        </span>
+                      </div>
+
+                      <Separator />
+
+                      {/* Cost breakdown */}
+                      <div className="space-y-1.5 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Material:</span>
+                          <span>R$ {fc.custoMaterial.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Energia:</span>
+                          <span>R$ {fc.custoEnergia.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Amortização:</span>
+                          <span>R$ {fc.custoAmortizacao.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Falhas ({defaults.percentualFalhas}%):</span>
+                          <span>R$ {fc.custoFalhas.toFixed(2)}</span>
+                        </div>
+
+                        <Separator className="my-1" />
+
+                        <div className="flex justify-between font-medium">
+                          <span>Custo Fabricação:</span>
+                          <span>R$ {fc.custoUnitario.toFixed(2)}</span>
+                        </div>
+                      </div>
+
+                      <Separator />
+
+                      {/* Shopee prices */}
+                      <div className="space-y-1.5 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Preço Base Shopee (zero):</span>
+                          <span className="text-yellow-500 font-medium">R$ {fc.precoBaseShopee.toFixed(2)}</span>
+                        </div>
+
+                        <div className="flex justify-between items-center bg-primary/10 -mx-4 px-4 py-2 rounded">
+                          <span className="font-semibold text-primary">Preço Consumidor ({mkValue}x):</span>
+                          <span className="font-bold text-lg text-primary">R$ {fc.precoComMarkup.toFixed(2)}</span>
+                        </div>
+                      </div>
+
+                      <Separator />
+
+                      {/* Profit */}
+                      <div className="space-y-1 text-xs">
+                        <div className="flex justify-between text-muted-foreground">
+                          <span>- Comissão Shopee (20%):</span>
+                          <span className="text-red-500">-R$ {fc.comissao.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-muted-foreground">
+                          <span>- Taxa Fixa:</span>
+                          <span className="text-red-500">-R$ {fc.taxaFixa.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-muted-foreground">
+                          <span>- Custo Produção:</span>
+                          <span className="text-red-500">-R$ {fc.custoUnitario.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center border-t border-border/30 pt-1.5 mt-1">
+                          <span className="font-semibold text-sm flex items-center gap-1">
+                            <TrendingUp className="h-3.5 w-3.5" />
+                            Lucro Líquido:
+                          </span>
+                          <span className={`font-bold text-sm ${fc.lucroLiquido >= 0 ? "text-green-500" : "text-red-500"}`}>
+                            R$ {fc.lucroLiquido.toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ── Variações Salvas ── */}
+        {priceVariations.length > 0 && (
+          <Card className="card-gradient border-border/50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Package className="h-5 w-5 text-primary" />
+                Variações Salvas
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Variações de preço salvas durante a edição da peça
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-2">
+                {priceVariations.map((v) => {
+                  const custoBase = v.calculated_cost;
+                  const shopee = calcShopeePrice(custoBase, 1);
+                  const shopeeMarkup = calcShopeePrice(custoBase, mkValue);
+
+                  return (
+                    <Card key={v.id} className="border-border/50 bg-muted/10">
+                      <CardContent className="p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Badge variant="outline" className="font-medium">{v.variation_name}</Badge>
+                          <span className="text-xs text-muted-foreground">R$ {v.custo_kg_filamento.toFixed(2)}/kg</span>
+                        </div>
+                        {v.peso_g && (
+                          <p className="text-xs text-muted-foreground">
+                            {v.peso_g}g • {v.tempo_impressao_min ? `${Math.floor(v.tempo_impressao_min / 60)}h ${v.tempo_impressao_min % 60}min` : ""}
+                          </p>
+                        )}
+                        <Separator />
+                        <div className="space-y-1.5 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Custo Fabricação:</span>
+                            <span className="font-medium">R$ {custoBase.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Preço Base (zero):</span>
+                            <span className="text-yellow-500 font-medium">R$ {shopee.precoConsumidor.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between items-center bg-primary/10 -mx-4 px-4 py-2 rounded">
+                            <span className="font-semibold text-primary">Preço ({mkValue}x):</span>
+                            <span className="font-bold text-lg text-primary">R$ {shopeeMarkup.precoConsumidor.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between items-center pt-1">
+                            <span className="font-semibold text-sm flex items-center gap-1">
+                              <TrendingUp className="h-3.5 w-3.5" /> Lucro:
+                            </span>
+                            <span className={`font-bold text-sm ${shopeeMarkup.lucroLiquido >= 0 ? "text-green-500" : "text-red-500"}`}>
+                              R$ {shopeeMarkup.lucroLiquido.toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Aviso se não tem filamentos */}
+        {filaments.length === 0 && (pesoG > 0 || tempoMin > 0) && (
+          <Card className="border-border/50 border-dashed">
+            <CardContent className="py-8 text-center">
+              <Palette className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+              <p className="text-muted-foreground mb-3">
+                Cadastre filamentos em <strong>Configurações</strong> para ver o relatório de preços por cor.
+              </p>
+              <Button asChild variant="outline">
+                <Link to="/settings">Ir para Configurações</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Aviso se peça sem peso/tempo */}
+        {pesoG === 0 && tempoMin === 0 && (
+          <Card className="border-border/50 border-dashed">
+            <CardContent className="py-8 text-center">
+              <AlertCircle className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+              <p className="text-muted-foreground">
+                Esta peça não tem peso e tempo de impressão cadastrados. Edite a peça para calcular os custos automaticamente.
+              </p>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
