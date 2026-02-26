@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
   ArrowLeft, Download, Trash2, Box, DollarSign, Radio,
-  TrendingUp, Edit, Palette, Package, AlertCircle,
+  TrendingUp, Edit, Palette, Package, AlertCircle, ExternalLink,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -27,7 +27,7 @@ interface Piece {
   preco_venda: number | null; lucro_liquido: number | null;
   peso_g: number | null; tempo_impressao_min: number | null;
   custo_material: number | null; custo_energia: number | null;
-  custo_acessorios: number | null;
+  custo_acessorios: number | null; makerworld_url: string | null;
 }
 
 interface Filament {
@@ -262,6 +262,19 @@ export default function PieceDetail() {
               {tempoMin > 0 && <Badge variant="outline">{tempoH}h {tempoM}min</Badge>}
             </div>
 
+            {/* Makerworld link */}
+            {piece.makerworld_url && (
+              <a
+                href={piece.makerworld_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Ver no Makerworld
+              </a>
+            )}
+
             {/* Custo de Fabricação salvo */}
             {piece.cost != null && (
               <Card className="card-gradient border-border/50">
@@ -310,11 +323,18 @@ export default function PieceDetail() {
               )}
               <div className="flex flex-col sm:flex-row gap-2">
                 {piece.stl_url && (
-                  <Button asChild variant="outline" className="flex-1 gap-2">
-                    <a href={piece.stl_url} download target="_blank" rel="noopener noreferrer">
-                      <Download className="h-4 w-4" /> Baixar STL
-                    </a>
-                  </Button>
+                  <>
+                    <Button asChild variant="outline" className="flex-1 gap-2">
+                      <a href={piece.stl_url} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="h-4 w-4" /> Abrir STL
+                      </a>
+                    </Button>
+                    <Button asChild variant="outline" className="flex-1 gap-2">
+                      <a href={piece.stl_url} download target="_blank" rel="noopener noreferrer">
+                        <Download className="h-4 w-4" /> Baixar STL
+                      </a>
+                    </Button>
+                  </>
                 )}
                 {isOwner && (
                   <AlertDialog>
