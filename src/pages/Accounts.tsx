@@ -114,12 +114,12 @@ export default function Accounts() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="p-6 max-w-[1200px] mx-auto">
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="page-header">
           <div>
-            <h1 className="text-4xl font-bold mb-2">Contas</h1>
-            <p className="text-muted-foreground">Gerencie seus acessos de forma segura</p>
+            <h1 className="page-title">Contas</h1>
+            <p className="page-subtitle">Gerencie seus acessos de forma segura</p>
           </div>
 
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

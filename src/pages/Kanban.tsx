@@ -42,11 +42,11 @@ export default function Kanban() {
     description: string;
     priority: "low" | "medium" | "high";
     estimated_hours: string;
-  }>({ 
-    title: "", 
-    description: "", 
+  }>({
+    title: "",
+    description: "",
     priority: "medium",
-    estimated_hours: "" 
+    estimated_hours: ""
   });
   const { toast } = useToast();
 
@@ -206,11 +206,11 @@ export default function Kanban() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-8 flex items-center justify-between">
+    <div className="p-6 max-w-[1400px] mx-auto">
+      <div className="page-header mb-8">
         <div>
-          <h1 className="text-4xl font-bold mb-2">Kanban de Tarefas</h1>
-          <p className="text-muted-foreground">Arraste as tarefas entre as colunas para atualizar o status</p>
+          <h1 className="page-title">Kanban de Tarefas</h1>
+          <p className="page-subtitle">Arraste as tarefas entre as colunas para atualizar o status</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
@@ -318,8 +318,8 @@ export default function Kanban() {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-2">
                                 <h3 className="font-semibold">{task.title}</h3>
-                                <Badge 
-                                  variant="outline" 
+                                <Badge
+                                  variant="outline"
                                   className={priorityConfig[task.priority as keyof typeof priorityConfig].color}
                                 >
                                   <AlertCircle className="h-3 w-3 mr-1" />

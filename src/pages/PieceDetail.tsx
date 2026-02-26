@@ -324,10 +324,14 @@ export default function PieceDetail() {
               <div className="flex flex-col sm:flex-row gap-2">
                 {piece.stl_url && (
                   <>
-                    <Button asChild variant="outline" className="flex-1 gap-2">
-                      <a href={piece.stl_url} target="_blank" rel="noopener noreferrer">
-                        <ExternalLink className="h-4 w-4" /> Abrir MF
-                      </a>
+                    <Button
+                      variant="outline"
+                      className="flex-1 gap-2"
+                      onClick={() => {
+                        window.location.href = `bambustudio://open?file=${encodeURIComponent(piece.stl_url)}`;
+                      }}
+                    >
+                      <ExternalLink className="h-4 w-4" /> Abrir MF
                     </Button>
                     <Button asChild variant="outline" className="flex-1 gap-2">
                       <a href={piece.stl_url} download target="_blank" rel="noopener noreferrer">

@@ -96,12 +96,12 @@ export default function MiningProducts() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="p-6 max-w-[1200px] mx-auto">
       <div className="space-y-6">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="page-header">
           <div>
-            <h1 className="text-4xl font-bold mb-2">Produtos Minerados</h1>
-            <p className="text-muted-foreground">{filtered.length} produto(s)</p>
+            <h1 className="page-title">Produtos Minerados</h1>
+            <p className="page-subtitle">{filtered.length} produto(s) encontrado(s)</p>
           </div>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>

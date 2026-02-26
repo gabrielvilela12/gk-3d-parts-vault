@@ -61,7 +61,7 @@ export default function FinancialControl() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não autenticado");
@@ -124,14 +124,14 @@ export default function FinancialControl() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="p-6 max-w-[1200px] mx-auto">
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="page-header">
           <div>
-            <h1 className="text-4xl font-bold mb-2">Controle Financeiro</h1>
-            <p className="text-muted-foreground">Gerencie suas entradas e despesas</p>
+            <h1 className="page-title">Controle Financeiro</h1>
+            <p className="page-subtitle">Gerencie suas entradas e despesas</p>
           </div>
-          
+
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
               <Button className="gap-2">
@@ -179,7 +179,7 @@ export default function FinancialControl() {
                       placeholder="0.00"
                     />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="category">Categoria</Label>
                     <Input
@@ -280,9 +280,8 @@ export default function FinancialControl() {
                     className="flex items-center justify-between p-4 rounded-lg hover:bg-muted/30 transition-colors"
                   >
                     <div className="flex items-center gap-4">
-                      <div className={`p-2 rounded-full ${
-                        transaction.type === "income" ? "bg-green-500/10" : "bg-red-500/10"
-                      }`}>
+                      <div className={`p-2 rounded-full ${transaction.type === "income" ? "bg-green-500/10" : "bg-red-500/10"
+                        }`}>
                         {transaction.type === "income" ? (
                           <ArrowUpCircle className="h-5 w-5 text-green-500" />
                         ) : (
@@ -298,9 +297,8 @@ export default function FinancialControl() {
                         </div>
                       </div>
                     </div>
-                    <div className={`text-lg font-bold ${
-                      transaction.type === "income" ? "text-green-500" : "text-red-500"
-                    }`}>
+                    <div className={`text-lg font-bold ${transaction.type === "income" ? "text-green-500" : "text-red-500"
+                      }`}>
                       {transaction.type === "income" ? "+" : "-"} R$ {transaction.amount.toFixed(2)}
                     </div>
                   </div>
