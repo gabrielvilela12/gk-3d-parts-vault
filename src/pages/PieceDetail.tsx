@@ -326,12 +326,12 @@ export default function PieceDetail() {
                   <>
                     <Button asChild variant="outline" className="flex-1 gap-2">
                       <a href={piece.stl_url} target="_blank" rel="noopener noreferrer">
-                        <ExternalLink className="h-4 w-4" /> Abrir STL
+                        <ExternalLink className="h-4 w-4" /> Abrir MF
                       </a>
                     </Button>
                     <Button asChild variant="outline" className="flex-1 gap-2">
                       <a href={piece.stl_url} download target="_blank" rel="noopener noreferrer">
-                        <Download className="h-4 w-4" /> Baixar STL
+                        <Download className="h-4 w-4" /> Baixar MF
                       </a>
                     </Button>
                   </>
