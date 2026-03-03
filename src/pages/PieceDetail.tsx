@@ -123,7 +123,7 @@ export default function PieceDetail() {
   const [priceVariations, setPriceVariations] = useState<PriceVariation[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [markup, setMarkup] = useState("1.5");
+  const [markup, setMarkup] = useState("0");
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -157,7 +157,7 @@ export default function PieceDetail() {
             markup: d.markup || 1.5,
           };
           setDefaults(loadedDefaults);
-          setMarkup(loadedDefaults.markup.toString());
+          setMarkup((loadedDefaults.markup - 1).toString());
         }
       } catch (error: any) {
         toast({ title: "Erro ao carregar peça", description: error.message, variant: "destructive" });
@@ -213,11 +213,12 @@ export default function PieceDetail() {
   const tempoMin = piece.tempo_impressao_min || 0;
   const tempoH = Math.floor(tempoMin / 60);
   const tempoM = Math.round(tempoMin % 60);
-  const mkValue = parseFloat(markup) || 1;
+  const mkInput = parseFloat(markup) || 0;
+  const mkMultiplier = mkInput + 1; // 0 = sem lucro (1x), 1 = dobro (2x), 0.5 = 1.5x
 
   // Calculate costs for all filaments
   const filamentCosts = (pesoG > 0 || tempoMin > 0)
-    ? filaments.map(f => calcCostForFilament(f, pesoG, tempoMin, defaults, mkValue))
+    ? filaments.map(f => calcCostForFilament(f, pesoG, tempoMin, defaults, mkMultiplier))
     : [];
 
   return (
@@ -379,20 +380,20 @@ export default function PieceDetail() {
             <CardContent>
               <div className="flex items-center gap-4">
                 <Label htmlFor="markup-input" className="text-sm text-muted-foreground whitespace-nowrap">
-                  Multiplicador de Markup:
+                  Markup:
                 </Label>
                 <Input
                   id="markup-input"
                   type="number"
                   step="0.1"
-                  min="1"
+                  min="0"
                   value={markup}
                   onChange={(e) => setMarkup(e.target.value)}
                   className="w-28 h-9"
                 />
                 <p className="text-xs text-muted-foreground flex items-center gap-1">
                   <AlertCircle className="h-3 w-3" />
-                  Simulação em tempo real — não salva automaticamente
+                  0 = sem lucro • 0.5 = +50% • 1 = dobro
                 </p>
               </div>
             </CardContent>
@@ -408,7 +409,7 @@ export default function PieceDetail() {
                 Preço por Filamento / Cor
               </CardTitle>
               <p className="text-sm text-muted-foreground">
-                Cálculo automático com Shopee (20% comissão + R$ 7,00 taxa fixa) • Markup: {mkValue}x
+                Cálculo automático com Shopee (20% comissão + R$ 7,00 taxa fixa) • Markup: {mkInput}
               </p>
             </CardHeader>
             <CardContent>
@@ -456,12 +457,17 @@ export default function PieceDetail() {
                               )}
                             </div>
                             <div className="flex items-center gap-3">
-                              <span
-                                className="font-bold text-base"
-                                style={{ color: isLight ? `hsl(${accentHsl})` : `hsl(${accentHsl})` }}
-                              >
-                                R$ {fc.precoComMarkup.toFixed(2)}
-                              </span>
+                              <div className="text-right">
+                                <span
+                                  className="font-bold text-base block"
+                                  style={{ color: `hsl(${accentHsl})` }}
+                                >
+                                  R$ {fc.precoComMarkup.toFixed(2)}
+                                </span>
+                                <span className={`text-xs font-medium ${fc.lucroLiquido >= 0 ? "text-green-500" : "text-red-500"}`}>
+                                  {fc.lucroLiquido >= 0 ? "+" : ""}R$ {fc.lucroLiquido.toFixed(2)}
+                                </span>
+                              </div>
                               <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 [[data-state=open]_&]:rotate-180" />
                             </div>
                           </div>
@@ -561,7 +567,7 @@ export default function PieceDetail() {
                 {priceVariations.map((v) => {
                   const custoBase = v.calculated_cost;
                   const shopee = calcShopeePrice(custoBase, 1);
-                  const shopeeMarkup = calcShopeePrice(custoBase, mkValue);
+                  const shopeeMarkup = calcShopeePrice(custoBase, mkMultiplier);
 
                   return (
                     <Card key={v.id} className="border-border/50 bg-muted/10">
@@ -586,7 +592,7 @@ export default function PieceDetail() {
                             <span className="text-yellow-500 font-medium">R$ {shopee.precoConsumidor.toFixed(2)}</span>
                           </div>
                           <div className="flex justify-between items-center bg-primary/10 -mx-4 px-4 py-2 rounded">
-                            <span className="font-semibold text-primary">Preço ({mkValue}x):</span>
+                            <span className="font-semibold text-primary">Preço ({mkInput}):</span>
                             <span className="font-bold text-lg text-primary">R$ {shopeeMarkup.precoConsumidor.toFixed(2)}</span>
                           </div>
                           <div className="flex justify-between items-center pt-1">
