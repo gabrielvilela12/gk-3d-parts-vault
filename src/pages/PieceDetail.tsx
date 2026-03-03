@@ -9,8 +9,9 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
   ArrowLeft, Download, Trash2, Box, DollarSign, Radio,
-  TrendingUp, Edit, Palette, Package, AlertCircle, ExternalLink,
+  TrendingUp, Edit, Palette, Package, AlertCircle, ExternalLink, ChevronDown,
 } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -411,98 +412,133 @@ export default function PieceDetail() {
               </p>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-4 md:grid-cols-2">
-                {filamentCosts.map((fc) => (
-                  <Card key={fc.filament.id} className="border-border/50 bg-muted/10">
-                    <CardContent className="p-4 space-y-3">
-                      {/* Header */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="font-semibold">
-                            {fc.filament.name}
-                          </Badge>
-                          {fc.filament.color && (
-                            <span className="text-xs text-muted-foreground">{fc.filament.color}</span>
-                          )}
-                        </div>
-                        <span className="text-xs text-muted-foreground">
-                          R$ {fc.filament.custo_kg.toFixed(2)}/kg
-                        </span>
+              <div className="grid gap-3 md:grid-cols-2">
+                {filamentCosts.map((fc) => {
+                  // Parse color name to a CSS-friendly hue for the accent
+                  const colorName = (fc.filament.color || "").toLowerCase();
+                  const colorMap: Record<string, string> = {
+                    preto: "0 0% 20%", black: "0 0% 20%",
+                    branco: "0 0% 90%", white: "0 0% 90%",
+                    vermelho: "0 75% 50%", red: "0 75% 50%",
+                    azul: "217 85% 55%", blue: "217 85% 55%",
+                    verde: "140 60% 45%", green: "140 60% 45%",
+                    amarelo: "45 90% 55%", yellow: "45 90% 55%",
+                    laranja: "25 90% 55%", orange: "25 90% 55%",
+                    rosa: "330 70% 60%", pink: "330 70% 60%",
+                    roxo: "270 60% 55%", purple: "270 60% 55%",
+                    cinza: "0 0% 55%", gray: "0 0% 55%", grey: "0 0% 55%",
+                    marrom: "25 50% 35%", brown: "25 50% 35%",
+                    "marrom claro": "25 45% 50%", "marrom escuro": "25 55% 25%",
+                    bege: "35 40% 70%", beige: "35 40% 70%",
+                    dourado: "43 80% 50%", gold: "43 80% 50%",
+                    prata: "0 0% 75%", silver: "0 0% 75%",
+                  };
+                  const accentHsl = colorMap[colorName] || "217 91% 60%";
+                  const isLight = colorName === "branco" || colorName === "white" || colorName === "amarelo" || colorName === "yellow" || colorName === "bege" || colorName === "beige" || colorName === "prata" || colorName === "silver";
+
+                  return (
+                    <Collapsible key={fc.filament.id}>
+                      <div
+                        className="rounded-lg border border-border/50 overflow-hidden"
+                        style={{ borderLeftWidth: 4, borderLeftColor: `hsl(${accentHsl})` }}
+                      >
+                        <CollapsibleTrigger className="w-full">
+                          <div className="flex items-center justify-between p-3 hover:bg-muted/20 transition-colors cursor-pointer">
+                            <div className="flex items-center gap-2">
+                              {/* Color dot */}
+                              <div
+                                className="w-4 h-4 rounded-full border border-border/50 shrink-0"
+                                style={{ backgroundColor: `hsl(${accentHsl})` }}
+                              />
+                              <span className="font-medium text-sm">{fc.filament.name}</span>
+                              {fc.filament.color && (
+                                <span className="text-xs text-muted-foreground">{fc.filament.color}</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span
+                                className="font-bold text-base"
+                                style={{ color: isLight ? `hsl(${accentHsl})` : `hsl(${accentHsl})` }}
+                              >
+                                R$ {fc.precoComMarkup.toFixed(2)}
+                              </span>
+                              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 [[data-state=open]_&]:rotate-180" />
+                            </div>
+                          </div>
+                        </CollapsibleTrigger>
+
+                        <CollapsibleContent>
+                          <div className="px-4 pb-4 space-y-3 border-t border-border/30">
+                            {/* Cost breakdown */}
+                            <div className="space-y-1.5 text-sm pt-3">
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Material:</span>
+                                <span>R$ {fc.custoMaterial.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Energia:</span>
+                                <span>R$ {fc.custoEnergia.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Amortização:</span>
+                                <span>R$ {fc.custoAmortizacao.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Falhas ({defaults.percentualFalhas}%):</span>
+                                <span>R$ {fc.custoFalhas.toFixed(2)}</span>
+                              </div>
+                              <Separator className="my-1" />
+                              <div className="flex justify-between font-medium">
+                                <span>Custo Fabricação:</span>
+                                <span>R$ {fc.custoUnitario.toFixed(2)}</span>
+                              </div>
+                            </div>
+
+                            <Separator />
+
+                            {/* Shopee prices */}
+                            <div className="space-y-1.5 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Preço Base Shopee (zero):</span>
+                                <span className="text-yellow-500 font-medium">R$ {fc.precoBaseShopee.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between text-xs text-muted-foreground">
+                                <span>R$ {fc.filament.custo_kg.toFixed(2)}/kg</span>
+                              </div>
+                            </div>
+
+                            <Separator />
+
+                            {/* Profit breakdown */}
+                            <div className="space-y-1 text-xs">
+                              <div className="flex justify-between text-muted-foreground">
+                                <span>- Comissão Shopee (20%):</span>
+                                <span className="text-red-500">-R$ {fc.comissao.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between text-muted-foreground">
+                                <span>- Taxa Fixa:</span>
+                                <span className="text-red-500">-R$ {fc.taxaFixa.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between text-muted-foreground">
+                                <span>- Custo Produção:</span>
+                                <span className="text-red-500">-R$ {fc.custoUnitario.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between items-center border-t border-border/30 pt-1.5 mt-1">
+                                <span className="font-semibold text-sm flex items-center gap-1">
+                                  <TrendingUp className="h-3.5 w-3.5" />
+                                  Lucro Líquido:
+                                </span>
+                                <span className={`font-bold text-sm ${fc.lucroLiquido >= 0 ? "text-green-500" : "text-red-500"}`}>
+                                  R$ {fc.lucroLiquido.toFixed(2)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </CollapsibleContent>
                       </div>
-
-                      <Separator />
-
-                      {/* Cost breakdown */}
-                      <div className="space-y-1.5 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Material:</span>
-                          <span>R$ {fc.custoMaterial.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Energia:</span>
-                          <span>R$ {fc.custoEnergia.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Amortização:</span>
-                          <span>R$ {fc.custoAmortizacao.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Falhas ({defaults.percentualFalhas}%):</span>
-                          <span>R$ {fc.custoFalhas.toFixed(2)}</span>
-                        </div>
-
-                        <Separator className="my-1" />
-
-                        <div className="flex justify-between font-medium">
-                          <span>Custo Fabricação:</span>
-                          <span>R$ {fc.custoUnitario.toFixed(2)}</span>
-                        </div>
-                      </div>
-
-                      <Separator />
-
-                      {/* Shopee prices */}
-                      <div className="space-y-1.5 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Preço Base Shopee (zero):</span>
-                          <span className="text-yellow-500 font-medium">R$ {fc.precoBaseShopee.toFixed(2)}</span>
-                        </div>
-
-                        <div className="flex justify-between items-center bg-primary/10 -mx-4 px-4 py-2 rounded">
-                          <span className="font-semibold text-primary">Preço Consumidor ({mkValue}x):</span>
-                          <span className="font-bold text-lg text-primary">R$ {fc.precoComMarkup.toFixed(2)}</span>
-                        </div>
-                      </div>
-
-                      <Separator />
-
-                      {/* Profit */}
-                      <div className="space-y-1 text-xs">
-                        <div className="flex justify-between text-muted-foreground">
-                          <span>- Comissão Shopee (20%):</span>
-                          <span className="text-red-500">-R$ {fc.comissao.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between text-muted-foreground">
-                          <span>- Taxa Fixa:</span>
-                          <span className="text-red-500">-R$ {fc.taxaFixa.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between text-muted-foreground">
-                          <span>- Custo Produção:</span>
-                          <span className="text-red-500">-R$ {fc.custoUnitario.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between items-center border-t border-border/30 pt-1.5 mt-1">
-                          <span className="font-semibold text-sm flex items-center gap-1">
-                            <TrendingUp className="h-3.5 w-3.5" />
-                            Lucro Líquido:
-                          </span>
-                          <span className={`font-bold text-sm ${fc.lucroLiquido >= 0 ? "text-green-500" : "text-red-500"}`}>
-                            R$ {fc.lucroLiquido.toFixed(2)}
-                          </span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                    </Collapsible>
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
