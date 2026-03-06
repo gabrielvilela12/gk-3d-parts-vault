@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,15 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { Package, Plus, Trash2, Clock, CheckCircle2, Filter } from "lucide-react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Package, Plus, Trash2, Clock, CheckCircle2, GripVertical, Timer, CalendarClock } from "lucide-react";
 
 interface Order {
   id: string;
@@ -56,15 +48,29 @@ interface Variation {
   tempo_impressao_min: number | null;
 }
 
+const formatTime = (minutes: number | null): string => {
+  if (minutes === null || minutes === 0) return "N/A";
+  const hours = Math.floor(minutes / 60);
+  const mins = Math.round(minutes % 60);
+  return hours > 0 ? `${hours}h ${mins}min` : `${mins}min`;
+};
+
+const formatDateTime = (date: Date): string => {
+  return date.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
 export default function Orders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [pieces, setPieces] = useState<Piece[]>([]);
   const [variations, setVariations] = useState<Variation[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [filterPrintStatus, setFilterPrintStatus] = useState<string>("all");
-  const [filterMaxHours, setFilterMaxHours] = useState<string>("");
-  const [filterColor, setFilterColor] = useState<string>("all");
+  const [now, setNow] = useState(new Date());
   const [newOrder, setNewOrder] = useState({
     piece_id: "",
     variation_id: "",
@@ -73,6 +79,12 @@ export default function Orders() {
     notes: "",
   });
   const { toast } = useToast();
+
+  // Update "now" every minute for live countdown
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -83,46 +95,33 @@ export default function Orders() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Fetch orders
-      const { data: ordersData, error: ordersError } = await supabase
-        .from("orders")
-        .select(`
-          *,
-          pieces(name, tempo_impressao_min, image_url),
-          piece_price_variations(variation_name, tempo_impressao_min)
-        `)
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
+      const [ordersRes, piecesRes, variationsRes] = await Promise.all([
+        supabase
+          .from("orders")
+          .select(`*, pieces(name, tempo_impressao_min, image_url), piece_price_variations(variation_name, tempo_impressao_min)`)
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("pieces")
+          .select("id, name, tempo_impressao_min, image_url")
+          .eq("user_id", user.id)
+          .order("name"),
+        supabase
+          .from("piece_price_variations")
+          .select("id, piece_id, variation_name, tempo_impressao_min")
+          .eq("user_id", user.id),
+      ]);
 
-      if (ordersError) throw ordersError;
-      setOrders(ordersData || []);
+      if (ordersRes.error) throw ordersRes.error;
+      if (piecesRes.error) throw piecesRes.error;
+      if (variationsRes.error) throw variationsRes.error;
 
-      // Fetch pieces
-      const { data: piecesData, error: piecesError } = await supabase
-        .from("pieces")
-        .select("id, name, tempo_impressao_min, image_url")
-        .eq("user_id", user.id)
-        .order("name");
-
-      if (piecesError) throw piecesError;
-      setPieces(piecesData || []);
-
-      // Fetch all variations
-      const { data: variationsData, error: variationsError } = await supabase
-        .from("piece_price_variations")
-        .select("id, piece_id, variation_name, tempo_impressao_min")
-        .eq("user_id", user.id);
-
-      if (variationsError) throw variationsError;
-      setVariations(variationsData || []);
-
+      setOrders(ordersRes.data || []);
+      setPieces(piecesRes.data || []);
+      setVariations(variationsRes.data || []);
     } catch (error) {
       console.error("Error fetching data:", error);
-      toast({
-        title: "Erro ao carregar dados",
-        description: "Não foi possível carregar os pedidos.",
-        variant: "destructive",
-      });
+      toast({ title: "Erro ao carregar dados", variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -130,46 +129,29 @@ export default function Orders() {
 
   const handleCreateOrder = async () => {
     if (!newOrder.piece_id) {
-      toast({
-        title: "Peça obrigatória",
-        description: "Por favor, selecione uma peça.",
-        variant: "destructive",
-      });
+      toast({ title: "Selecione uma peça", variant: "destructive" });
       return;
     }
-
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { error } = await supabase
-        .from("orders")
-        .insert({
-          user_id: user.id,
-          piece_id: newOrder.piece_id,
-          variation_id: newOrder.variation_id || null,
-          quantity: parseInt(newOrder.quantity),
-          color: newOrder.color || null,
-          notes: newOrder.notes || null,
-        });
-
-      if (error) throw error;
-
-      toast({
-        title: "Pedido criado",
-        description: "O pedido foi criado com sucesso.",
+      const { error } = await supabase.from("orders").insert({
+        user_id: user.id,
+        piece_id: newOrder.piece_id,
+        variation_id: newOrder.variation_id || null,
+        quantity: parseInt(newOrder.quantity),
+        color: newOrder.color || null,
+        notes: newOrder.notes || null,
       });
 
+      if (error) throw error;
+      toast({ title: "Pedido criado!" });
       setNewOrder({ piece_id: "", variation_id: "", quantity: "1", color: "", notes: "" });
       setIsDialogOpen(false);
       fetchData();
-    } catch (error) {
-      console.error("Error creating order:", error);
-      toast({
-        title: "Erro ao criar",
-        description: "Não foi possível criar o pedido.",
-        variant: "destructive",
-      });
+    } catch {
+      toast({ title: "Erro ao criar pedido", variant: "destructive" });
     }
   };
 
@@ -178,424 +160,319 @@ export default function Orders() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { error } = await supabase
-        .from("orders")
-        .update({
-          is_printed: !currentStatus,
-          printed_at: !currentStatus ? new Date().toISOString() : null,
-          printed_by: !currentStatus ? user.email : null,
-        })
-        .eq("id", orderId);
+      const { error } = await supabase.from("orders").update({
+        is_printed: !currentStatus,
+        printed_at: !currentStatus ? new Date().toISOString() : null,
+        printed_by: !currentStatus ? user.email : null,
+      }).eq("id", orderId);
 
       if (error) throw error;
-
-      setOrders(orders.map(order =>
-        order.id === orderId
-          ? {
-              ...order,
-              is_printed: !currentStatus,
-              printed_at: !currentStatus ? new Date().toISOString() : null,
-              printed_by: !currentStatus ? user.email : null,
-            }
-          : order
-      ));
-
-      toast({
-        title: !currentStatus ? "Marcado como impresso" : "Desmarcado",
-        description: !currentStatus ? "O pedido foi marcado como impresso." : "O pedido foi desmarcado.",
-      });
-    } catch (error) {
-      console.error("Error updating order:", error);
-      toast({
-        title: "Erro ao atualizar",
-        description: "Não foi possível atualizar o status do pedido.",
-        variant: "destructive",
-      });
+      setOrders(prev => prev.map(o => o.id === orderId ? {
+        ...o,
+        is_printed: !currentStatus,
+        printed_at: !currentStatus ? new Date().toISOString() : null,
+        printed_by: !currentStatus ? user.email : null,
+      } : o));
+    } catch {
+      toast({ title: "Erro ao atualizar", variant: "destructive" });
     }
   };
 
   const handleDeleteOrder = async (orderId: string) => {
     try {
-      const { error } = await supabase
-        .from("orders")
-        .delete()
-        .eq("id", orderId);
-
+      const { error } = await supabase.from("orders").delete().eq("id", orderId);
       if (error) throw error;
-
-      setOrders(orders.filter(order => order.id !== orderId));
-      toast({
-        title: "Pedido excluído",
-        description: "O pedido foi excluído com sucesso.",
-      });
-    } catch (error) {
-      console.error("Error deleting order:", error);
-      toast({
-        title: "Erro ao excluir",
-        description: "Não foi possível excluir o pedido.",
-        variant: "destructive",
-      });
+      setOrders(prev => prev.filter(o => o.id !== orderId));
+      toast({ title: "Pedido excluído" });
+    } catch {
+      toast({ title: "Erro ao excluir", variant: "destructive" });
     }
   };
 
-  const getPrintTime = (order: Order): number | null => {
-    if (order.variation_id && order.piece_price_variations) {
-      return order.piece_price_variations.tempo_impressao_min;
-    }
-    return order.pieces.tempo_impressao_min;
+  const getPrintTimeMin = (order: Order): number => {
+    const t = order.variation_id && order.piece_price_variations
+      ? order.piece_price_variations.tempo_impressao_min
+      : order.pieces.tempo_impressao_min;
+    return (t || 0) * order.quantity;
   };
 
-  const filteredOrders = orders.filter(order => {
-    // Filter by print status
-    if (filterPrintStatus === "printed" && !order.is_printed) return false;
-    if (filterPrintStatus === "not_printed" && order.is_printed) return false;
+  // Split orders into queue (not printed) and done (printed)
+  const queue = useMemo(() => orders.filter(o => !o.is_printed), [orders]);
+  const done = useMemo(() => orders.filter(o => o.is_printed), [orders]);
 
-    // Filter by color
-    if (filterColor !== "all") {
-      if (filterColor === "no_color" && order.color) return false;
-      if (filterColor !== "no_color" && order.color !== filterColor) return false;
-    }
+  // Calculate cumulative finish times for the queue
+  const queueWithTimes = useMemo(() => {
+    let accMinutes = 0;
+    return queue.map(order => {
+      const totalMin = getPrintTimeMin(order);
+      accMinutes += totalMin;
+      const finishAt = new Date(now.getTime() + accMinutes * 60_000);
+      return { order, totalMin, accMinutes, finishAt };
+    });
+  }, [queue, now]);
 
-    // Filter by max hours (exact hours, not decimals)
-    if (filterMaxHours) {
-      const printTime = getPrintTime(order);
-      if (printTime === null) return false;
-      const maxMinutes = parseInt(filterMaxHours) * 60; // Exact hours only
-      if (printTime > maxMinutes) return false;
-    }
-
-    return true;
-  });
-
-  const getTotalPrintTime = (order: Order): number => {
-    const printTime = getPrintTime(order);
-    return (printTime || 0) * order.quantity;
-  };
-
-  const formatTime = (minutes: number | null): string => {
-    if (minutes === null) return "N/A";
-    const hours = Math.floor(minutes / 60);
-    const mins = Math.round(minutes % 60);
-    return hours > 0 ? `${hours}h ${mins}min` : `${mins}min`;
-  };
+  const totalQueueMin = queueWithTimes.length > 0 ? queueWithTimes[queueWithTimes.length - 1].accMinutes : 0;
 
   const availableVariations = variations.filter(v => v.piece_id === newOrder.piece_id);
 
-  // Get unique colors from orders
-  const availableColors = Array.from(
-    new Set(orders.map(o => o.color).filter(Boolean))
-  ).sort();
-
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-center">
-          <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">Carregando...</p>
-        </div>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-4xl font-bold mb-2">Controle de Pedidos</h1>
-            <p className="text-muted-foreground">Gerencie os pedidos vendidos e status de impressão</p>
-          </div>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Novo Pedido
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Criar Novo Pedido</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="piece">Peça *</Label>
-                  <Select value={newOrder.piece_id} onValueChange={(value) => setNewOrder({ ...newOrder, piece_id: value, variation_id: "" })}>
-                    <SelectTrigger id="piece">
-                      <SelectValue placeholder="Selecione uma peça" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {pieces.map(piece => (
-                        <SelectItem key={piece.id} value={piece.id}>
-                          <div className="flex items-center gap-3">
-                            {piece.image_url ? (
-                              <img 
-                                src={piece.image_url} 
-                                alt={piece.name}
-                                className="h-10 w-10 rounded object-cover"
-                              />
-                            ) : (
-                              <div className="h-10 w-10 rounded bg-muted flex items-center justify-center">
-                                <Package className="h-5 w-5 text-muted-foreground" />
-                              </div>
-                            )}
-                            <span>{piece.name}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {availableVariations.length > 0 && (
-                  <div className="space-y-2">
-                    <Label htmlFor="variation">Variação</Label>
-                    <Select value={newOrder.variation_id} onValueChange={(value) => setNewOrder({ ...newOrder, variation_id: value })}>
-                      <SelectTrigger id="variation">
-                        <SelectValue placeholder="Selecione uma variação (opcional)" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">Sem variação</SelectItem>
-                        {availableVariations.map(variation => (
-                          <SelectItem key={variation.id} value={variation.id}>
-                            {variation.variation_name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="quantity">Quantidade *</Label>
-                    <Input
-                      id="quantity"
-                      type="number"
-                      min="1"
-                      value={newOrder.quantity}
-                      onChange={(e) => setNewOrder({ ...newOrder, quantity: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="color">Cor</Label>
-                    <Input
-                      id="color"
-                      value={newOrder.color}
-                      onChange={(e) => setNewOrder({ ...newOrder, color: e.target.value })}
-                      placeholder="Ex: Preto, Branco"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="notes">Observações</Label>
-                  <Textarea
-                    id="notes"
-                    value={newOrder.notes}
-                    onChange={(e) => setNewOrder({ ...newOrder, notes: e.target.value })}
-                    placeholder="Observações sobre o pedido"
-                    rows={3}
-                  />
-                </div>
-
-                <Button onClick={handleCreateOrder} className="w-full">
-                  Criar Pedido
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+    <div className="container mx-auto px-4 py-8 max-w-4xl">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-3xl font-bold">Fila de Produção</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Organize a ordem de impressão e acompanhe os horários
+          </p>
         </div>
-
-        {/* Filters */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Filter className="h-5 w-5" />
-              Filtros
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button><Plus className="mr-2 h-4 w-4" />Novo Pedido</Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Adicionar Pedido à Fila</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="filterStatus">Status de Impressão</Label>
-                <Select value={filterPrintStatus} onValueChange={setFilterPrintStatus}>
-                  <SelectTrigger id="filterStatus">
-                    <SelectValue />
-                  </SelectTrigger>
+                <Label>Peça *</Label>
+                <Select value={newOrder.piece_id} onValueChange={(v) => setNewOrder({ ...newOrder, piece_id: v, variation_id: "" })}>
+                  <SelectTrigger><SelectValue placeholder="Selecione uma peça" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    <SelectItem value="printed">Impresso</SelectItem>
-                    <SelectItem value="not_printed">Não Impresso</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="filterColor">Cor</Label>
-                <Select value={filterColor} onValueChange={setFilterColor}>
-                  <SelectTrigger id="filterColor">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas as cores</SelectItem>
-                    <SelectItem value="no_color">Sem cor</SelectItem>
-                    {availableColors.map(color => (
-                      <SelectItem key={color} value={color!}>
-                        {color}
+                    {pieces.map(p => (
+                      <SelectItem key={p.id} value={p.id}>
+                        <div className="flex items-center gap-2">
+                          {p.image_url ? (
+                            <img src={p.image_url} alt={p.name} className="h-8 w-8 rounded object-cover" />
+                          ) : (
+                            <div className="h-8 w-8 rounded bg-muted flex items-center justify-center">
+                              <Package className="h-4 w-4 text-muted-foreground" />
+                            </div>
+                          )}
+                          <span>{p.name}</span>
+                          {p.tempo_impressao_min && (
+                            <span className="text-xs text-muted-foreground">({formatTime(p.tempo_impressao_min)})</span>
+                          )}
+                        </div>
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="filterHours">Máximo de Horas (por unidade)</Label>
-                <Input
-                  id="filterHours"
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={filterMaxHours}
-                  onChange={(e) => setFilterMaxHours(e.target.value)}
-                  placeholder="Ex: 2 (horas exatas)"
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
-        {/* Statistics */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Total de Pedidos</p>
-                  <p className="text-2xl font-bold">{filteredOrders.length}</p>
+              {availableVariations.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Variação</Label>
+                  <Select value={newOrder.variation_id} onValueChange={(v) => setNewOrder({ ...newOrder, variation_id: v })}>
+                    <SelectTrigger><SelectValue placeholder="Opcional" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Sem variação</SelectItem>
+                      {availableVariations.map(v => (
+                        <SelectItem key={v.id} value={v.id}>{v.variation_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <Package className="h-8 w-8 text-muted-foreground" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Não Impressos</p>
-                  <p className="text-2xl font-bold text-yellow-500">
-                    {filteredOrders.filter(o => !o.is_printed).length}
-                  </p>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Quantidade</Label>
+                  <Input type="number" min="1" value={newOrder.quantity} onChange={(e) => setNewOrder({ ...newOrder, quantity: e.target.value })} />
                 </div>
-                <Clock className="h-8 w-8 text-yellow-500" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Impressos</p>
-                  <p className="text-2xl font-bold text-green-500">
-                    {filteredOrders.filter(o => o.is_printed).length}
-                  </p>
+                <div className="space-y-2">
+                  <Label>Cor</Label>
+                  <Input value={newOrder.color} onChange={(e) => setNewOrder({ ...newOrder, color: e.target.value })} placeholder="Ex: Preto" />
                 </div>
-                <CheckCircle2 className="h-8 w-8 text-green-500" />
               </div>
-            </CardContent>
-          </Card>
-        </div>
+
+              <div className="space-y-2">
+                <Label>Observações</Label>
+                <Textarea value={newOrder.notes} onChange={(e) => setNewOrder({ ...newOrder, notes: e.target.value })} rows={2} />
+              </div>
+
+              <Button onClick={handleCreateOrder} className="w-full">Adicionar à Fila</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      {/* Orders Table */}
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[50px]">Impresso</TableHead>
-                <TableHead>Peça</TableHead>
-                <TableHead>Variação</TableHead>
-                <TableHead>Cor</TableHead>
-                <TableHead className="text-center">Qtd</TableHead>
-                <TableHead className="text-center">Tempo/Un.</TableHead>
-                <TableHead className="text-center">Tempo Total</TableHead>
-                <TableHead>Observações</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredOrders.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                    Nenhum pedido encontrado
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredOrders.map(order => (
-                  <TableRow key={order.id} className={order.is_printed ? "opacity-60" : ""}>
-                    <TableCell>
-                      <Checkbox
-                        checked={order.is_printed}
-                        onCheckedChange={() => handleTogglePrinted(order.id, order.is_printed)}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        {order.pieces.image_url ? (
-                          <img 
-                            src={order.pieces.image_url} 
-                            alt={order.pieces.name}
-                            className="h-10 w-10 rounded object-cover"
-                          />
-                        ) : (
-                          <div className="h-10 w-10 rounded bg-muted flex items-center justify-center">
-                            <Package className="h-5 w-5 text-muted-foreground" />
-                          </div>
+      {/* Summary stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <Card>
+          <CardContent className="pt-4 pb-3 px-4">
+            <p className="text-xs text-muted-foreground">Na Fila</p>
+            <p className="text-2xl font-bold">{queue.length}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 pb-3 px-4">
+            <p className="text-xs text-muted-foreground">Tempo Total</p>
+            <p className="text-2xl font-bold">{formatTime(totalQueueMin)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 pb-3 px-4">
+            <p className="text-xs text-muted-foreground">Término Previsto</p>
+            <p className="text-lg font-bold">
+              {totalQueueMin > 0 ? formatDateTime(new Date(now.getTime() + totalQueueMin * 60_000)) : "—"}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 pb-3 px-4">
+            <p className="text-xs text-muted-foreground">Concluídos</p>
+            <p className="text-2xl font-bold text-primary">{done.length}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Queue */}
+      <div className="mb-8">
+        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+          <Timer className="h-5 w-5 text-primary" />
+          Fila de Impressão
+        </h2>
+
+        {queueWithTimes.length === 0 ? (
+          <Card>
+            <CardContent className="py-12 text-center text-muted-foreground">
+              <Package className="h-10 w-10 mx-auto mb-3 opacity-40" />
+              <p>Nenhum pedido na fila. Adicione um pedido para começar.</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-2">
+            {queueWithTimes.map(({ order, totalMin, finishAt }, idx) => {
+              const unitTime = order.variation_id && order.piece_price_variations
+                ? order.piece_price_variations.tempo_impressao_min
+                : order.pieces.tempo_impressao_min;
+
+              return (
+                <Card key={order.id} className="border-l-4 border-l-primary/60 hover:border-l-primary transition-colors">
+                  <CardContent className="py-3 px-4">
+                    <div className="flex items-center gap-3">
+                      {/* Position */}
+                      <div className="flex flex-col items-center justify-center w-8 shrink-0">
+                        <span className="text-xs text-muted-foreground font-mono">#{idx + 1}</span>
+                      </div>
+
+                      {/* Image */}
+                      {order.pieces.image_url ? (
+                        <img src={order.pieces.image_url} alt={order.pieces.name} className="h-12 w-12 rounded-lg object-cover shrink-0" />
+                      ) : (
+                        <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                          <Package className="h-5 w-5 text-muted-foreground" />
+                        </div>
+                      )}
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-sm truncate">{order.pieces.name}</span>
+                          {order.quantity > 1 && (
+                            <Badge variant="secondary" className="text-xs">x{order.quantity}</Badge>
+                          )}
+                          {order.color && (
+                            <Badge variant="outline" className="text-xs">{order.color}</Badge>
+                          )}
+                          {order.piece_price_variations && (
+                            <Badge variant="outline" className="text-xs">{order.piece_price_variations.variation_name}</Badge>
+                          )}
+                        </div>
+                        {order.notes && (
+                          <p className="text-xs text-muted-foreground truncate mt-0.5">{order.notes}</p>
                         )}
-                        <span className="font-medium">{order.pieces.name}</span>
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      {order.piece_price_variations ? (
-                        <Badge variant="outline">{order.piece_price_variations.variation_name}</Badge>
-                      ) : (
-                        <span className="text-muted-foreground text-sm">Sem variação</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {order.color ? (
-                        <Badge variant="secondary">{order.color}</Badge>
-                      ) : (
-                        <span className="text-muted-foreground text-sm">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center">{order.quantity}</TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <Clock className="h-3 w-3 text-muted-foreground" />
-                        {formatTime(getPrintTime(order))}
+
+                      {/* Time info */}
+                      <div className="text-right shrink-0 space-y-0.5">
+                        <div className="flex items-center gap-1 justify-end">
+                          <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="text-sm font-medium">{formatTime(totalMin)}</span>
+                        </div>
+                        <div className="flex items-center gap-1 justify-end">
+                          <CalendarClock className="h-3.5 w-3.5 text-primary" />
+                          <span className="text-xs text-primary font-medium">{formatDateTime(finishAt)}</span>
+                        </div>
                       </div>
-                    </TableCell>
-                    <TableCell className="text-center font-semibold">
-                      {formatTime(getTotalPrintTime(order))}
-                    </TableCell>
-                    <TableCell className="max-w-[200px] truncate text-sm text-muted-foreground">
-                      {order.notes || "-"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDeleteOrder(order.id)}
-                      >
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Checkbox
+                          checked={false}
+                          onCheckedChange={() => handleTogglePrinted(order.id, false)}
+                          className="h-5 w-5"
+                        />
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteOrder(order.id)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Done */}
+      {done.length > 0 && (
+        <div>
+          <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+            <CheckCircle2 className="h-5 w-5 text-primary" />
+            Concluídos ({done.length})
+          </h2>
+          <div className="space-y-1.5">
+            {done.map(order => (
+              <Card key={order.id} className="opacity-70 hover:opacity-100 transition-opacity">
+                <CardContent className="py-2.5 px-4">
+                  <div className="flex items-center gap-3">
+                    {order.pieces.image_url ? (
+                      <img src={order.pieces.image_url} alt={order.pieces.name} className="h-9 w-9 rounded-lg object-cover shrink-0" />
+                    ) : (
+                      <div className="h-9 w-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                        <Package className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm line-through text-muted-foreground truncate">{order.pieces.name}</span>
+                        {order.quantity > 1 && <Badge variant="secondary" className="text-xs">x{order.quantity}</Badge>}
+                        {order.color && <Badge variant="outline" className="text-xs">{order.color}</Badge>}
+                      </div>
+                    </div>
+                    {order.printed_at && (
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        {new Date(order.printed_at).toLocaleDateString("pt-BR")}
+                      </span>
+                    )}
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Checkbox
+                        checked={true}
+                        onCheckedChange={() => handleTogglePrinted(order.id, true)}
+                        className="h-5 w-5"
+                      />
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteOrder(order.id)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
