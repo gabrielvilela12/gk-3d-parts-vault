@@ -18,7 +18,7 @@ import Accounts from "./pages/Accounts";
 import About from "./pages/About";
 import GptLinks from "./pages/GptLinks";
 import SettingsPage from "./pages/Settings";
-import Rankings from "./pages/Rankings";
+import Orders from "./pages/Orders";
 import NotFound from "./pages/NotFound";
 import { cn } from "@/lib/utils";
 
@@ -107,8 +107,8 @@ function AppContent() {
             element={user ? <SettingsPage /> : <Navigate to="/auth" replace />}
           />
           <Route
-            path="/rankings"
-            element={user ? <Rankings /> : <Navigate to="/auth" replace />}
+            path="/orders"
+            element={user ? <Orders /> : <Navigate to="/auth" replace />}
           />
           <Route path="*" element={<NotFound />} />
         </Routes>
