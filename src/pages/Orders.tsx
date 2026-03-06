@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { Package, Plus, Trash2, Clock, CheckCircle2, GripVertical, Timer, CalendarClock } from "lucide-react";
+import { Package, Plus, Trash2, Clock, CheckCircle2, GripVertical, Timer, CalendarClock, Search, X } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface Order {
   id: string;
@@ -78,6 +79,7 @@ export default function Orders() {
     color: "",
     notes: "",
   });
+  const [pieceSearch, setPieceSearch] = useState("");
   const { toast } = useToast();
 
   // Update "now" every minute for live countdown
@@ -244,28 +246,77 @@ export default function Orders() {
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label>Peça *</Label>
-                <Select value={newOrder.piece_id} onValueChange={(v) => setNewOrder({ ...newOrder, piece_id: v, variation_id: "" })}>
-                  <SelectTrigger><SelectValue placeholder="Selecione uma peça" /></SelectTrigger>
-                  <SelectContent>
-                    {pieces.map(p => (
-                      <SelectItem key={p.id} value={p.id}>
-                        <div className="flex items-center gap-2">
-                          {p.image_url ? (
-                            <img src={p.image_url} alt={p.name} className="h-8 w-8 rounded object-cover" />
+                {newOrder.piece_id ? (
+                  <div className="flex items-center gap-3 p-2 rounded-lg border border-primary/40 bg-primary/5">
+                    {(() => {
+                      const sel = pieces.find(p => p.id === newOrder.piece_id);
+                      if (!sel) return null;
+                      return (
+                        <>
+                          {sel.image_url ? (
+                            <img src={sel.image_url} alt={sel.name} className="h-12 w-12 rounded-lg object-cover" />
                           ) : (
-                            <div className="h-8 w-8 rounded bg-muted flex items-center justify-center">
-                              <Package className="h-4 w-4 text-muted-foreground" />
+                            <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center">
+                              <Package className="h-5 w-5 text-muted-foreground" />
                             </div>
                           )}
-                          <span>{p.name}</span>
-                          {p.tempo_impressao_min && (
-                            <span className="text-xs text-muted-foreground">({formatTime(p.tempo_impressao_min)})</span>
-                          )}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm truncate">{sel.name}</p>
+                            {sel.tempo_impressao_min && (
+                              <p className="text-xs text-muted-foreground">{formatTime(sel.tempo_impressao_min)}</p>
+                            )}
+                          </div>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setNewOrder({ ...newOrder, piece_id: "", variation_id: "" })}>
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar peça..."
+                        value={pieceSearch}
+                        onChange={(e) => setPieceSearch(e.target.value)}
+                        className="pl-9 h-9 text-sm"
+                      />
+                    </div>
+                    <ScrollArea className="h-[200px] rounded-lg border">
+                      <div className="p-1 space-y-0.5">
+                        {pieces
+                          .filter(p => p.name.toLowerCase().includes(pieceSearch.toLowerCase()))
+                          .map(p => (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => { setNewOrder({ ...newOrder, piece_id: p.id, variation_id: "" }); setPieceSearch(""); }}
+                              className="w-full flex items-center gap-3 p-2 rounded-md hover:bg-accent transition-colors text-left"
+                            >
+                              {p.image_url ? (
+                                <img src={p.image_url} alt={p.name} className="h-10 w-10 rounded-md object-cover shrink-0" />
+                              ) : (
+                                <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center shrink-0">
+                                  <Package className="h-4 w-4 text-muted-foreground" />
+                                </div>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">{p.name}</p>
+                                {p.tempo_impressao_min && (
+                                  <p className="text-[11px] text-muted-foreground">{formatTime(p.tempo_impressao_min)}</p>
+                                )}
+                              </div>
+                            </button>
+                          ))}
+                        {pieces.filter(p => p.name.toLowerCase().includes(pieceSearch.toLowerCase())).length === 0 && (
+                          <p className="text-sm text-muted-foreground text-center py-6">Nenhuma peça encontrada</p>
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                )}
               </div>
 
               {availableVariations.length > 0 && (
