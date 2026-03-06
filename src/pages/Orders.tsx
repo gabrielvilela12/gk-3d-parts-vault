@@ -49,6 +49,12 @@ interface Variation {
   tempo_impressao_min: number | null;
 }
 
+interface Filament {
+  id: string;
+  name: string;
+  color: string | null;
+}
+
 const formatTime = (minutes: number | null): string => {
   if (minutes === null || minutes === 0) return "N/A";
   const hours = Math.floor(minutes / 60);
@@ -69,6 +75,7 @@ export default function Orders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [pieces, setPieces] = useState<Piece[]>([]);
   const [variations, setVariations] = useState<Variation[]>([]);
+  const [filaments, setFilaments] = useState<Filament[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [now, setNow] = useState(new Date());
@@ -97,7 +104,7 @@ export default function Orders() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const [ordersRes, piecesRes, variationsRes] = await Promise.all([
+      const [ordersRes, piecesRes, variationsRes, filamentsRes] = await Promise.all([
         supabase
           .from("orders")
           .select(`*, pieces(name, tempo_impressao_min, image_url), piece_price_variations(variation_name, tempo_impressao_min)`)
@@ -112,6 +119,11 @@ export default function Orders() {
           .from("piece_price_variations")
           .select("id, piece_id, variation_name, tempo_impressao_min")
           .eq("user_id", user.id),
+        supabase
+          .from("filaments")
+          .select("id, name, color")
+          .eq("user_id", user.id)
+          .order("name"),
       ]);
 
       if (ordersRes.error) throw ordersRes.error;
@@ -121,6 +133,7 @@ export default function Orders() {
       setOrders(ordersRes.data || []);
       setPieces(piecesRes.data || []);
       setVariations(variationsRes.data || []);
+      setFilaments(filamentsRes.data || []);
     } catch (error) {
       console.error("Error fetching data:", error);
       toast({ title: "Erro ao carregar dados", variant: "destructive" });
@@ -322,15 +335,33 @@ export default function Orders() {
               {availableVariations.length > 0 && (
                 <div className="space-y-2">
                   <Label>Variação</Label>
-                  <Select value={newOrder.variation_id} onValueChange={(v) => setNewOrder({ ...newOrder, variation_id: v })}>
-                    <SelectTrigger><SelectValue placeholder="Opcional" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">Sem variação</SelectItem>
-                      {availableVariations.map(v => (
-                        <SelectItem key={v.id} value={v.id}>{v.variation_name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setNewOrder({ ...newOrder, variation_id: "" })}
+                      className={`px-3 py-1.5 rounded-md text-sm border transition-colors ${
+                        !newOrder.variation_id
+                          ? "border-primary bg-primary/10 text-primary font-medium"
+                          : "border-border hover:bg-accent text-muted-foreground"
+                      }`}
+                    >
+                      Padrão
+                    </button>
+                    {availableVariations.map(v => (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => setNewOrder({ ...newOrder, variation_id: v.id })}
+                        className={`px-3 py-1.5 rounded-md text-sm border transition-colors ${
+                          newOrder.variation_id === v.id
+                            ? "border-primary bg-primary/10 text-primary font-medium"
+                            : "border-border hover:bg-accent text-muted-foreground"
+                        }`}
+                      >
+                        {v.variation_name}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -341,7 +372,43 @@ export default function Orders() {
                 </div>
                 <div className="space-y-2">
                   <Label>Cor</Label>
-                  <Input value={newOrder.color} onChange={(e) => setNewOrder({ ...newOrder, color: e.target.value })} placeholder="Ex: Preto" />
+                  {filaments.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {filaments.map(f => {
+                        const colorMap: Record<string, string> = {
+                          preto: "hsl(0 0% 10%)", black: "hsl(0 0% 10%)",
+                          branco: "hsl(0 0% 95%)", white: "hsl(0 0% 95%)",
+                          vermelho: "hsl(0 75% 50%)", red: "hsl(0 75% 50%)",
+                          azul: "hsl(217 90% 50%)", blue: "hsl(217 90% 50%)",
+                          verde: "hsl(140 70% 40%)", green: "hsl(140 70% 40%)",
+                          amarelo: "hsl(50 95% 55%)", yellow: "hsl(50 95% 55%)",
+                          laranja: "hsl(25 90% 55%)", orange: "hsl(25 90% 55%)",
+                          rosa: "hsl(330 80% 60%)", pink: "hsl(330 80% 60%)",
+                          roxo: "hsl(270 70% 50%)", purple: "hsl(270 70% 50%)",
+                          cinza: "hsl(0 0% 55%)", gray: "hsl(0 0% 55%)",
+                          marrom: "hsl(25 50% 30%)", brown: "hsl(25 50% 30%)",
+                          bege: "hsl(35 40% 75%)", beige: "hsl(35 40% 75%)",
+                        };
+                        const colorKey = (f.color || f.name).toLowerCase().trim();
+                        const bg = colorMap[colorKey] || "hsl(var(--muted))";
+                        const isSelected = newOrder.color === (f.color || f.name);
+                        return (
+                          <button
+                            key={f.id}
+                            type="button"
+                            onClick={() => setNewOrder({ ...newOrder, color: f.color || f.name })}
+                            title={f.name}
+                            className={`h-8 w-8 rounded-full border-2 transition-all ${
+                              isSelected ? "border-primary scale-110 ring-2 ring-primary/30" : "border-border hover:scale-105"
+                            }`}
+                            style={{ backgroundColor: bg }}
+                          />
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <Input value={newOrder.color} onChange={(e) => setNewOrder({ ...newOrder, color: e.target.value })} placeholder="Ex: Preto" />
+                  )}
                 </div>
               </div>
 
