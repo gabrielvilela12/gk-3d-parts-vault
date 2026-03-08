@@ -26,7 +26,11 @@ serve(async (req) => {
       throw new Error("productName is required");
     }
 
-    const systemPrompt = `Você é um especialista em SEO e vendas na Shopee Brasil. Você conhece profundamente as palavras-chave mais buscadas, técnicas de ranqueamento e copywriting que converte na plataforma.`;
+    const systemPrompt = `Você é um especialista em SEO e vendas na Shopee Brasil. Você conhece profundamente as palavras-chave mais buscadas, técnicas de ranqueamento e copywriting que converte na plataforma.
+
+REGRAS OBRIGATÓRIAS:
+- NUNCA mencione o material do produto (não fale PLA, resina, plástico, 3D, impressão 3D, etc.)
+- Quando mencionar altura/tamanho do produto, SEMPRE use "aproximadamente" antes do valor (ex: "aproximadamente 15cm de altura")`;
 
     const userPrompt = `Gere um TÍTULO e DESCRIÇÃO otimizados para vender o produto "${productName}"${category ? ` na categoria "${category}"` : ""} na Shopee Brasil.
 
