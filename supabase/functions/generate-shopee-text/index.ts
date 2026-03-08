@@ -28,17 +28,20 @@ serve(async (req) => {
 
     const userPrompt = `Gere um TÍTULO e DESCRIÇÃO otimizados para vender o produto "${productName}"${category ? ` na categoria "${category}"` : ""} na Shopee Brasil.
 
+${isKit ? `IMPORTANTE: O produto será vendido como KIT com múltiplas unidades/cores. O título DEVE começar com "Kit" e NÃO deve mencionar cores específicas, pois há variações de cor disponíveis.` : ""}
+
 TÍTULO (máximo 120 caracteres):
 - Use palavras-chave de ALTO VOLUME de busca na Shopee
 - Inclua variações e sinônimos relevantes
-- Formato: Palavra-chave principal + Características + Diferencial
-- Exemplo: "Suporte Celular Carro Veicular Universal Ventosa 360 Graus GPS"
+${isKit ? "- OBRIGATÓRIO: Comece com \"Kit\" e NÃO mencione cores específicas" : "- Formato: Palavra-chave principal + Características + Diferencial"}
+- Exemplo: ${isKit ? '"Kit Escultura Decorativa Chama Abstrata Enfeite Mesa Luxo Sala Escritório Moderna"' : '"Suporte Celular Carro Veicular Universal Ventosa 360 Graus GPS"'}
 
 DESCRIÇÃO (máximo 2000 caracteres):
 - Use emojis estrategicamente para chamar atenção
 - Bullet points com benefícios claros
 - Palavras-chave distribuídas naturalmente no texto
 - Inclua especificações técnicas quando relevante
+${isKit ? "- Mencione que está disponível em diversas cores/variações" : ""}
 - Call-to-action convincente no final
 - Formato profissional de anúncio Shopee
 
