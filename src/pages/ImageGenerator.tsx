@@ -390,9 +390,9 @@ export default function ImageGenerator() {
       }
     }
 
-    // PHASE 2: Environment + Benefit images
-    if (selectedMarketingTypes.length > 0) {
-      for (const mktType of selectedMarketingTypes) {
+    // PHASE 2: Environment images
+    if (environmentTypes.length > 0) {
+      for (const mktType of environmentTypes) {
         const mktLabel = MARKETING_TYPES.find((m) => m.id === mktType)?.label || mktType;
         setProgressLabel(`📸 Gerando: ${mktLabel}`);
         setProgress(Math.round((done / total) * 100));
@@ -408,6 +408,31 @@ export default function ImageGenerator() {
             height: 1024,
             type: "marketing",
             marketingType: mktType,
+          };
+          results.push(result);
+          setGeneratedImages([...results]);
+        }
+        done++;
+      }
+    }
+
+    // PHASE 2b: Benefit images (3 variations)
+    if (hasBenefit) {
+      for (let i = 1; i <= 3; i++) {
+        setProgressLabel(`💡 Gerando Benefício: variação ${i}/3`);
+        setProgress(Math.round((done / total) * 100));
+
+        const imageUrl = await callMarketingApi("benefit", i);
+        if (imageUrl) {
+          const result: GeneratedImage = {
+            colorName: `Benefício ${i}`,
+            colorHex: "#ffffff",
+            format: "square",
+            dataUrl: imageUrl,
+            width: 1024,
+            height: 1024,
+            type: "marketing",
+            marketingType: "benefit",
           };
           results.push(result);
           setGeneratedImages([...results]);
