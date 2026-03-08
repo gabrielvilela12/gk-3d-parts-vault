@@ -325,6 +325,17 @@ export default function Orders() {
     } : r));
   };
 
+  const handleDeleteOrder = async (orderId: string) => {
+    try {
+      const { error } = await supabase.from("orders").delete().eq("id", orderId);
+      if (error) throw error;
+      setOrders(prev => prev.filter(o => o.id !== orderId));
+      toast({ title: "Pedido excluído" });
+    } catch {
+      toast({ title: "Erro ao excluir", variant: "destructive" });
+    }
+  };
+
   const getPrintTimeMin = (order: Order): number => {
     const t = order.variation_id && order.piece_price_variations
       ? order.piece_price_variations.tempo_impressao_min
