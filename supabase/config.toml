@@ -1,1 +1,4 @@
 project_id = "exdszczkyijgsqpgbvsp"
+
+[functions.recolor-product]
+verify_jwt = false
