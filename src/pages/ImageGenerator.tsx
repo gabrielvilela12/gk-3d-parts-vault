@@ -25,17 +25,10 @@ const PRESET_COLORS = [
   { name: "Vermelho", hex: "#dc2626" },
   { name: "Azul", hex: "#2563eb" },
   { name: "Verde", hex: "#16a34a" },
-  { name: "Amarelo", hex: "#eab308" },
   { name: "Rosa", hex: "#ec4899" },
-  { name: "Roxo", hex: "#9333ea" },
-  { name: "Laranja", hex: "#ea580c" },
-  { name: "Cinza", hex: "#6b7280" },
-  { name: "Marrom", hex: "#92400e" },
+  { name: "Marrom Claro", hex: "#a0785a" },
+  { name: "Marrom Escuro", hex: "#5c3317" },
   { name: "Bege", hex: "#d4b896" },
-  { name: "Azul Claro", hex: "#38bdf8" },
-  { name: "Verde Limão", hex: "#84cc16" },
-  { name: "Dourado", hex: "#d4a017" },
-  { name: "Prata", hex: "#c0c0c0" },
 ];
 
 const FORMATS = [
