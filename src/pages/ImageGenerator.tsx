@@ -102,6 +102,7 @@ export default function ImageGenerator() {
     "environment_living_room", "environment_office", "environment_outdoor", "environment_kitchen", "benefit"
   ]);
   const [generateShopeeText, setGenerateShopeeText] = useState(true);
+  const [shopeeQuantity, setShopeeQuantity] = useState(1);
   const [benefitPrompt, setBenefitPrompt] = useState("");
 
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
