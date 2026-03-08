@@ -106,10 +106,10 @@ export default function ImageGenerator() {
   const [generateBenefitImages, setGenerateBenefitImages] = useState(true);
   const [generateShopeeText, setGenerateShopeeText] = useState(true);
   const [shopeeQuantity, setShopeeQuantity] = useState(1);
-  const [packageWeight, setPackageWeight] = useState("");
-  const [packageLength, setPackageLength] = useState("");
-  const [packageWidth, setPackageWidth] = useState("");
-  const [packageHeight, setPackageHeight] = useState("");
+  const [packageWeight, setPackageWeight] = useState("0,15");
+  const [packageLength, setPackageLength] = useState("18");
+  const [packageWidth, setPackageWidth] = useState("18");
+  const [packageHeight, setPackageHeight] = useState("18");
   const [benefitPrompt, setBenefitPrompt] = useState("");
 
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
