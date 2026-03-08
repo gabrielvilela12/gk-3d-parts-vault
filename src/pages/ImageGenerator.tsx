@@ -323,6 +323,7 @@ export default function ImageGenerator() {
           productName,
           marketingType,
           ...(marketingType === "benefit" ? { benefitPrompt, benefitIndex: benefitIdx || 1 } : {}),
+          ...(mainColor ? { mainColor: mainColor.name, mainColorHex: mainColor.hex } : {}),
         }),
       });
 
