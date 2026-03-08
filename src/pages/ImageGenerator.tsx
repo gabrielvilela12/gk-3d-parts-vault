@@ -392,6 +392,7 @@ export default function ImageGenerator() {
           productName,
           imageBase64: getWorkingImage(),
           quantity: shopeeQuantity,
+          heights: productHeights.filter(h => h.trim() !== ""),
         }),
       });
 
