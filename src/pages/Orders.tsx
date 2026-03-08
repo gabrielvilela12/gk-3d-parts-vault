@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Package, Plus, Trash2, Clock, CheckCircle2, GripVertical, Timer, CalendarClock, Search, X, Upload, FileSpreadsheet, AlertCircle, Check, Filter, ShoppingBag } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import * as XLSX from "xlsx";
+import QueueOptimizerChat from "@/components/QueueOptimizerChat";
 
 interface ImportRow {
   platformOrderId: string;
