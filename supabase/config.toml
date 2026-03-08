@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.identify-product]
 verify_jwt = false
+
+[functions.cleanup-product-image]
+verify_jwt = false
