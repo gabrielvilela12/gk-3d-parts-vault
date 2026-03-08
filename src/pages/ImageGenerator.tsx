@@ -545,7 +545,10 @@ export default function ImageGenerator() {
   };
 
   const recolorCount = selectedColors.length * selectedFormats.length;
-  const marketingCount = selectedMarketingTypes.length;
+  const hasBenefitSelected = selectedMarketingTypes.includes("benefit");
+  const environmentCount = selectedMarketingTypes.filter((t) => t !== "benefit").length;
+  const benefitImageCount = hasBenefitSelected && benefitPrompt.trim() ? 3 : 0;
+  const marketingCount = environmentCount + benefitImageCount;
   const totalImages = recolorCount + marketingCount;
 
   const filteredImages = generatedImages.filter((img) => {
