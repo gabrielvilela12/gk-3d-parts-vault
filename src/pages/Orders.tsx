@@ -564,7 +564,76 @@ export default function Orders() {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
+
+      {/* Import Dialog */}
+      <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileSpreadsheet className="h-5 w-5" />
+              Importar Pedidos do Excel
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex items-center gap-3 text-sm">
+              <Badge variant="default" className="gap-1">
+                <Check className="h-3 w-3" />
+                {importRows.filter(r => r.matchedPieceId).length} correspondidos
+              </Badge>
+              <Badge variant="destructive" className="gap-1">
+                <AlertCircle className="h-3 w-3" />
+                {importRows.filter(r => !r.matchedPieceId).length} não encontrados
+              </Badge>
+            </div>
+            <ScrollArea className="h-[400px] pr-3">
+              <div className="space-y-2">
+                {importRows.map((row, idx) => (
+                  <Card key={idx} className={`border-l-4 ${row.matchedPieceId ? 'border-l-primary' : 'border-l-destructive'}`}>
+                    <CardContent className="py-2.5 px-3">
+                      <div className="flex items-start gap-2">
+                        {row.imageUrl ? (
+                          <img src={row.imageUrl} alt="" className="h-10 w-10 rounded-md object-cover shrink-0" />
+                        ) : (
+                          <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center shrink-0">
+                            <Package className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <p className="text-xs text-muted-foreground truncate" title={row.productName}>{row.productName}</p>
+                          {row.matchedPieceId ? (
+                            <p className="text-sm font-medium text-primary truncate">→ {row.matchedPieceName}</p>
+                          ) : (
+                            <Select onValueChange={(v) => updateImportRowMatch(idx, v)}>
+                              <SelectTrigger className="h-7 text-xs">
+                                <SelectValue placeholder="Selecionar peça manualmente..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {pieces.map(p => (
+                                  <SelectItem key={p.id} value={p.id} className="text-xs">{p.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                          <div className="flex gap-2 flex-wrap">
+                            {row.color && <Badge variant="outline" className="text-[10px]">{row.color}</Badge>}
+                            <Badge variant="secondary" className="text-[10px]">x{row.quantity}</Badge>
+                            {row.platformOrderId && <Badge variant="secondary" className="text-[10px] font-mono">{row.platformOrderId}</Badge>}
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </ScrollArea>
+            <Button onClick={handleConfirmImport} className="w-full" disabled={isImporting || importRows.filter(r => r.matchedPieceId).length === 0}>
+              {isImporting ? "Importando..." : `Importar ${importRows.filter(r => r.matchedPieceId).length} pedido(s)`}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Summary stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
