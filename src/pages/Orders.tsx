@@ -210,6 +210,120 @@ export default function Orders() {
     }
   };
 
+  const normalizeText = (text: string) => text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9 ]/g, "").trim();
+
+  const findBestMatch = (productName: string): Piece | null => {
+    const normalized = normalizeText(productName);
+    // Try exact match first
+    let match = pieces.find(p => normalizeText(p.name) === normalized);
+    if (match) return match;
+    // Try if piece name is contained in product name or vice versa
+    match = pieces.find(p => {
+      const pNorm = normalizeText(p.name);
+      return normalized.includes(pNorm) || pNorm.includes(normalized);
+    });
+    if (match) return match;
+    // Try matching by significant words (3+ chars)
+    const words = normalized.split(/\s+/).filter(w => w.length >= 3);
+    let bestScore = 0;
+    let bestPiece: Piece | null = null;
+    for (const piece of pieces) {
+      const pNorm = normalizeText(piece.name);
+      const matchCount = words.filter(w => pNorm.includes(w)).length;
+      const score = matchCount / Math.max(words.length, 1);
+      if (score > bestScore && score >= 0.4) {
+        bestScore = score;
+        bestPiece = piece;
+      }
+    }
+    return bestPiece;
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet);
+
+      const parsed: ImportRow[] = [];
+      for (const row of rows) {
+        const productName = row["Nome do Anúncio"] || "";
+        if (!productName) continue;
+        const variation = row["Variação"] || "";
+        const colorPart = variation.split(",")[0]?.trim() || "";
+        const quantity = parseInt(row["Qtd. do Produto"]) || 1;
+        const platformOrderId = row["Nº de Pedido da Plataforma"] || "";
+        const buyerNotes = row["Notas do Comprador"] || "";
+
+        const matched = findBestMatch(productName);
+        parsed.push({
+          platformOrderId,
+          productName,
+          variation,
+          color: colorPart,
+          quantity,
+          buyerNotes,
+          matchedPieceId: matched?.id || null,
+          matchedPieceName: matched?.name || null,
+          imageUrl: matched?.image_url || null,
+        });
+      }
+
+      setImportRows(parsed);
+      setIsImportDialogOpen(true);
+    } catch (err) {
+      console.error("Error parsing file:", err);
+      toast({ title: "Erro ao ler arquivo", variant: "destructive" });
+    }
+    // Reset input
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleConfirmImport = async () => {
+    const matchedRows = importRows.filter(r => r.matchedPieceId);
+    if (matchedRows.length === 0) {
+      toast({ title: "Nenhum produto correspondente encontrado", variant: "destructive" });
+      return;
+    }
+    setIsImporting(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const inserts = matchedRows.map(r => ({
+        user_id: user.id,
+        piece_id: r.matchedPieceId!,
+        quantity: r.quantity,
+        color: r.color || null,
+        notes: r.buyerNotes ? `${r.platformOrderId} - ${r.buyerNotes}` : r.platformOrderId || null,
+      }));
+
+      const { error } = await supabase.from("orders").insert(inserts);
+      if (error) throw error;
+
+      toast({ title: `${matchedRows.length} pedido(s) importado(s)!` });
+      setIsImportDialogOpen(false);
+      setImportRows([]);
+      fetchData();
+    } catch {
+      toast({ title: "Erro ao importar pedidos", variant: "destructive" });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const updateImportRowMatch = (index: number, pieceId: string) => {
+    const piece = pieces.find(p => p.id === pieceId);
+    setImportRows(prev => prev.map((r, i) => i === index ? {
+      ...r,
+      matchedPieceId: piece?.id || null,
+      matchedPieceName: piece?.name || null,
+      imageUrl: piece?.image_url || null,
+    } : r));
+
   const handleDeleteOrder = async (orderId: string) => {
     try {
       const { error } = await supabase.from("orders").delete().eq("id", orderId);
