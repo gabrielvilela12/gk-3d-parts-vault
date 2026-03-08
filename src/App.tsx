@@ -29,6 +29,7 @@ function AppContent() {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -64,7 +65,8 @@ function AppContent() {
       <main
         className={cn(
           "flex-1 min-h-screen transition-all duration-300",
-          user ? "ml-[220px]" : ""
+          user && !isMobile ? "ml-[220px]" : "",
+          user && isMobile ? "pt-14" : ""
         )}
       >
         <Routes>
