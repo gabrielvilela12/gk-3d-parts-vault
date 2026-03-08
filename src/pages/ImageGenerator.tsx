@@ -443,24 +443,24 @@ export default function ImageGenerator() {
       }
     }
 
-    // PHASE 2: Environment images
-    if (environmentTypes.length > 0) {
-      for (const mktType of environmentTypes) {
-        const mktLabel = MARKETING_TYPES.find((m) => m.id === mktType)?.label || mktType;
-        setProgressLabel(`📸 Gerando: ${mktLabel}`);
+    // PHASE 2: Environment images (AI-suggested)
+    if (activeEnvironments.length > 0) {
+      for (const envKey of activeEnvironments) {
+        const envLabel = ENVIRONMENT_LABELS[envKey]?.label || envKey;
+        setProgressLabel(`📸 Gerando: ${envLabel}`);
         setProgress(Math.round((done / total) * 100));
 
-        const imageUrl = await callMarketingApi(mktType);
+        const imageUrl = await callMarketingApi(envKey);
         if (imageUrl) {
           const result: GeneratedImage = {
-            colorName: mktLabel,
+            colorName: envLabel,
             colorHex: "#ffffff",
             format: "square",
             dataUrl: imageUrl,
             width: 1024,
             height: 1024,
             type: "marketing",
-            marketingType: mktType,
+            marketingType: envKey,
           };
           results.push(result);
           setGeneratedImages([...results]);
