@@ -95,7 +95,7 @@ Product: "${productName || "this product"}"
 RULES:
 - Keep the product as the MAIN FOCUS, centered and prominent.
 - Use a CLEAN WHITE background with subtle professional lighting effects.
-- Make the product look PREMIUM and DESIRABLE.
+- Make the product look PREMIUM and DESIRABLE.${colorInstruction}
 - Do NOT add any text, labels, watermarks, or overlays.
 - Keep it clean, minimal, and high-end.
 - Output at 1024x1024 resolution.`;
