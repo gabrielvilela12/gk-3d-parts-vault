@@ -20,6 +20,7 @@ import GptLinks from "./pages/GptLinks";
 import SettingsPage from "./pages/Settings";
 import Orders from "./pages/Orders";
 import NotFound from "./pages/NotFound";
+import ImageGenerator from "./pages/ImageGenerator";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 
