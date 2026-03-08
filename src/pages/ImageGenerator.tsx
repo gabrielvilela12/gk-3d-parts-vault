@@ -42,13 +42,15 @@ const BACKGROUNDS = [
   { id: "premium", label: "Premium", description: "Gradiente elegante" },
 ];
 
-const MARKETING_TYPES = [
-  { id: "environment_living_room", label: "Sala de Estar", icon: Home, description: "Produto em ambiente de sala de estar aconchegante" },
-  { id: "environment_office", label: "Escritório", icon: Briefcase, description: "Produto em ambiente de trabalho moderno" },
-  { id: "environment_outdoor", label: "Área Externa", icon: Sun, description: "Produto em ambiente ao ar livre" },
-  { id: "environment_kitchen", label: "Cozinha", icon: UtensilsCrossed, description: "Produto em ambiente de cozinha/jantar" },
-  { id: "benefit", label: "Benefício", icon: ThumbsUp, description: "Destaca o principal benefício do produto" },
-];
+const ENVIRONMENT_LABELS: Record<string, { label: string; icon: any }> = {
+  living_room: { label: "Sala de Estar", icon: Home },
+  office: { label: "Escritório", icon: Briefcase },
+  outdoor: { label: "Área Externa", icon: Sun },
+  kitchen: { label: "Cozinha", icon: UtensilsCrossed },
+  bedroom: { label: "Quarto", icon: Home },
+  bathroom: { label: "Banheiro", icon: Home },
+  studio: { label: "Estúdio", icon: Sparkles },
+};
 
 interface GeneratedImage {
   colorName: string;
