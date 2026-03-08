@@ -106,6 +106,7 @@ export default function ImageGenerator() {
   const [generateBenefitImages, setGenerateBenefitImages] = useState(true);
   const [generateShopeeText, setGenerateShopeeText] = useState(true);
   const [shopeeQuantity, setShopeeQuantity] = useState(1);
+  const [productHeights, setProductHeights] = useState<string[]>([""]);
   const [packageWeight, setPackageWeight] = useState("0,15");
   const [packageLength, setPackageLength] = useState("30");
   const [packageWidth, setPackageWidth] = useState("15");
@@ -391,6 +392,7 @@ export default function ImageGenerator() {
           productName,
           imageBase64: getWorkingImage(),
           quantity: shopeeQuantity,
+          heights: productHeights.filter(h => h.trim() !== ""),
         }),
       });
 
@@ -1012,19 +1014,64 @@ export default function ImageGenerator() {
                     Gera título SEO, descrição otimizada e palavras-chave para anúncio na Shopee
                   </p>
                   {generateShopeeText && (
-                    <div className="flex items-center gap-3">
-                      <Label className="text-xs whitespace-nowrap">Qtd por anúncio:</Label>
-                      <Input
-                        type="number"
-                        min={1}
-                        max={99}
-                        value={shopeeQuantity}
-                        onChange={(e) => setShopeeQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                        className="w-20 h-8 text-sm"
-                      />
-                      {shopeeQuantity > 1 && (
-                        <span className="text-xs text-muted-foreground">→ Título com "Kit {shopeeQuantity}..."</span>
-                      )}
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3">
+                        <Label className="text-xs whitespace-nowrap">Qtd por anúncio:</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={99}
+                          value={shopeeQuantity}
+                          onChange={(e) => setShopeeQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                          className="w-20 h-8 text-sm"
+                        />
+                        {shopeeQuantity > 1 && (
+                          <span className="text-xs text-muted-foreground">→ Título com "Kit {shopeeQuantity}..."</span>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="flex items-center gap-2 text-xs font-semibold">
+                          <Ruler className="h-3.5 w-3.5" /> Altura(s) de referência (cm)
+                        </Label>
+                        <p className="text-[11px] text-muted-foreground">Será mencionada como "aproximadamente" na descrição</p>
+                        <div className="flex flex-wrap gap-2">
+                          {productHeights.map((h, i) => (
+                            <div key={i} className="flex items-center gap-1">
+                              <Input
+                                type="text"
+                                placeholder={`Ex: ${10 + i * 5}`}
+                                value={h}
+                                onChange={(e) => {
+                                  const updated = [...productHeights];
+                                  updated[i] = e.target.value;
+                                  setProductHeights(updated);
+                                }}
+                                className="w-20 h-8 text-sm text-center"
+                              />
+                              {productHeights.length > 1 && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => setProductHeights(productHeights.filter((_, j) => j !== i))}
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              )}
+                            </div>
+                          ))}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 text-xs"
+                            onClick={() => setProductHeights([...productHeights, ""])}
+                          >
+                            + Altura
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                   )}
                   {generateShopeeText && (

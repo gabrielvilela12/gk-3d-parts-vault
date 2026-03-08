@@ -12,9 +12,10 @@ serve(async (req) => {
   }
 
   try {
-    const { productName, imageBase64, category, quantity } = await req.json();
+    const { productName, imageBase64, category, quantity, heights } = await req.json();
     const isKit = (quantity ?? 1) > 1;
     const qty = quantity ?? 1;
+    const heightList: string[] = Array.isArray(heights) ? heights.filter((h: string) => h && h.trim()) : [];
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
@@ -25,11 +26,20 @@ serve(async (req) => {
       throw new Error("productName is required");
     }
 
-    const systemPrompt = `Você é um especialista em SEO e vendas na Shopee Brasil. Você conhece profundamente as palavras-chave mais buscadas, técnicas de ranqueamento e copywriting que converte na plataforma.`;
+    const systemPrompt = `Você é um especialista em SEO e vendas na Shopee Brasil. Você conhece profundamente as palavras-chave mais buscadas, técnicas de ranqueamento e copywriting que converte na plataforma.
+
+REGRAS OBRIGATÓRIAS:
+- NUNCA mencione o material do produto (não fale PLA, resina, plástico, 3D, impressão 3D, etc.)
+- Quando mencionar altura/tamanho do produto, SEMPRE use "aproximadamente" antes do valor (ex: "aproximadamente 15cm de altura")`;
+
+    const heightInstruction = heightList.length > 0
+      ? `\nALTURAS DISPONÍVEIS: O produto possui ${heightList.length > 1 ? "as seguintes opções de altura" : "a seguinte altura"}: ${heightList.map(h => `aproximadamente ${h}cm`).join(", ")}. Mencione ${heightList.length > 1 ? "essas opções" : "essa medida"} na descrição usando SEMPRE "aproximadamente" antes do valor.`
+      : "";
 
     const userPrompt = `Gere um TÍTULO e DESCRIÇÃO otimizados para vender o produto "${productName}"${category ? ` na categoria "${category}"` : ""} na Shopee Brasil.
 
 ${isKit ? `IMPORTANTE: O anúncio é de um KIT com ${qty} unidades do produto. O título DEVE começar com "Kit ${qty}" seguido do nome do produto. NÃO mencione cores específicas no título.` : ""}
+${heightInstruction}
 
 TÍTULO (máximo 120 caracteres):
 - Use palavras-chave de ALTO VOLUME de busca na Shopee
@@ -41,7 +51,9 @@ DESCRIÇÃO (máximo 2000 caracteres):
 - Use emojis estrategicamente para chamar atenção
 - Bullet points com benefícios claros
 - Palavras-chave distribuídas naturalmente no texto
-- Inclua especificações técnicas quando relevante
+- Inclua especificações técnicas quando relevante (EXCETO material de fabricação)
+- NUNCA mencione o material do produto (PLA, resina, plástico, impressão 3D, etc.)
+- Quando mencionar altura, SEMPRE use "aproximadamente" antes do valor
 ${isKit ? `- Destaque que o anúncio inclui ${qty} unidades` : ""}
 - Call-to-action convincente no final
 - Formato profissional de anúncio Shopee
