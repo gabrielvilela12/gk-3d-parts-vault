@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { Package, Plus, Trash2, Clock, CheckCircle2, GripVertical, Timer, CalendarClock, Search, X, Upload, FileSpreadsheet, AlertCircle, Check } from "lucide-react";
+import { Package, Plus, Trash2, Clock, CheckCircle2, GripVertical, Timer, CalendarClock, Search, X, Upload, FileSpreadsheet, AlertCircle, Check, Filter, ShoppingBag } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import * as XLSX from "xlsx";
 
@@ -103,6 +103,9 @@ export default function Orders() {
   const [importRows, setImportRows] = useState<ImportRow[]>([]);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [filterColor, setFilterColor] = useState<string>("all");
+  const [filterSearch, setFilterSearch] = useState("");
+  const [filterStatus, setFilterStatus] = useState<"all" | "queue" | "done">("all");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -373,16 +376,61 @@ export default function Orders() {
   const queue = useMemo(() => orders.filter(o => !o.is_printed), [orders]);
   const done = useMemo(() => orders.filter(o => o.is_printed), [orders]);
 
+  // Extract unique colors and platform order IDs
+  const uniqueColors = useMemo(() => {
+    const colors = new Set(orders.map(o => o.color).filter(Boolean) as string[]);
+    return Array.from(colors).sort();
+  }, [orders]);
+
+  // Filter orders
+  const filterOrder = (order: Order) => {
+    if (filterColor !== "all" && order.color !== filterColor) return false;
+    if (filterSearch && !order.pieces.name.toLowerCase().includes(filterSearch.toLowerCase()) &&
+        !(order.notes || "").toLowerCase().includes(filterSearch.toLowerCase())) return false;
+    return true;
+  };
+
+  const filteredQueue = useMemo(() => queue.filter(filterOrder), [queue, filterColor, filterSearch]);
+  const filteredDone = useMemo(() => done.filter(filterOrder), [done, filterColor, filterSearch]);
+
+  // Extract platform order ID from notes
+  const getPlatformId = (order: Order): string => {
+    const notes = order.notes || "";
+    // Format: "PLATFORM_ID - buyer notes" or just "PLATFORM_ID"
+    const match = notes.match(/^(\S+)/);
+    return match?.[1] || "sem-pedido";
+  };
+
+  // Group orders by platform order ID
+  const groupOrders = (orderList: Order[]) => {
+    const groups: Record<string, Order[]> = {};
+    for (const order of orderList) {
+      const key = getPlatformId(order);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(order);
+    }
+    return Object.entries(groups);
+  };
+
+  const groupedQueue = useMemo(() => groupOrders(filteredQueue), [filteredQueue]);
+  const groupedDone = useMemo(() => groupOrders(filteredDone), [filteredDone]);
+
   // Calculate cumulative finish times for the queue
   const queueWithTimes = useMemo(() => {
     let accMinutes = 0;
-    return queue.map(order => {
+    return filteredQueue.map(order => {
       const totalMin = getPrintTimeMin(order);
       accMinutes += totalMin;
       const finishAt = new Date(now.getTime() + accMinutes * 60_000);
       return { order, totalMin, accMinutes, finishAt };
     });
-  }, [queue, now]);
+  }, [filteredQueue, now]);
+
+  const queueTimeMap = useMemo(() => {
+    const map = new Map<string, { totalMin: number; finishAt: Date }>();
+    queueWithTimes.forEach(qt => map.set(qt.order.id, { totalMin: qt.totalMin, finishAt: qt.finishAt }));
+    return map;
+  }, [queueWithTimes]);
 
   const totalQueueMin = queueWithTimes.length > 0 ? queueWithTimes[queueWithTimes.length - 1].accMinutes : 0;
 
@@ -521,148 +569,173 @@ export default function Orders() {
         </Card>
       </div>
 
-      {/* Queue */}
-      <div className="mb-8">
-        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-          <Timer className="h-5 w-5 text-primary" />
-          Fila de Impressão
-        </h2>
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-2 mb-6">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            placeholder="Buscar peça ou nº pedido..."
+            value={filterSearch}
+            onChange={(e) => setFilterSearch(e.target.value)}
+            className="pl-9 h-9 text-sm"
+          />
+        </div>
+        <Select value={filterColor} onValueChange={setFilterColor}>
+          <SelectTrigger className="w-full sm:w-[140px] h-9 text-sm">
+            <SelectValue placeholder="Cor" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas as cores</SelectItem>
+            {uniqueColors.map(c => (
+              <SelectItem key={c} value={c}>{c}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="flex gap-1">
+          {(["all", "queue", "done"] as const).map(s => (
+            <Button
+              key={s}
+              variant={filterStatus === s ? "default" : "outline"}
+              size="sm"
+              className="text-xs h-9"
+              onClick={() => setFilterStatus(s)}
+            >
+              {s === "all" ? "Todos" : s === "queue" ? "Na Fila" : "Concluídos"}
+            </Button>
+          ))}
+        </div>
+      </div>
 
-        {queueWithTimes.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 text-center text-muted-foreground">
-              <Package className="h-10 w-10 mx-auto mb-3 opacity-40" />
-              <p>Nenhum pedido na fila. Adicione um pedido para começar.</p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-2">
-            {queueWithTimes.map(({ order, totalMin, finishAt }, idx) => {
-              const unitTime = order.variation_id && order.piece_price_variations
-                ? order.piece_price_variations.tempo_impressao_min
-                : order.pieces.tempo_impressao_min;
+      {/* Queue grouped by platform order */}
+      {filterStatus !== "done" && (
+        <div className="mb-8">
+          <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+            <Timer className="h-5 w-5 text-primary" />
+            Fila de Impressão ({filteredQueue.length})
+          </h2>
 
-              return (
-                <Card key={order.id} className="border-l-4 border-l-primary/60 hover:border-l-primary transition-colors">
-                  <CardContent className="py-3 px-3 sm:px-4">
-                    <div className="flex items-start sm:items-center gap-2 sm:gap-3">
-                      {/* Position */}
-                      <div className="flex flex-col items-center justify-center w-6 sm:w-8 shrink-0 pt-0.5 sm:pt-0">
-                        <span className="text-xs text-muted-foreground font-mono">#{idx + 1}</span>
-                      </div>
+          {groupedQueue.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center text-muted-foreground">
+                <Package className="h-10 w-10 mx-auto mb-3 opacity-40" />
+                <p>Nenhum pedido na fila.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {groupedQueue.map(([platformId, groupOrders]) => (
+                <Card key={platformId} className="overflow-hidden">
+                  <CardHeader className="py-2.5 px-3 sm:px-4 bg-muted/50 border-b">
+                    <div className="flex items-center gap-2">
+                      <ShoppingBag className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-semibold font-mono">{platformId === "sem-pedido" ? "Sem nº de pedido" : platformId}</span>
+                      <Badge variant="secondary" className="text-[10px] ml-auto">{groupOrders.length} {groupOrders.length === 1 ? "item" : "itens"}</Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="divide-y divide-border">
+                      {groupOrders.map((order) => {
+                        const times = queueTimeMap.get(order.id);
+                        const totalMin = times?.totalMin || 0;
+                        const finishAt = times?.finishAt || now;
 
-                      {/* Image */}
-                      {order.pieces.image_url ? (
-                        <img src={order.pieces.image_url} alt={order.pieces.name} className="h-10 w-10 sm:h-12 sm:w-12 rounded-lg object-cover shrink-0" />
-                      ) : (
-                        <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                          <Package className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
-                        </div>
-                      )}
-
-                      {/* Info + time stacked on mobile */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-medium text-xs sm:text-sm truncate">{order.pieces.name}</span>
-                          {order.quantity > 1 && (
-                            <Badge variant="secondary" className="text-[10px] sm:text-xs">x{order.quantity}</Badge>
-                          )}
-                          {order.color && (
-                            <Badge variant="outline" className="text-[10px] sm:text-xs">{order.color}</Badge>
-                          )}
-                          {order.piece_price_variations && (
-                            <Badge variant="outline" className="text-[10px] sm:text-xs hidden sm:inline-flex">{order.piece_price_variations.variation_name}</Badge>
-                          )}
-                        </div>
-                        {order.notes && (
-                          <p className="text-[10px] sm:text-xs text-muted-foreground truncate mt-0.5">{order.notes}</p>
-                        )}
-                        {/* Time info inline on mobile */}
-                        <div className="flex items-center gap-3 mt-1 sm:hidden">
-                          <div className="flex items-center gap-1">
-                            <Clock className="h-3 w-3 text-muted-foreground" />
-                            <span className="text-[11px] font-medium">{formatTime(totalMin)}</span>
+                        return (
+                          <div key={order.id} className="py-2.5 px-3 sm:px-4 hover:bg-accent/30 transition-colors">
+                            <div className="flex items-start sm:items-center gap-2 sm:gap-3">
+                              {order.pieces.image_url ? (
+                                <img src={order.pieces.image_url} alt={order.pieces.name} className="h-10 w-10 sm:h-11 sm:w-11 rounded-lg object-cover shrink-0" />
+                              ) : (
+                                <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                                  <Package className="h-4 w-4 text-muted-foreground" />
+                                </div>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-medium text-xs sm:text-sm truncate">{order.pieces.name}</span>
+                                  {order.quantity > 1 && <Badge variant="secondary" className="text-[10px]">x{order.quantity}</Badge>}
+                                  {order.color && <Badge variant="outline" className="text-[10px]">{order.color}</Badge>}
+                                  {order.piece_price_variations && (
+                                    <Badge variant="outline" className="text-[10px] hidden sm:inline-flex">{order.piece_price_variations.variation_name}</Badge>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-3 mt-1">
+                                  <div className="flex items-center gap-1">
+                                    <Clock className="h-3 w-3 text-muted-foreground" />
+                                    <span className="text-[11px] font-medium">{formatTime(totalMin)}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <CalendarClock className="h-3 w-3 text-primary" />
+                                    <span className="text-[11px] text-primary font-medium">{formatDateTime(finishAt)}</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-0.5 shrink-0">
+                                <Checkbox checked={false} onCheckedChange={() => handleTogglePrinted(order.id, false)} className="h-5 w-5" />
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteOrder(order.id)}>
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1">
-                            <CalendarClock className="h-3 w-3 text-primary" />
-                            <span className="text-[11px] text-primary font-medium">{formatDateTime(finishAt)}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Time info - desktop only */}
-                      <div className="text-right shrink-0 space-y-0.5 hidden sm:block">
-                        <div className="flex items-center gap-1 justify-end">
-                          <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span className="text-sm font-medium">{formatTime(totalMin)}</span>
-                        </div>
-                        <div className="flex items-center gap-1 justify-end">
-                          <CalendarClock className="h-3.5 w-3.5 text-primary" />
-                          <span className="text-xs text-primary font-medium">{formatDateTime(finishAt)}</span>
-                        </div>
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex items-center gap-0.5 shrink-0">
-                        <Checkbox
-                          checked={false}
-                          onCheckedChange={() => handleTogglePrinted(order.id, false)}
-                          className="h-5 w-5"
-                        />
-                        <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteOrder(order.id)}>
-                          <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                        </Button>
-                      </div>
+                        );
+                      })}
                     </div>
                   </CardContent>
                 </Card>
-              );
-            })}
-          </div>
-        )}
-      </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
-      {/* Done */}
-      {done.length > 0 && (
+      {/* Done grouped by platform order */}
+      {filterStatus !== "queue" && filteredDone.length > 0 && (
         <div>
           <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
             <CheckCircle2 className="h-5 w-5 text-primary" />
-            Concluídos ({done.length})
+            Concluídos ({filteredDone.length})
           </h2>
-          <div className="space-y-1.5">
-            {done.map(order => (
-              <Card key={order.id} className="opacity-70 hover:opacity-100 transition-opacity">
-                <CardContent className="py-2.5 px-4">
-                  <div className="flex items-center gap-3">
-                    {order.pieces.image_url ? (
-                      <img src={order.pieces.image_url} alt={order.pieces.name} className="h-9 w-9 rounded-lg object-cover shrink-0" />
-                    ) : (
-                      <div className="h-9 w-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                        <Package className="h-4 w-4 text-muted-foreground" />
+          <div className="space-y-4">
+            {groupedDone.map(([platformId, groupOrders]) => (
+              <Card key={platformId} className="overflow-hidden opacity-80 hover:opacity-100 transition-opacity">
+                <CardHeader className="py-2 px-3 sm:px-4 bg-muted/30 border-b">
+                  <div className="flex items-center gap-2">
+                    <ShoppingBag className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="text-xs font-semibold font-mono text-muted-foreground">{platformId === "sem-pedido" ? "Sem nº de pedido" : platformId}</span>
+                    <Badge variant="secondary" className="text-[10px] ml-auto">{groupOrders.length} {groupOrders.length === 1 ? "item" : "itens"}</Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="divide-y divide-border">
+                    {groupOrders.map(order => (
+                      <div key={order.id} className="py-2 px-3 sm:px-4">
+                        <div className="flex items-center gap-3">
+                          {order.pieces.image_url ? (
+                            <img src={order.pieces.image_url} alt={order.pieces.name} className="h-9 w-9 rounded-lg object-cover shrink-0" />
+                          ) : (
+                            <div className="h-9 w-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                              <Package className="h-4 w-4 text-muted-foreground" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm line-through text-muted-foreground truncate">{order.pieces.name}</span>
+                              {order.quantity > 1 && <Badge variant="secondary" className="text-xs">x{order.quantity}</Badge>}
+                              {order.color && <Badge variant="outline" className="text-xs">{order.color}</Badge>}
+                            </div>
+                          </div>
+                          {order.printed_at && (
+                            <span className="text-xs text-muted-foreground shrink-0">{new Date(order.printed_at).toLocaleDateString("pt-BR")}</span>
+                          )}
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Checkbox checked={true} onCheckedChange={() => handleTogglePrinted(order.id, true)} className="h-5 w-5" />
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteOrder(order.id)}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
                       </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm line-through text-muted-foreground truncate">{order.pieces.name}</span>
-                        {order.quantity > 1 && <Badge variant="secondary" className="text-xs">x{order.quantity}</Badge>}
-                        {order.color && <Badge variant="outline" className="text-xs">{order.color}</Badge>}
-                      </div>
-                    </div>
-                    {order.printed_at && (
-                      <span className="text-xs text-muted-foreground shrink-0">
-                        {new Date(order.printed_at).toLocaleDateString("pt-BR")}
-                      </span>
-                    )}
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Checkbox
-                        checked={true}
-                        onCheckedChange={() => handleTogglePrinted(order.id, true)}
-                        className="h-5 w-5"
-                      />
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteOrder(order.id)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
