@@ -100,6 +100,10 @@ export default function Orders() {
     notes: "",
   });
   const [pieceSearch, setPieceSearch] = useState("");
+  const [importRows, setImportRows] = useState<ImportRow[]>([]);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   // Update "now" every minute for live countdown
