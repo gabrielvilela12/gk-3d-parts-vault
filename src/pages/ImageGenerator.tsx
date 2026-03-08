@@ -185,6 +185,13 @@ export default function ImageGenerator() {
       if (data.description) {
         setProductDescription(data.description);
       }
+      if (data.suggested_environments && Array.isArray(data.suggested_environments)) {
+        setSuggestedEnvironments(data.suggested_environments);
+      }
+      if (data.benefit_prompt) {
+        setSuggestedBenefit(data.benefit_prompt);
+        setBenefitPrompt(data.benefit_prompt);
+      }
     } catch (e) {
       console.error("Identify fetch error:", e);
     } finally {
