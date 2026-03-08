@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.generate-marketing]
 verify_jwt = false
+
+[functions.generate-shopee-text]
+verify_jwt = false

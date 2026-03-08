@@ -14,8 +14,9 @@ import JSZip from "jszip";
 import {
   ImagePlus, Palette, Download, Loader2, Eye, Package,
   Square, Smartphone, Monitor, X, History, Sparkles, CheckCircle2,
-  Megaphone, Zap, Star
+  Megaphone, Zap, Star, Copy, FileText, Tag
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 const PRESET_COLORS = [
   { name: "Preto", hex: "#1a1a1a" },
@@ -77,6 +78,13 @@ interface HistoryEntry {
 
 const RECOLOR_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/recolor-product`;
 const MARKETING_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-marketing`;
+const SHOPEE_TEXT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-shopee-text`;
+
+interface ShopeeText {
+  title: string;
+  description: string;
+  keywords: string[];
+}
 
 export default function ImageGenerator() {
   const { toast } = useToast();
@@ -91,8 +99,10 @@ export default function ImageGenerator() {
   const [customColorName, setCustomColorName] = useState("");
   const [customColorHex, setCustomColorHex] = useState("#000000");
   const [selectedMarketingTypes, setSelectedMarketingTypes] = useState<string[]>(["highlight"]);
+  const [generateShopeeText, setGenerateShopeeText] = useState(true);
 
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
+  const [shopeeText, setShopeeText] = useState<ShopeeText | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressLabel, setProgressLabel] = useState("");
@@ -240,23 +250,60 @@ export default function ImageGenerator() {
     }
   };
 
+  const callShopeeTextApi = async (): Promise<ShopeeText | null> => {
+    try {
+      const resp = await fetch(SHOPEE_TEXT_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          productName,
+          imageBase64: baseImageData,
+        }),
+      });
+
+      if (resp.status === 429) {
+        toast({ title: "Rate limit", description: "Aguarde um momento e tente novamente.", variant: "destructive" });
+        return null;
+      }
+      if (resp.status === 402) {
+        toast({ title: "Créditos insuficientes", description: "Adicione créditos no workspace.", variant: "destructive" });
+        return null;
+      }
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        console.error("Shopee text error:", err);
+        return null;
+      }
+
+      return await resp.json();
+    } catch (e) {
+      console.error("Shopee text fetch error:", e);
+      return null;
+    }
+  };
+
   const handleGenerate = async () => {
     if (!baseImageData) {
       toast({ title: "Envie uma imagem base", variant: "destructive" });
       return;
     }
-    if (selectedColors.length === 0 && selectedMarketingTypes.length === 0) {
-      toast({ title: "Selecione cores ou tipos de marketing", variant: "destructive" });
+    if (selectedColors.length === 0 && selectedMarketingTypes.length === 0 && !generateShopeeText) {
+      toast({ title: "Selecione cores, marketing ou texto Shopee", variant: "destructive" });
       return;
     }
 
     setIsGenerating(true);
     setGeneratedImages([]);
+    setShopeeText(null);
     const results: GeneratedImage[] = [];
 
     const recolorTotal = selectedColors.length * selectedFormats.length;
     const marketingTotal = selectedMarketingTypes.length;
-    const total = recolorTotal + marketingTotal;
+    const shopeeStep = generateShopeeText && productName ? 1 : 0;
+    const total = recolorTotal + marketingTotal + shopeeStep;
     let done = 0;
 
     // PHASE 1: Recolor images
@@ -312,6 +359,18 @@ export default function ImageGenerator() {
       }
     }
 
+    // PHASE 3: Shopee SEO text
+    if (generateShopeeText && productName) {
+      setProgressLabel(`📝 Gerando título e descrição Shopee...`);
+      setProgress(Math.round((done / total) * 100));
+
+      const textResult = await callShopeeTextApi();
+      if (textResult) {
+        setShopeeText(textResult);
+      }
+      done++;
+    }
+
     setProgress(100);
     setIsGenerating(false);
 
@@ -337,10 +396,11 @@ export default function ImageGenerator() {
       });
     }
 
+    const imageTotal = recolorTotal + marketingTotal;
     toast({
-      title: `${results.length} imagens geradas!`,
-      description: results.length < total
-        ? `${total - results.length} falharam. Tente novamente.`
+      title: `${results.length} imagens geradas!${shopeeStep ? " Texto Shopee pronto!" : ""}`,
+      description: results.length < imageTotal
+        ? `${imageTotal - results.length} falharam. Tente novamente.`
         : "Pronto para download.",
     });
   };
@@ -647,6 +707,25 @@ export default function ImageGenerator() {
                   </div>
                 </Card>
 
+                {/* PHASE 3: Shopee Text */}
+                <Card className="p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label className="flex items-center gap-2 text-sm font-semibold">
+                      <FileText className="h-4 w-4" /> Fase 3: Título e Descrição Shopee
+                    </Label>
+                    <Switch
+                      checked={generateShopeeText}
+                      onCheckedChange={setGenerateShopeeText}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Gera título SEO, descrição otimizada e palavras-chave para anúncio na Shopee
+                  </p>
+                  {!productName && generateShopeeText && (
+                    <p className="text-xs text-amber-500">⚠️ Preencha o nome do produto para gerar o texto</p>
+                  )}
+                </Card>
+
                 {/* Generate button + progress */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -657,14 +736,17 @@ export default function ImageGenerator() {
                       {marketingCount > 0 && (
                         <p>📸 {marketingCount} {marketingCount === 1 ? "imagem" : "imagens"} de marketing</p>
                       )}
-                      {totalImages > 0 && (
-                        <p className="font-medium text-foreground">Total: {totalImages} imagens via IA</p>
+                      {generateShopeeText && productName && (
+                        <p>📝 Título + Descrição Shopee</p>
+                      )}
+                      {(totalImages > 0 || (generateShopeeText && productName)) && (
+                        <p className="font-medium text-foreground">Total: {totalImages} imagens{generateShopeeText && productName ? " + texto SEO" : ""} via IA</p>
                       )}
                     </div>
                     <Button
                       size="lg"
                       onClick={handleGenerate}
-                      disabled={isGenerating || !baseImageData || totalImages === 0}
+                      disabled={isGenerating || !baseImageData || (totalImages === 0 && !(generateShopeeText && productName))}
                       className="gap-2"
                     >
                       {isGenerating ? (
@@ -762,6 +844,80 @@ export default function ImageGenerator() {
                           </div>
                         </div>
                       ))}
+                    </div>
+                  </Card>
+                )}
+
+                {/* Shopee Text Results */}
+                {shopeeText && (
+                  <Card className="p-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold text-sm flex items-center gap-2">
+                        <FileText className="h-4 w-4" /> Texto Shopee Gerado
+                      </h3>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5"
+                        onClick={() => {
+                          const full = `${shopeeText.title}\n\n${shopeeText.description}\n\nTags: ${shopeeText.keywords.join(", ")}`;
+                          navigator.clipboard.writeText(full);
+                          toast({ title: "Tudo copiado!" });
+                        }}
+                      >
+                        <Copy className="h-3.5 w-3.5" /> Copiar Tudo
+                      </Button>
+                    </div>
+
+                    {/* Title */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Título ({shopeeText.title.length}/120 caracteres)</Label>
+                      <div className="flex items-start gap-2">
+                        <p className="flex-1 text-sm font-medium bg-muted p-3 rounded-lg">{shopeeText.title}</p>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 shrink-0"
+                          onClick={() => { navigator.clipboard.writeText(shopeeText.title); toast({ title: "Título copiado!" }); }}
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Description */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Descrição ({shopeeText.description.length}/2000 caracteres)</Label>
+                      <div className="flex items-start gap-2">
+                        <pre className="flex-1 text-sm bg-muted p-3 rounded-lg whitespace-pre-wrap font-sans">{shopeeText.description}</pre>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 shrink-0"
+                          onClick={() => { navigator.clipboard.writeText(shopeeText.description); toast({ title: "Descrição copiada!" }); }}
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Keywords */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Tag className="h-3 w-3" /> Palavras-chave ({shopeeText.keywords.length})
+                      </Label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {shopeeText.keywords.map((kw, i) => (
+                          <Badge
+                            key={i}
+                            variant="secondary"
+                            className="cursor-pointer hover:bg-primary/20"
+                            onClick={() => { navigator.clipboard.writeText(kw); toast({ title: `"${kw}" copiada!` }); }}
+                          >
+                            {kw}
+                          </Badge>
+                        ))}
+                      </div>
                     </div>
                   </Card>
                 )}
