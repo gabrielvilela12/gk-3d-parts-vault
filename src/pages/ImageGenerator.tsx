@@ -111,6 +111,7 @@ export default function ImageGenerator() {
   const [packageWidth, setPackageWidth] = useState("15");
   const [packageHeight, setPackageHeight] = useState("11");
   const [benefitPrompt, setBenefitPrompt] = useState("");
+  const [mainColor, setMainColor] = useState<{ name: string; hex: string } | null>(null);
 
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
   const [shopeeText, setShopeeText] = useState<ShopeeText | null>(null);
@@ -322,6 +323,7 @@ export default function ImageGenerator() {
           productName,
           marketingType,
           ...(marketingType === "benefit" ? { benefitPrompt, benefitIndex: benefitIdx || 1 } : {}),
+          ...(mainColor ? { mainColor: mainColor.name, mainColorHex: mainColor.hex } : {}),
         }),
       });
 
@@ -891,6 +893,45 @@ export default function ImageGenerator() {
                     {generateEnvironments && suggestedEnvironments.length === 0 && (
                       <p className="text-xs text-amber-500">⚠️ Envie uma foto para a IA sugerir os ambientes</p>
                     )}
+                  </div>
+
+                  {/* Main color selector */}
+                  <div className="space-y-2 pt-2 border-t border-border">
+                    <Label className="flex items-center gap-2 text-xs font-medium">
+                      <Palette className="h-3.5 w-3.5" /> Cor Principal do Produto
+                    </Label>
+                    <p className="text-[11px] text-muted-foreground">
+                      Selecione a cor que o produto deve ter nas imagens de ambiente e benefício
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        onClick={() => setMainColor(null)}
+                        className={`px-2.5 py-1 rounded-full border text-[11px] font-medium transition-all ${
+                          !mainColor
+                            ? "ring-2 ring-primary border-primary bg-primary/5"
+                            : "border-border hover:border-primary/40"
+                        }`}
+                      >
+                        Original
+                      </button>
+                      {PRESET_COLORS.map((color) => (
+                        <button
+                          key={color.hex}
+                          onClick={() => setMainColor(color)}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-medium transition-all ${
+                            mainColor?.hex === color.hex
+                              ? "ring-2 ring-primary border-primary bg-primary/5"
+                              : "border-border hover:border-primary/40"
+                          }`}
+                        >
+                          <span
+                            className="h-3 w-3 rounded-full border border-border/50"
+                            style={{ backgroundColor: color.hex }}
+                          />
+                          {color.name}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   {/* Benefit toggle + prompt */}

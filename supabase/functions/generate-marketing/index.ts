@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { imageBase64, productName, marketingType, benefitPrompt, benefitIndex } = await req.json();
+    const { imageBase64, productName, marketingType, benefitPrompt, benefitIndex, mainColor, mainColorHex } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
@@ -33,6 +33,8 @@ serve(async (req) => {
       studio: { name: "Estúdio", description: "professional photography studio with controlled lighting, clean backdrop" },
     };
 
+    const colorInstruction = mainColor ? `\n- The product MUST be shown in the color "${mainColor}" (hex: ${mainColorHex}). Change the product color to this specific color while keeping all other details.` : "";
+
     let prompt: string;
 
     if (marketingType === "benefit") {
@@ -49,7 +51,7 @@ RULES:
 - The image should clearly communicate the benefit to the viewer.
 - Show the positive outcome or result described.
 - Use clean, bright lighting and professional composition.
-- Each variation should use a DIFFERENT angle, composition, or visual metaphor.
+- Each variation should use a DIFFERENT angle, composition, or visual metaphor.${colorInstruction}
 - Do NOT add any text, labels, watermarks, or overlays.
 - Keep it clean, professional, and aspirational.
 - Output at 1024x1024 resolution.`;
@@ -65,7 +67,7 @@ Product: "${productName || "this product"}"
 RULES:
 - Place the product naturally in a ${env.description} setting.
 - The product should be the MAIN FOCUS but integrated into the environment.
-- Make it look like a high-end lifestyle/interior design photo.
+- Make it look like a high-end lifestyle/interior design photo.${colorInstruction}
 - Do NOT add any text, labels, watermarks, or overlays.
 - Keep it professional and aspirational.
 - Output at 1024x1024 resolution.`;
@@ -80,7 +82,7 @@ Product: "${productName || "this product"}"
 RULES:
 - Place the product naturally in a ${env.description} setting.
 - The product should be the MAIN FOCUS but integrated into the environment.
-- Make it look like a high-end lifestyle/interior design photo.
+- Make it look like a high-end lifestyle/interior design photo.${colorInstruction}
 - Do NOT add any text, labels, watermarks, or overlays.
 - Keep it professional and aspirational.
 - Output at 1024x1024 resolution.`;
@@ -93,7 +95,7 @@ Product: "${productName || "this product"}"
 RULES:
 - Keep the product as the MAIN FOCUS, centered and prominent.
 - Use a CLEAN WHITE background with subtle professional lighting effects.
-- Make the product look PREMIUM and DESIRABLE.
+- Make the product look PREMIUM and DESIRABLE.${colorInstruction}
 - Do NOT add any text, labels, watermarks, or overlays.
 - Keep it clean, minimal, and high-end.
 - Output at 1024x1024 resolution.`;
