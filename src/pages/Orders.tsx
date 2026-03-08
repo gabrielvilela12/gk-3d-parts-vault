@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,8 +10,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { Package, Plus, Trash2, Clock, CheckCircle2, GripVertical, Timer, CalendarClock, Search, X } from "lucide-react";
+import { Package, Plus, Trash2, Clock, CheckCircle2, GripVertical, Timer, CalendarClock, Search, X, Upload, FileSpreadsheet, AlertCircle, Check } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import * as XLSX from "xlsx";
+
+interface ImportRow {
+  platformOrderId: string;
+  productName: string;
+  variation: string;
+  color: string;
+  quantity: number;
+  buyerNotes: string;
+  matchedPieceId: string | null;
+  matchedPieceName: string | null;
+  imageUrl: string | null;
+}
 
 interface Order {
   id: string;
@@ -87,6 +100,10 @@ export default function Orders() {
     notes: "",
   });
   const [pieceSearch, setPieceSearch] = useState("");
+  const [importRows, setImportRows] = useState<ImportRow[]>([]);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   // Update "now" every minute for live countdown
@@ -193,6 +210,121 @@ export default function Orders() {
     }
   };
 
+  const normalizeText = (text: string) => text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9 ]/g, "").trim();
+
+  const findBestMatch = (productName: string): Piece | null => {
+    const normalized = normalizeText(productName);
+    // Try exact match first
+    let match = pieces.find(p => normalizeText(p.name) === normalized);
+    if (match) return match;
+    // Try if piece name is contained in product name or vice versa
+    match = pieces.find(p => {
+      const pNorm = normalizeText(p.name);
+      return normalized.includes(pNorm) || pNorm.includes(normalized);
+    });
+    if (match) return match;
+    // Try matching by significant words (3+ chars)
+    const words = normalized.split(/\s+/).filter(w => w.length >= 3);
+    let bestScore = 0;
+    let bestPiece: Piece | null = null;
+    for (const piece of pieces) {
+      const pNorm = normalizeText(piece.name);
+      const matchCount = words.filter(w => pNorm.includes(w)).length;
+      const score = matchCount / Math.max(words.length, 1);
+      if (score > bestScore && score >= 0.4) {
+        bestScore = score;
+        bestPiece = piece;
+      }
+    }
+    return bestPiece;
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet);
+
+      const parsed: ImportRow[] = [];
+      for (const row of rows) {
+        const productName = row["Nome do Anúncio"] || "";
+        if (!productName) continue;
+        const variation = row["Variação"] || "";
+        const colorPart = variation.split(",")[0]?.trim() || "";
+        const quantity = parseInt(row["Qtd. do Produto"]) || 1;
+        const platformOrderId = row["Nº de Pedido da Plataforma"] || "";
+        const buyerNotes = row["Notas do Comprador"] || "";
+
+        const matched = findBestMatch(productName);
+        parsed.push({
+          platformOrderId,
+          productName,
+          variation,
+          color: colorPart,
+          quantity,
+          buyerNotes,
+          matchedPieceId: matched?.id || null,
+          matchedPieceName: matched?.name || null,
+          imageUrl: matched?.image_url || null,
+        });
+      }
+
+      setImportRows(parsed);
+      setIsImportDialogOpen(true);
+    } catch (err) {
+      console.error("Error parsing file:", err);
+      toast({ title: "Erro ao ler arquivo", variant: "destructive" });
+    }
+    // Reset input
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleConfirmImport = async () => {
+    const matchedRows = importRows.filter(r => r.matchedPieceId);
+    if (matchedRows.length === 0) {
+      toast({ title: "Nenhum produto correspondente encontrado", variant: "destructive" });
+      return;
+    }
+    setIsImporting(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const inserts = matchedRows.map(r => ({
+        user_id: user.id,
+        piece_id: r.matchedPieceId!,
+        quantity: r.quantity,
+        color: r.color || null,
+        notes: r.buyerNotes ? `${r.platformOrderId} - ${r.buyerNotes}` : r.platformOrderId || null,
+      }));
+
+      const { error } = await supabase.from("orders").insert(inserts);
+      if (error) throw error;
+
+      toast({ title: `${matchedRows.length} pedido(s) importado(s)!` });
+      setIsImportDialogOpen(false);
+      setImportRows([]);
+      fetchData();
+    } catch {
+      toast({ title: "Erro ao importar pedidos", variant: "destructive" });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const updateImportRowMatch = (index: number, pieceId: string) => {
+    const piece = pieces.find(p => p.id === pieceId);
+    setImportRows(prev => prev.map((r, i) => i === index ? {
+      ...r,
+      matchedPieceId: piece?.id || null,
+      matchedPieceName: piece?.name || null,
+      imageUrl: piece?.image_url || null,
+    } : r));
+  };
+
   const handleDeleteOrder = async (orderId: string) => {
     try {
       const { error } = await supabase.from("orders").delete().eq("id", orderId);
@@ -248,10 +380,21 @@ export default function Orders() {
             Organize a ordem de impressão e acompanhe os horários
           </p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="w-full sm:w-auto"><Plus className="mr-2 h-4 w-4" />Novo Pedido</Button>
-          </DialogTrigger>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={handleFileUpload}
+            className="hidden"
+          />
+          <Button variant="outline" className="flex-1 sm:flex-none" onClick={() => fileInputRef.current?.click()}>
+            <Upload className="mr-2 h-4 w-4" />Importar Excel
+          </Button>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="flex-1 sm:flex-none"><Plus className="mr-2 h-4 w-4" />Novo Pedido</Button>
+            </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Adicionar Pedido à Fila</DialogTitle>
@@ -421,7 +564,76 @@ export default function Orders() {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
+
+      {/* Import Dialog */}
+      <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileSpreadsheet className="h-5 w-5" />
+              Importar Pedidos do Excel
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex items-center gap-3 text-sm">
+              <Badge variant="default" className="gap-1">
+                <Check className="h-3 w-3" />
+                {importRows.filter(r => r.matchedPieceId).length} correspondidos
+              </Badge>
+              <Badge variant="destructive" className="gap-1">
+                <AlertCircle className="h-3 w-3" />
+                {importRows.filter(r => !r.matchedPieceId).length} não encontrados
+              </Badge>
+            </div>
+            <ScrollArea className="h-[400px] pr-3">
+              <div className="space-y-2">
+                {importRows.map((row, idx) => (
+                  <Card key={idx} className={`border-l-4 ${row.matchedPieceId ? 'border-l-primary' : 'border-l-destructive'}`}>
+                    <CardContent className="py-2.5 px-3">
+                      <div className="flex items-start gap-2">
+                        {row.imageUrl ? (
+                          <img src={row.imageUrl} alt="" className="h-10 w-10 rounded-md object-cover shrink-0" />
+                        ) : (
+                          <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center shrink-0">
+                            <Package className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <p className="text-xs text-muted-foreground truncate" title={row.productName}>{row.productName}</p>
+                          {row.matchedPieceId ? (
+                            <p className="text-sm font-medium text-primary truncate">→ {row.matchedPieceName}</p>
+                          ) : (
+                            <Select onValueChange={(v) => updateImportRowMatch(idx, v)}>
+                              <SelectTrigger className="h-7 text-xs">
+                                <SelectValue placeholder="Selecionar peça manualmente..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {pieces.map(p => (
+                                  <SelectItem key={p.id} value={p.id} className="text-xs">{p.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                          <div className="flex gap-2 flex-wrap">
+                            {row.color && <Badge variant="outline" className="text-[10px]">{row.color}</Badge>}
+                            <Badge variant="secondary" className="text-[10px]">x{row.quantity}</Badge>
+                            {row.platformOrderId && <Badge variant="secondary" className="text-[10px] font-mono">{row.platformOrderId}</Badge>}
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </ScrollArea>
+            <Button onClick={handleConfirmImport} className="w-full" disabled={isImporting || importRows.filter(r => r.matchedPieceId).length === 0}>
+              {isImporting ? "Importando..." : `Importar ${importRows.filter(r => r.matchedPieceId).length} pedido(s)`}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Summary stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
