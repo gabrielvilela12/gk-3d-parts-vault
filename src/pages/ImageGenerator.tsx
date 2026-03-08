@@ -199,7 +199,7 @@ export default function ImageGenerator() {
       });
 
       if (resp.status === 429) {
-        toast({ title: "Rate limit", description: "Aguarde e tente novamente.", variant: "destructive" });
+        handleRateLimit(resp);
         return;
       }
       if (resp.status === 402) {
