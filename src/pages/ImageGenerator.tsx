@@ -919,6 +919,22 @@ export default function ImageGenerator() {
                   <p className="text-xs text-muted-foreground">
                     Gera título SEO, descrição otimizada e palavras-chave para anúncio na Shopee
                   </p>
+                  {generateShopeeText && (
+                    <div className="flex items-center gap-3">
+                      <Label className="text-xs whitespace-nowrap">Qtd por anúncio:</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={99}
+                        value={shopeeQuantity}
+                        onChange={(e) => setShopeeQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-20 h-8 text-sm"
+                      />
+                      {shopeeQuantity > 1 && (
+                        <span className="text-xs text-muted-foreground">→ Título com "Kit {shopeeQuantity}..."</span>
+                      )}
+                    </div>
+                  )}
                   {!productName && generateShopeeText && (
                     <p className="text-xs text-amber-500">⚠️ Envie uma foto para identificar o produto automaticamente</p>
                   )}
