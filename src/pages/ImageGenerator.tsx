@@ -348,7 +348,7 @@ export default function ImageGenerator() {
         body: JSON.stringify({
           productName,
           imageBase64: getWorkingImage(),
-          colorCount: selectedColors.length,
+          quantity: shopeeQuantity,
         }),
       });
 
