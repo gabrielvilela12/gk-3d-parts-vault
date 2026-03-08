@@ -795,30 +795,52 @@ export default function ImageGenerator() {
                   <p className="text-xs text-muted-foreground">
                     Gera o produto em 4 ambientes diferentes + 1 imagem destacando o benefício principal
                   </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    {MARKETING_TYPES.map((mkt) => {
-                      const Icon = mkt.icon;
-                      const sel = selectedMarketingTypes.includes(mkt.id);
-                      return (
-                        <button
-                          key={mkt.id}
-                          onClick={() => toggleMarketingType(mkt.id)}
-                          className={`p-3 rounded-lg border text-left transition-all ${
-                            sel
-                              ? "border-primary bg-primary/5 ring-1 ring-primary"
-                              : "border-border hover:border-primary/30"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2 mb-1">
-                            <Icon className="h-4 w-4" />
-                            <p className="text-sm font-medium">{mkt.label}</p>
-                            {sel && <CheckCircle2 className="h-3.5 w-3.5 text-primary ml-auto" />}
-                          </div>
-                          <p className="text-xs text-muted-foreground">{mkt.description}</p>
-                        </button>
-                      );
-                    })}
-                  </div>
+                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                     {MARKETING_TYPES.map((mkt) => {
+                       const Icon = mkt.icon;
+                       const sel = selectedMarketingTypes.includes(mkt.id);
+                       return (
+                         <button
+                           key={mkt.id}
+                           onClick={() => toggleMarketingType(mkt.id)}
+                           className={`p-3 rounded-lg border text-left transition-all ${
+                             sel
+                               ? "border-primary bg-primary/5 ring-1 ring-primary"
+                               : "border-border hover:border-primary/30"
+                           }`}
+                         >
+                           <div className="flex items-center gap-2 mb-1">
+                             <Icon className="h-4 w-4" />
+                             <p className="text-sm font-medium">{mkt.label}</p>
+                             {mkt.id === "benefit" && <span className="text-[10px] text-muted-foreground">(3 imgs)</span>}
+                             {sel && <CheckCircle2 className="h-3.5 w-3.5 text-primary ml-auto" />}
+                           </div>
+                           <p className="text-xs text-muted-foreground">{mkt.description}</p>
+                         </button>
+                       );
+                     })}
+                   </div>
+
+                   {/* Benefit prompt input */}
+                   {hasBenefitSelected && (
+                     <div className="space-y-2 pt-2 border-t border-border">
+                       <Label className="flex items-center gap-2 text-xs font-semibold">
+                         <MessageSquare className="h-3.5 w-3.5" /> Descreva o benefício do produto
+                       </Label>
+                       <Textarea
+                         placeholder="Ex: Mantém o celular firme mesmo em estradas esburacadas, permite usar GPS e carregar ao mesmo tempo..."
+                         value={benefitPrompt}
+                         onChange={(e) => setBenefitPrompt(e.target.value)}
+                         className="text-sm min-h-[80px]"
+                       />
+                       <p className="text-xs text-muted-foreground">
+                         💡 A IA gerará 3 imagens diferentes mostrando esse benefício
+                       </p>
+                       {!benefitPrompt.trim() && (
+                         <p className="text-xs text-amber-500">⚠️ Escreva o benefício para gerar as imagens</p>
+                       )}
+                     </div>
+                   )}
                 </Card>
 
                 {/* PHASE 3: Shopee Text */}
