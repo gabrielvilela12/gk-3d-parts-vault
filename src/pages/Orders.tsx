@@ -376,16 +376,61 @@ export default function Orders() {
   const queue = useMemo(() => orders.filter(o => !o.is_printed), [orders]);
   const done = useMemo(() => orders.filter(o => o.is_printed), [orders]);
 
+  // Extract unique colors and platform order IDs
+  const uniqueColors = useMemo(() => {
+    const colors = new Set(orders.map(o => o.color).filter(Boolean) as string[]);
+    return Array.from(colors).sort();
+  }, [orders]);
+
+  // Filter orders
+  const filterOrder = (order: Order) => {
+    if (filterColor !== "all" && order.color !== filterColor) return false;
+    if (filterSearch && !order.pieces.name.toLowerCase().includes(filterSearch.toLowerCase()) &&
+        !(order.notes || "").toLowerCase().includes(filterSearch.toLowerCase())) return false;
+    return true;
+  };
+
+  const filteredQueue = useMemo(() => queue.filter(filterOrder), [queue, filterColor, filterSearch]);
+  const filteredDone = useMemo(() => done.filter(filterOrder), [done, filterColor, filterSearch]);
+
+  // Extract platform order ID from notes
+  const getPlatformId = (order: Order): string => {
+    const notes = order.notes || "";
+    // Format: "PLATFORM_ID - buyer notes" or just "PLATFORM_ID"
+    const match = notes.match(/^(\S+)/);
+    return match?.[1] || "sem-pedido";
+  };
+
+  // Group orders by platform order ID
+  const groupOrders = (orderList: Order[]) => {
+    const groups: Record<string, Order[]> = {};
+    for (const order of orderList) {
+      const key = getPlatformId(order);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(order);
+    }
+    return Object.entries(groups);
+  };
+
+  const groupedQueue = useMemo(() => groupOrders(filteredQueue), [filteredQueue]);
+  const groupedDone = useMemo(() => groupOrders(filteredDone), [filteredDone]);
+
   // Calculate cumulative finish times for the queue
   const queueWithTimes = useMemo(() => {
     let accMinutes = 0;
-    return queue.map(order => {
+    return filteredQueue.map(order => {
       const totalMin = getPrintTimeMin(order);
       accMinutes += totalMin;
       const finishAt = new Date(now.getTime() + accMinutes * 60_000);
       return { order, totalMin, accMinutes, finishAt };
     });
-  }, [queue, now]);
+  }, [filteredQueue, now]);
+
+  const queueTimeMap = useMemo(() => {
+    const map = new Map<string, { totalMin: number; finishAt: Date }>();
+    queueWithTimes.forEach(qt => map.set(qt.order.id, { totalMin: qt.totalMin, finishAt: qt.finishAt }));
+    return map;
+  }, [queueWithTimes]);
 
   const totalQueueMin = queueWithTimes.length > 0 ? queueWithTimes[queueWithTimes.length - 1].accMinutes : 0;
 
