@@ -222,11 +222,7 @@ export default function ImageGenerator() {
     );
   };
 
-  const toggleMarketingType = (typeId: string) => {
-    setSelectedMarketingTypes((prev) =>
-      prev.includes(typeId) ? prev.filter((t) => t !== typeId) : [...prev, typeId]
-    );
-  };
+  // removed toggleMarketingType - now automatic
 
   const callCleanupApi = async (): Promise<string | null> => {
     try {
