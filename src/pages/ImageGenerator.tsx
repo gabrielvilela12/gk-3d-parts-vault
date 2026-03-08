@@ -869,8 +869,11 @@ export default function ImageGenerator() {
                       {recolorCount > 0 && (
                         <p>🎨 {recolorCount} {recolorCount === 1 ? "imagem" : "imagens"} de cores</p>
                       )}
-                      {marketingCount > 0 && (
-                        <p>📸 {marketingCount} {marketingCount === 1 ? "imagem" : "imagens"} de ambientes/benefício</p>
+                      {environmentCount > 0 && (
+                        <p>📸 {environmentCount} {environmentCount === 1 ? "imagem" : "imagens"} de ambientes</p>
+                      )}
+                      {benefitImageCount > 0 && (
+                        <p>💡 3 imagens de benefício</p>
                       )}
                       {generateShopeeText && productName && (
                         <p>📝 Título + Descrição Shopee</p>
