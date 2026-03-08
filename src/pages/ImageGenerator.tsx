@@ -99,8 +99,10 @@ export default function ImageGenerator() {
   const [customColorName, setCustomColorName] = useState("");
   const [customColorHex, setCustomColorHex] = useState("#000000");
   const [selectedMarketingTypes, setSelectedMarketingTypes] = useState<string[]>(["highlight"]);
+  const [generateShopeeText, setGenerateShopeeText] = useState(true);
 
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
+  const [shopeeText, setShopeeText] = useState<ShopeeText | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressLabel, setProgressLabel] = useState("");
