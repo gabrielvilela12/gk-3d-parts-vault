@@ -131,6 +131,7 @@ export default function Orders() {
           .from("orders")
           .select(`*, pieces(name, tempo_impressao_min, image_url), piece_price_variations(variation_name, tempo_impressao_min)`)
           .eq("user_id", user.id)
+          .order("position", { ascending: true })
           .order("created_at", { ascending: true }),
         supabase
           .from("pieces")
@@ -749,6 +750,7 @@ export default function Orders() {
       {/* AI Chat */}
       <QueueOptimizerChat
         queueData={filteredQueue.map(o => ({
+          id: o.id,
           name: o.pieces.name,
           color: o.color,
           quantity: o.quantity,
@@ -760,6 +762,19 @@ export default function Orders() {
         }))}
         isOpen={isChatOpen}
         onToggle={() => setIsChatOpen(!isChatOpen)}
+        onReorder={async (orderedIds, explanation) => {
+          try {
+            // Update position for each order
+            const updates = orderedIds.map((id, idx) =>
+              supabase.from("orders").update({ position: idx }).eq("id", id)
+            );
+            await Promise.all(updates);
+            toast({ title: "Fila reorganizada pela IA!", description: explanation });
+            fetchData();
+          } catch {
+            toast({ title: "Erro ao reorganizar fila", variant: "destructive" });
+          }
+        }}
       />
     </div>
   );

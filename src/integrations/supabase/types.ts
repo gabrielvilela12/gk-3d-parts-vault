@@ -285,6 +285,7 @@ export type Database = {
           is_printed: boolean
           notes: string | null
           piece_id: string
+          position: number | null
           printed_at: string | null
           printed_by: string | null
           quantity: number
@@ -299,6 +300,7 @@ export type Database = {
           is_printed?: boolean
           notes?: string | null
           piece_id: string
+          position?: number | null
           printed_at?: string | null
           printed_by?: string | null
           quantity?: number
@@ -313,6 +315,7 @@ export type Database = {
           is_printed?: boolean
           notes?: string | null
           piece_id?: string
+          position?: number | null
           printed_at?: string | null
           printed_by?: string | null
           quantity?: number

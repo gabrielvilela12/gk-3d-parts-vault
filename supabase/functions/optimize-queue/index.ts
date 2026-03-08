@@ -12,10 +12,96 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, queueData } = await req.json();
+    const { messages, queueData, mode } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
+    // Mode "reorder": non-streaming, uses tool calling to get structured order
+    if (mode === "reorder") {
+      const reorderPrompt = `Você é um otimizador de fila de impressão 3D.
+
+FILA ATUAL (cada item tem um index que identifica sua posição atual):
+${JSON.stringify(queueData.map((item: any, i: number) => ({ index: i, ...item })), null, 2)}
+
+Com base na conversa anterior, determine a melhor ordem de impressão.
+Use a tool reorder_queue para retornar a nova ordem.
+
+REGRAS:
+- Retorne TODOS os itens da fila, apenas reordenados
+- Agrupe por cor quando possível para evitar trocas de filamento
+- Considere os horários de disponibilidade mencionados pelo usuário
+- Coloque peças mais longas para quando o usuário estiver fora
+- Coloque peças curtas para quando o usuário estiver presente para trocar rápido`;
+
+      const response = await fetch(
+        "https://ai.gateway.lovable.dev/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "google/gemini-3-flash-preview",
+            messages: [
+              { role: "system", content: reorderPrompt },
+              ...messages,
+            ],
+            tools: [
+              {
+                type: "function",
+                function: {
+                  name: "reorder_queue",
+                  description: "Reorder the print queue. Return all item indices in the new optimal order.",
+                  parameters: {
+                    type: "object",
+                    properties: {
+                      ordered_indices: {
+                        type: "array",
+                        description: "Array of item indices (from the original queue) in the new optimal order",
+                        items: { type: "number" },
+                      },
+                      explanation: {
+                        type: "string",
+                        description: "Brief explanation of why this order is optimal (in Portuguese)",
+                      },
+                    },
+                    required: ["ordered_indices", "explanation"],
+                    additionalProperties: false,
+                  },
+                },
+              },
+            ],
+            tool_choice: { type: "function", function: { name: "reorder_queue" } },
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const t = await response.text();
+        console.error("AI gateway error:", response.status, t);
+        return new Response(
+          JSON.stringify({ error: "Erro no serviço de IA" }),
+          { status: response.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const data = await response.json();
+      const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+      if (!toolCall) {
+        return new Response(
+          JSON.stringify({ error: "IA não retornou uma reorganização" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const args = JSON.parse(toolCall.function.arguments);
+      return new Response(JSON.stringify(args), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Mode "chat": streaming conversation
     const systemPrompt = `Você é um assistente especializado em otimizar filas de impressão 3D. 
 Você recebe dados da fila atual do usuário e ajuda a reorganizar para minimizar tempo ocioso.
 
@@ -37,7 +123,8 @@ REGRAS:
 - Se o usuário disser horários de disponibilidade, otimize para que peças terminem nesses horários
 - Formate a resposta de forma clara com markdown
 - Quando sugerir uma ordem, use uma tabela ou lista numerada com: nome da peça, cor, tempo de impressão, horário estimado de início e término
-- Seja conciso e prático`;
+- Seja conciso e prático
+- Ao final de cada sugestão de reordenação, pergunte se o usuário quer aplicar a ordem sugerida`;
 
     const response = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
