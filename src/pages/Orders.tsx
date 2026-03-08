@@ -380,10 +380,21 @@ export default function Orders() {
             Organize a ordem de impressão e acompanhe os horários
           </p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="w-full sm:w-auto"><Plus className="mr-2 h-4 w-4" />Novo Pedido</Button>
-          </DialogTrigger>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={handleFileUpload}
+            className="hidden"
+          />
+          <Button variant="outline" className="flex-1 sm:flex-none" onClick={() => fileInputRef.current?.click()}>
+            <Upload className="mr-2 h-4 w-4" />Importar Excel
+          </Button>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="flex-1 sm:flex-none"><Plus className="mr-2 h-4 w-4" />Novo Pedido</Button>
+            </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Adicionar Pedido à Fila</DialogTitle>
