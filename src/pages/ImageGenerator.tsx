@@ -1051,28 +1051,48 @@ export default function ImageGenerator() {
 
                 {/* Generate button + progress */}
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between gap-4 flex-wrap">
-                    <div className="text-sm text-muted-foreground space-y-0.5">
-                      {recolorCount > 0 && (
-                        <p>🎨 {recolorCount} {recolorCount === 1 ? "imagem" : "imagens"} de cores</p>
+                  {/* Rate limit indicator */}
+                  {totalApiCalls > 0 && (
+                    <div className={`rounded-lg border p-3 space-y-2 ${totalApiCalls > 15 ? "border-destructive bg-destructive/10" : totalApiCalls > 10 ? "border-amber-500 bg-amber-500/10" : "border-primary/30 bg-primary/5"}`}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-muted-foreground">Chamadas à IA nesta geração</span>
+                        <Badge variant={totalApiCalls > 15 ? "destructive" : totalApiCalls > 10 ? "outline" : "secondary"} className="text-xs">
+                          {totalApiCalls} / 20
+                        </Badge>
+                      </div>
+                      <Progress value={Math.min((totalApiCalls / 20) * 100, 100)} className={`h-1.5 ${totalApiCalls > 15 ? "[&>div]:bg-destructive" : totalApiCalls > 10 ? "[&>div]:bg-amber-500" : ""}`} />
+                      <div className="text-xs text-muted-foreground space-y-0.5">
+                        {recolorCount > 0 && (
+                          <p>🎨 {recolorCount} recolor{recolorCount > 1 ? "ações" : "ação"}</p>
+                        )}
+                        {environmentCount > 0 && (
+                          <p>📸 {environmentCount} ambiente{environmentCount > 1 ? "s" : ""}</p>
+                        )}
+                        {benefitImageCount > 0 && (
+                          <p>💡 3 benefícios</p>
+                        )}
+                        {generateShopeeText && productName && (
+                          <p>📝 1 texto SEO</p>
+                        )}
+                        <p>🧹 1 limpeza de imagem</p>
+                      </div>
+                      {totalApiCalls > 15 && (
+                        <p className="text-xs font-medium text-destructive">⚠️ Muitas chamadas! Risco de erro de rate limit. Reduza cores ou ambientes.</p>
                       )}
-                      {environmentCount > 0 && (
-                        <p>📸 {environmentCount} {environmentCount === 1 ? "imagem" : "imagens"} de ambientes</p>
-                      )}
-                      {benefitImageCount > 0 && (
-                        <p>💡 3 imagens de benefício</p>
-                      )}
-                      {generateShopeeText && productName && (
-                        <p>📝 Título + Descrição Shopee</p>
-                      )}
-                      {(totalImages > 0 || (generateShopeeText && productName)) && (
-                        <p className="font-medium text-foreground">Total: {totalImages} imagens{generateShopeeText && productName ? " + texto SEO" : ""} • <span className="text-primary">{totalApiCalls} chamadas à IA</span></p>
+                      {totalApiCalls > 10 && totalApiCalls <= 15 && (
+                        <p className="text-xs font-medium text-amber-600">⚡ Volume alto. Pode demorar mais e ter risco leve de rate limit.</p>
                       )}
                     </div>
+                  )}
+
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <p className="text-sm font-medium text-foreground">
+                      {totalImages > 0 ? `${totalImages} imagens` : ""}{totalImages > 0 && generateShopeeText && productName ? " + " : ""}{generateShopeeText && productName ? "texto SEO" : ""}
+                    </p>
                     <Button
                       size="lg"
                       onClick={handleGenerate}
-                      disabled={isGenerating || isIdentifying || !baseImageData || (totalImages === 0 && !(generateShopeeText && productName))}
+                      disabled={isGenerating || isIdentifying || !baseImageData || (totalImages === 0 && !(generateShopeeText && productName)) || totalApiCalls > 20}
                       className="gap-2"
                     >
                       {isGenerating ? (
