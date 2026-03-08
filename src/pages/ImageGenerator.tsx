@@ -1,19 +1,19 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsMobile } from "@/hooks/use-mobile";
 import JSZip from "jszip";
 import {
-  ImagePlus, Palette, Download, Loader2, Trash2, Eye, Package,
+  ImagePlus, Palette, Download, Loader2, Eye, Package,
   Square, Smartphone, Monitor, X, History, Sparkles, CheckCircle2
 } from "lucide-react";
 
@@ -67,15 +67,15 @@ interface HistoryEntry {
   generated_images: GeneratedImage[];
 }
 
+const RECOLOR_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/recolor-product`;
+
 export default function ImageGenerator() {
   const { toast } = useToast();
   const isMobile = useIsMobile();
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [productName, setProductName] = useState("");
-  const [baseImage, setBaseImage] = useState<HTMLImageElement | null>(null);
-  const [baseImagePreview, setBaseImagePreview] = useState<string | null>(null);
+  const [baseImageData, setBaseImageData] = useState<string | null>(null);
   const [selectedColors, setSelectedColors] = useState<typeof PRESET_COLORS>([]);
   const [selectedFormats, setSelectedFormats] = useState<string[]>(["square"]);
   const [backgroundStyle, setBackgroundStyle] = useState("white");
@@ -84,6 +84,8 @@ export default function ImageGenerator() {
 
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [progressLabel, setProgressLabel] = useState("");
   const [previewImage, setPreviewImage] = useState<GeneratedImage | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [activeTab, setActiveTab] = useState("generator");
@@ -113,12 +115,7 @@ export default function ImageGenerator() {
     }
     const reader = new FileReader();
     reader.onload = (ev) => {
-      const img = new Image();
-      img.onload = () => {
-        setBaseImage(img);
-        setBaseImagePreview(ev.target?.result as string);
-      };
-      img.src = ev.target?.result as string;
+      setBaseImageData(ev.target?.result as string);
     };
     reader.readAsDataURL(file);
   };
@@ -142,124 +139,55 @@ export default function ImageGenerator() {
 
   const toggleFormat = (formatId: string) => {
     setSelectedFormats((prev) =>
-      prev.includes(formatId)
-        ? prev.filter((f) => f !== formatId)
-        : [...prev, formatId]
+      prev.includes(formatId) ? prev.filter((f) => f !== formatId) : [...prev, formatId]
     );
   };
 
-  const drawImage = useCallback(
-    (
-      canvas: HTMLCanvasElement,
-      img: HTMLImageElement,
-      color: typeof PRESET_COLORS[0],
-      format: typeof FORMATS[0],
-      bg: string,
-      name: string
-    ) => {
-      const ctx = canvas.getContext("2d")!;
-      canvas.width = format.width;
-      canvas.height = format.height;
+  const callRecolorApi = async (
+    color: typeof PRESET_COLORS[0],
+    format: typeof FORMATS[0]
+  ): Promise<string | null> => {
+    try {
+      const resp = await fetch(RECOLOR_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          imageBase64: baseImageData,
+          colorName: color.name,
+          colorHex: color.hex,
+          productName,
+          backgroundStyle,
+          format: format.id,
+        }),
+      });
 
-      // Background
-      if (bg === "white") {
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-      } else if (bg === "promo") {
-        const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-        grad.addColorStop(0, "#fef9c3");
-        grad.addColorStop(1, "#fde68a");
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        // Promo banner stripe
-        ctx.save();
-        ctx.fillStyle = "#dc2626";
-        ctx.translate(canvas.width, 0);
-        ctx.rotate(Math.PI / 4);
-        ctx.fillRect(-60, -10, 400, 50);
-        ctx.fillStyle = "#fff";
-        ctx.font = "bold 22px Inter, sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText("PROMOÇÃO", 140, 28);
-        ctx.restore();
-      } else if (bg === "premium") {
-        const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-        grad.addColorStop(0, "#1e1b4b");
-        grad.addColorStop(0.5, "#312e81");
-        grad.addColorStop(1, "#1e1b4b");
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        // Subtle pattern dots
-        ctx.fillStyle = "rgba(255,255,255,0.03)";
-        for (let x = 0; x < canvas.width; x += 40) {
-          for (let y = 0; y < canvas.height; y += 40) {
-            ctx.beginPath();
-            ctx.arc(x, y, 2, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        }
+      if (resp.status === 429) {
+        toast({ title: "Rate limit", description: "Aguarde um momento e tente novamente.", variant: "destructive" });
+        return null;
+      }
+      if (resp.status === 402) {
+        toast({ title: "Créditos insuficientes", description: "Adicione créditos no workspace.", variant: "destructive" });
+        return null;
+      }
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        console.error("Recolor error:", err);
+        return null;
       }
 
-      // Draw product image centered with padding
-      const padding = Math.min(canvas.width, canvas.height) * 0.12;
-      const availW = canvas.width - padding * 2;
-      const availH = canvas.height - padding * 2 - 120; // reserve for text
-      const scale = Math.min(availW / img.width, availH / img.height, 1);
-      const drawW = img.width * scale;
-      const drawH = img.height * scale;
-      const drawX = (canvas.width - drawW) / 2;
-      const drawY = padding + (availH - drawH) / 2;
-
-      // Color tint overlay on product
-      ctx.save();
-      ctx.drawImage(img, drawX, drawY, drawW, drawH);
-      ctx.globalCompositeOperation = "multiply";
-      ctx.fillStyle = color.hex;
-      ctx.fillRect(drawX, drawY, drawW, drawH);
-      ctx.globalCompositeOperation = "destination-in";
-      ctx.drawImage(img, drawX, drawY, drawW, drawH);
-      ctx.restore();
-
-      // Re-draw with reduced tint for realism
-      ctx.save();
-      ctx.globalAlpha = 0.45;
-      ctx.drawImage(img, drawX, drawY, drawW, drawH);
-      ctx.restore();
-
-      // Product name
-      const textY = canvas.height - padding - 50;
-      const fontSize = Math.max(28, Math.min(canvas.width * 0.04, 48));
-      ctx.font = `bold ${fontSize}px Inter, system-ui, sans-serif`;
-      ctx.textAlign = "center";
-      ctx.fillStyle = bg === "premium" ? "#e0e7ff" : "#111827";
-      if (name) ctx.fillText(name, canvas.width / 2, textY);
-
-      // Color name badge
-      const badgeY = textY + fontSize * 0.8;
-      const badgeFontSize = Math.max(18, fontSize * 0.55);
-      ctx.font = `600 ${badgeFontSize}px Inter, system-ui, sans-serif`;
-      const textW = ctx.measureText(color.name).width;
-      const bx = canvas.width / 2 - textW / 2 - 16;
-      const by = badgeY - badgeFontSize * 0.7;
-      const bw = textW + 32;
-      const bh = badgeFontSize + 14;
-      ctx.fillStyle = color.hex;
-      ctx.beginPath();
-      ctx.roundRect(bx, by, bw, bh, 8);
-      ctx.fill();
-      // Contrast text
-      const r = parseInt(color.hex.slice(1, 3), 16);
-      const g = parseInt(color.hex.slice(3, 5), 16);
-      const b = parseInt(color.hex.slice(5, 7), 16);
-      ctx.fillStyle = r * 0.299 + g * 0.587 + b * 0.114 > 150 ? "#111" : "#fff";
-      ctx.textAlign = "center";
-      ctx.fillText(color.name, canvas.width / 2, badgeY);
-    },
-    []
-  );
+      const data = await resp.json();
+      return data.imageUrl || null;
+    } catch (e) {
+      console.error("Recolor fetch error:", e);
+      return null;
+    }
+  };
 
   const handleGenerate = async () => {
-    if (!baseImage) {
+    if (!baseImageData) {
       toast({ title: "Envie uma imagem base", variant: "destructive" });
       return;
     }
@@ -273,36 +201,44 @@ export default function ImageGenerator() {
     }
 
     setIsGenerating(true);
-    const canvas = document.createElement("canvas");
+    setGeneratedImages([]);
     const results: GeneratedImage[] = [];
+    const total = selectedColors.length * selectedFormats.length;
+    let done = 0;
 
     for (const color of selectedColors) {
       for (const fmtId of selectedFormats) {
         const fmt = FORMATS.find((f) => f.id === fmtId)!;
-        drawImage(canvas, baseImage, color, fmt, backgroundStyle, productName);
-        results.push({
-          colorName: color.name,
-          colorHex: color.hex,
-          format: fmtId,
-          dataUrl: canvas.toDataURL("image/png"),
-          width: fmt.width,
-          height: fmt.height,
-        });
-        // Yield to UI
-        await new Promise((r) => setTimeout(r, 10));
+        setProgressLabel(`${color.name} — ${fmt.label}`);
+        setProgress(Math.round((done / total) * 100));
+
+        const imageUrl = await callRecolorApi(color, fmt);
+        if (imageUrl) {
+          const result: GeneratedImage = {
+            colorName: color.name,
+            colorHex: color.hex,
+            format: fmtId,
+            dataUrl: imageUrl,
+            width: fmt.width,
+            height: fmt.height,
+          };
+          results.push(result);
+          setGeneratedImages([...results]);
+        }
+        done++;
       }
     }
 
-    setGeneratedImages(results);
+    setProgress(100);
     setIsGenerating(false);
 
     // Save to history
     const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
+    if (user && results.length > 0) {
       await supabase.from("image_generations").insert({
         user_id: user.id,
         product_name: productName || "Sem nome",
-        base_image_url: baseImagePreview?.slice(0, 200) || "",
+        base_image_url: "ai-generated",
         colors: selectedColors.map((c) => c.name),
         background_style: backgroundStyle,
         formats: selectedFormats,
@@ -316,7 +252,12 @@ export default function ImageGenerator() {
       });
     }
 
-    toast({ title: `${results.length} imagens geradas!`, description: "Pronto para download." });
+    toast({
+      title: `${results.length} imagens geradas!`,
+      description: results.length < total
+        ? `${total - results.length} falharam. Tente novamente.`
+        : "Pronto para download.",
+    });
   };
 
   const downloadAll = async () => {
@@ -324,10 +265,24 @@ export default function ImageGenerator() {
     const zip = new JSZip();
     const folder = zip.folder(productName || "imagens")!;
 
-    for (const img of generatedImages) {
-      const base64 = img.dataUrl.split(",")[1];
+    for (let i = 0; i < generatedImages.length; i++) {
+      const img = generatedImages[i];
       const fileName = `${productName || "produto"}_${img.colorName}_${img.format}.png`;
-      folder.file(fileName, base64, { base64: true });
+
+      // Handle base64 data URLs
+      if (img.dataUrl.startsWith("data:")) {
+        const base64 = img.dataUrl.split(",")[1];
+        folder.file(fileName, base64, { base64: true });
+      } else {
+        // If it's a URL, fetch it
+        try {
+          const resp = await fetch(img.dataUrl);
+          const blob = await resp.blob();
+          folder.file(fileName, blob);
+        } catch {
+          console.error("Failed to fetch image for zip:", fileName);
+        }
+      }
     }
 
     const blob = await zip.generateAsync({ type: "blob" });
@@ -339,19 +294,32 @@ export default function ImageGenerator() {
     URL.revokeObjectURL(url);
   };
 
-  const downloadSingle = (img: GeneratedImage) => {
-    const a = document.createElement("a");
-    a.href = img.dataUrl;
-    a.download = `${productName || "produto"}_${img.colorName}_${img.format}.png`;
-    a.click();
+  const downloadSingle = async (img: GeneratedImage) => {
+    if (img.dataUrl.startsWith("data:")) {
+      const a = document.createElement("a");
+      a.href = img.dataUrl;
+      a.download = `${productName || "produto"}_${img.colorName}_${img.format}.png`;
+      a.click();
+    } else {
+      try {
+        const resp = await fetch(img.dataUrl);
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${productName || "produto"}_${img.colorName}_${img.format}.png`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch {
+        toast({ title: "Erro ao baixar", variant: "destructive" });
+      }
+    }
   };
 
   const totalImages = selectedColors.length * selectedFormats.length;
 
   return (
     <div className="min-h-screen bg-background">
-      <canvas ref={canvasRef} className="hidden" />
-
       <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="page-header">
@@ -361,7 +329,7 @@ export default function ImageGenerator() {
             </div>
             <div>
               <h1 className="page-title">Gerador de Imagens</h1>
-              <p className="page-subtitle">Gere imagens de anúncios em lote para múltiplas cores</p>
+              <p className="page-subtitle">IA recolore somente o produto — gere anúncios em lote</p>
             </div>
           </div>
         </div>
@@ -378,9 +346,8 @@ export default function ImageGenerator() {
 
           <TabsContent value="generator" className="space-y-6 mt-4">
             <div className={`grid gap-6 ${isMobile ? "grid-cols-1" : "grid-cols-3"}`}>
-              {/* Left panel - Config */}
+              {/* Left panel */}
               <div className="space-y-5 col-span-1">
-                {/* Product name */}
                 <Card className="p-4 space-y-3">
                   <Label className="flex items-center gap-2 text-sm font-semibold">
                     <Package className="h-4 w-4" /> Nome do Produto
@@ -392,7 +359,6 @@ export default function ImageGenerator() {
                   />
                 </Card>
 
-                {/* Image upload */}
                 <Card className="p-4 space-y-3">
                   <Label className="text-sm font-semibold">Imagem Base</Label>
                   <input
@@ -402,10 +368,10 @@ export default function ImageGenerator() {
                     className="hidden"
                     onChange={handleImageUpload}
                   />
-                  {baseImagePreview ? (
+                  {baseImageData ? (
                     <div className="relative group">
                       <img
-                        src={baseImagePreview}
+                        src={baseImageData}
                         alt="Base"
                         className="w-full h-40 object-contain rounded-lg border border-border bg-muted"
                       />
@@ -413,7 +379,7 @@ export default function ImageGenerator() {
                         size="icon"
                         variant="destructive"
                         className="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={() => { setBaseImage(null); setBaseImagePreview(null); }}
+                        onClick={() => setBaseImageData(null)}
                       >
                         <X className="h-3 w-3" />
                       </Button>
@@ -429,7 +395,6 @@ export default function ImageGenerator() {
                   )}
                 </Card>
 
-                {/* Background style */}
                 <Card className="p-4 space-y-3">
                   <Label className="text-sm font-semibold">Estilo de Fundo</Label>
                   <div className="grid grid-cols-1 gap-2">
@@ -450,7 +415,6 @@ export default function ImageGenerator() {
                   </div>
                 </Card>
 
-                {/* Formats */}
                 <Card className="p-4 space-y-3">
                   <Label className="text-sm font-semibold">Formatos</Label>
                   <div className="flex flex-wrap gap-2">
@@ -477,9 +441,8 @@ export default function ImageGenerator() {
                 </Card>
               </div>
 
-              {/* Right panel - Colors + generate */}
+              {/* Right panel */}
               <div className={`space-y-5 ${isMobile ? "col-span-1" : "col-span-2"}`}>
-                {/* Color selector */}
                 <Card className="p-4 space-y-4">
                   <div className="flex items-center justify-between">
                     <Label className="flex items-center gap-2 text-sm font-semibold">
@@ -511,7 +474,6 @@ export default function ImageGenerator() {
                     })}
                   </div>
 
-                  {/* Custom color */}
                   <div className="flex items-end gap-2">
                     <div className="flex-1">
                       <Label className="text-xs">Cor personalizada</Label>
@@ -533,7 +495,6 @@ export default function ImageGenerator() {
                     </Button>
                   </div>
 
-                  {/* Selected colors */}
                   {selectedColors.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 pt-2 border-t border-border">
                       {selectedColors.map((c) => (
@@ -552,25 +513,36 @@ export default function ImageGenerator() {
                   )}
                 </Card>
 
-                {/* Generate button */}
-                <div className="flex items-center justify-between gap-4 flex-wrap">
-                  <div className="text-sm text-muted-foreground">
-                    {totalImages > 0
-                      ? `${totalImages} ${totalImages === 1 ? "imagem será gerada" : "imagens serão geradas"}`
-                      : "Configure cores e formatos"}
+                {/* Generate button + progress */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <div className="text-sm text-muted-foreground">
+                      {totalImages > 0
+                        ? `${totalImages} ${totalImages === 1 ? "imagem será gerada" : "imagens serão geradas"} via IA`
+                        : "Configure cores e formatos"}
+                    </div>
+                    <Button
+                      size="lg"
+                      onClick={handleGenerate}
+                      disabled={isGenerating || !baseImageData || selectedColors.length === 0 || selectedFormats.length === 0}
+                      className="gap-2"
+                    >
+                      {isGenerating ? (
+                        <><Loader2 className="h-4 w-4 animate-spin" /> Gerando...</>
+                      ) : (
+                        <><Sparkles className="h-4 w-4" /> Gerar em Lote (IA)</>
+                      )}
+                    </Button>
                   </div>
-                  <Button
-                    size="lg"
-                    onClick={handleGenerate}
-                    disabled={isGenerating || !baseImage || selectedColors.length === 0 || selectedFormats.length === 0}
-                    className="gap-2"
-                  >
-                    {isGenerating ? (
-                      <><Loader2 className="h-4 w-4 animate-spin" /> Gerando...</>
-                    ) : (
-                      <><Sparkles className="h-4 w-4" /> Gerar em Lote</>
-                    )}
-                  </Button>
+
+                  {isGenerating && (
+                    <div className="space-y-2">
+                      <Progress value={progress} className="h-2" />
+                      <p className="text-xs text-muted-foreground text-center">
+                        {progressLabel} • {progress}%
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Results gallery */}
