@@ -403,7 +403,10 @@ export default function Orders() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold">Fila de Produção</h1>
           <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-            Organize a ordem de impressão e acompanhe os horários
+            Importe pedidos via Excel exportado do{" "}
+            <a href="https://app.upseller.com/pt/order/to-ship" target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2 hover:text-primary/80">
+              UpSeller → Pedidos → Para Enviar
+            </a>
           </p>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
@@ -414,182 +417,9 @@ export default function Orders() {
             onChange={handleFileUpload}
             className="hidden"
           />
-          <Button variant="outline" className="flex-1 sm:flex-none" onClick={() => fileInputRef.current?.click()}>
+          <Button className="w-full sm:w-auto" onClick={() => fileInputRef.current?.click()}>
             <Upload className="mr-2 h-4 w-4" />Importar Excel
           </Button>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="flex-1 sm:flex-none"><Plus className="mr-2 h-4 w-4" />Novo Pedido</Button>
-            </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Adicionar Pedido à Fila</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>Peça *</Label>
-                {newOrder.piece_id ? (
-                  <div className="flex items-center gap-3 p-2 rounded-lg border border-primary/40 bg-primary/5">
-                    {(() => {
-                      const sel = pieces.find(p => p.id === newOrder.piece_id);
-                      if (!sel) return null;
-                      return (
-                        <>
-                          {sel.image_url ? (
-                            <img src={sel.image_url} alt={sel.name} className="h-12 w-12 rounded-lg object-cover" />
-                          ) : (
-                            <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center">
-                              <Package className="h-5 w-5 text-muted-foreground" />
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm truncate">{sel.name}</p>
-                            {sel.tempo_impressao_min && (
-                              <p className="text-xs text-muted-foreground">{formatTime(sel.tempo_impressao_min)}</p>
-                            )}
-                          </div>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setNewOrder({ ...newOrder, piece_id: "", variation_id: "" })}>
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </>
-                      );
-                    })()}
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                      <Input
-                        placeholder="Buscar peça..."
-                        value={pieceSearch}
-                        onChange={(e) => setPieceSearch(e.target.value)}
-                        className="pl-9 h-9 text-sm"
-                      />
-                    </div>
-                    <ScrollArea className="h-[200px] rounded-lg border">
-                      <div className="p-1 space-y-0.5">
-                        {pieces
-                          .filter(p => p.name.toLowerCase().includes(pieceSearch.toLowerCase()))
-                          .map(p => (
-                            <button
-                              key={p.id}
-                              type="button"
-                              onClick={() => { setNewOrder({ ...newOrder, piece_id: p.id, variation_id: "" }); setPieceSearch(""); }}
-                              className="w-full flex items-center gap-3 p-2 rounded-md hover:bg-accent transition-colors text-left"
-                            >
-                              {p.image_url ? (
-                                <img src={p.image_url} alt={p.name} className="h-10 w-10 rounded-md object-cover shrink-0" />
-                              ) : (
-                                <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center shrink-0">
-                                  <Package className="h-4 w-4 text-muted-foreground" />
-                                </div>
-                              )}
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium truncate">{p.name}</p>
-                                {p.tempo_impressao_min && (
-                                  <p className="text-[11px] text-muted-foreground">{formatTime(p.tempo_impressao_min)}</p>
-                                )}
-                              </div>
-                            </button>
-                          ))}
-                        {pieces.filter(p => p.name.toLowerCase().includes(pieceSearch.toLowerCase())).length === 0 && (
-                          <p className="text-sm text-muted-foreground text-center py-6">Nenhuma peça encontrada</p>
-                        )}
-                      </div>
-                    </ScrollArea>
-                  </div>
-                )}
-              </div>
-
-              {availableVariations.length > 0 && (
-                <div className="space-y-2">
-                  <Label>Variação</Label>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setNewOrder({ ...newOrder, variation_id: "" })}
-                      className={`px-3 py-1.5 rounded-md text-sm border transition-colors ${
-                        !newOrder.variation_id
-                          ? "border-primary bg-primary/10 text-primary font-medium"
-                          : "border-border hover:bg-accent text-muted-foreground"
-                      }`}
-                    >
-                      Padrão
-                    </button>
-                    {availableVariations.map(v => (
-                      <button
-                        key={v.id}
-                        type="button"
-                        onClick={() => setNewOrder({ ...newOrder, variation_id: v.id })}
-                        className={`px-3 py-1.5 rounded-md text-sm border transition-colors ${
-                          newOrder.variation_id === v.id
-                            ? "border-primary bg-primary/10 text-primary font-medium"
-                            : "border-border hover:bg-accent text-muted-foreground"
-                        }`}
-                      >
-                        {v.variation_name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Quantidade</Label>
-                  <Input type="number" min="1" value={newOrder.quantity} onChange={(e) => setNewOrder({ ...newOrder, quantity: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Cor</Label>
-                  {filaments.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {filaments.map(f => {
-                        const colorMap: Record<string, string> = {
-                          preto: "hsl(0 0% 10%)", black: "hsl(0 0% 10%)",
-                          branco: "hsl(0 0% 95%)", white: "hsl(0 0% 95%)",
-                          vermelho: "hsl(0 75% 50%)", red: "hsl(0 75% 50%)",
-                          azul: "hsl(217 90% 50%)", blue: "hsl(217 90% 50%)",
-                          verde: "hsl(140 70% 40%)", green: "hsl(140 70% 40%)",
-                          amarelo: "hsl(50 95% 55%)", yellow: "hsl(50 95% 55%)",
-                          laranja: "hsl(25 90% 55%)", orange: "hsl(25 90% 55%)",
-                          rosa: "hsl(330 80% 60%)", pink: "hsl(330 80% 60%)",
-                          roxo: "hsl(270 70% 50%)", purple: "hsl(270 70% 50%)",
-                          cinza: "hsl(0 0% 55%)", gray: "hsl(0 0% 55%)",
-                          marrom: "hsl(25 50% 30%)", brown: "hsl(25 50% 30%)",
-                          bege: "hsl(35 40% 75%)", beige: "hsl(35 40% 75%)",
-                        };
-                        const colorKey = (f.color || f.name).toLowerCase().trim();
-                        const bg = colorMap[colorKey] || "hsl(var(--muted))";
-                        const isSelected = newOrder.color === (f.color || f.name);
-                        return (
-                          <button
-                            key={f.id}
-                            type="button"
-                            onClick={() => setNewOrder({ ...newOrder, color: f.color || f.name })}
-                            title={f.name}
-                            className={`h-8 w-8 rounded-full border-2 transition-all ${
-                              isSelected ? "border-primary scale-110 ring-2 ring-primary/30" : "border-border hover:scale-105"
-                            }`}
-                            style={{ backgroundColor: bg }}
-                          />
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <Input value={newOrder.color} onChange={(e) => setNewOrder({ ...newOrder, color: e.target.value })} placeholder="Ex: Preto" />
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Observações</Label>
-                <Textarea value={newOrder.notes} onChange={(e) => setNewOrder({ ...newOrder, notes: e.target.value })} rows={2} />
-              </div>
-
-              <Button onClick={handleCreateOrder} className="w-full">Adicionar à Fila</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
         </div>
       </div>
 
