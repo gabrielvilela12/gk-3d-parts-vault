@@ -69,16 +69,19 @@ RULES:
 - Output at 1024x1024 resolution.`,
 
       benefit: `You are a professional product photographer and marketing expert.
-Edit this product image to create a compelling photo that highlights the MAIN BENEFIT of using this product.
+Edit this product image to create a compelling photo that highlights a specific BENEFIT of using this product.
 
 Product: "${productName || "this product"}"
+Benefit to highlight: "${benefitPrompt || "the main benefit of this product"}"
+Image variation: ${benefitIndex || 1} of 3 (make each variation UNIQUE and DIFFERENT from the others)
 
 RULES:
 - Keep the product as the MAIN FOCUS, centered and prominent.
-- Show a BEFORE/AFTER or TRANSFORMATION visual that demonstrates the key benefit.
-- The image should clearly communicate WHY someone should buy this product.
-- Show the positive outcome or result of using the product.
+- Visually represent the described benefit in a creative, eye-catching way.
+- The image should clearly communicate the benefit to the viewer.
+- Show the positive outcome or result described.
 - Use clean, bright lighting and professional composition.
+- Each variation should use a DIFFERENT angle, composition, or visual metaphor.
 - Do NOT add any text, labels, watermarks, or overlays.
 - Keep it clean, professional, and aspirational.
 - Output at 1024x1024 resolution.`,
