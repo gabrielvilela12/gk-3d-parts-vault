@@ -111,6 +111,7 @@ export default function ImageGenerator() {
   const [packageWidth, setPackageWidth] = useState("15");
   const [packageHeight, setPackageHeight] = useState("11");
   const [benefitPrompt, setBenefitPrompt] = useState("");
+  const [mainColor, setMainColor] = useState<{ name: string; hex: string } | null>(null);
 
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
   const [shopeeText, setShopeeText] = useState<ShopeeText | null>(null);
