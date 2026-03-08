@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { imageBase64, productName, marketingType, benefitPrompt, benefitIndex } = await req.json();
+    const { imageBase64, productName, marketingType, benefitPrompt, benefitIndex, mainColor, mainColorHex } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
