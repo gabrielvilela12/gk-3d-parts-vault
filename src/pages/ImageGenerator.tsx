@@ -851,63 +851,71 @@ export default function ImageGenerator() {
                   )}
                 </Card>
 
-                {/* PHASE 2: Environments + Benefit */}
+                {/* PHASE 2: Ambientes + Benefício (automático via IA) */}
                 <Card className="p-4 space-y-4">
                   <div className="flex items-center justify-between">
                     <Label className="flex items-center gap-2 text-sm font-semibold">
                       <Megaphone className="h-4 w-4" /> Fase 2: Ambientes e Benefício
                     </Label>
-                    <Badge variant="secondary">{selectedMarketingTypes.length} imagens</Badge>
+                    <Badge variant="secondary">{marketingCount} imagens</Badge>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Gera o produto em 4 ambientes diferentes + 1 imagem destacando o benefício principal
+                    A IA identifica os melhores ambientes para o produto automaticamente
                   </p>
-                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                     {MARKETING_TYPES.map((mkt) => {
-                       const Icon = mkt.icon;
-                       const sel = selectedMarketingTypes.includes(mkt.id);
-                       return (
-                         <button
-                           key={mkt.id}
-                           onClick={() => toggleMarketingType(mkt.id)}
-                           className={`p-3 rounded-lg border text-left transition-all ${
-                             sel
-                               ? "border-primary bg-primary/5 ring-1 ring-primary"
-                               : "border-border hover:border-primary/30"
-                           }`}
-                         >
-                           <div className="flex items-center gap-2 mb-1">
-                             <Icon className="h-4 w-4" />
-                             <p className="text-sm font-medium">{mkt.label}</p>
-                             {mkt.id === "benefit" && <span className="text-[10px] text-muted-foreground">(3 imgs)</span>}
-                             {sel && <CheckCircle2 className="h-3.5 w-3.5 text-primary ml-auto" />}
-                           </div>
-                           <p className="text-xs text-muted-foreground">{mkt.description}</p>
-                         </button>
-                       );
-                     })}
-                   </div>
 
-                   {/* Benefit prompt input */}
-                   {hasBenefitSelected && (
-                     <div className="space-y-2 pt-2 border-t border-border">
-                       <Label className="flex items-center gap-2 text-xs font-semibold">
-                         <MessageSquare className="h-3.5 w-3.5" /> Descreva o benefício do produto
-                       </Label>
-                       <Textarea
-                         placeholder="Ex: Mantém o celular firme mesmo em estradas esburacadas, permite usar GPS e carregar ao mesmo tempo..."
-                         value={benefitPrompt}
-                         onChange={(e) => setBenefitPrompt(e.target.value)}
-                         className="text-sm min-h-[80px]"
-                       />
-                       <p className="text-xs text-muted-foreground">
-                         💡 A IA gerará 3 imagens diferentes mostrando esse benefício
-                       </p>
-                       {!benefitPrompt.trim() && (
-                         <p className="text-xs text-amber-500">⚠️ Escreva o benefício para gerar as imagens</p>
-                       )}
-                     </div>
-                   )}
+                  {/* Environments toggle + display */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs">Imagens de Ambiente</Label>
+                      <Switch checked={generateEnvironments} onCheckedChange={setGenerateEnvironments} />
+                    </div>
+                    {generateEnvironments && suggestedEnvironments.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {suggestedEnvironments.map((envKey) => {
+                          const env = ENVIRONMENT_LABELS[envKey];
+                          if (!env) return null;
+                          const Icon = env.icon;
+                          return (
+                            <Badge key={envKey} variant="secondary" className="gap-1.5 py-1">
+                              <Icon className="h-3 w-3" />
+                              {env.label}
+                            </Badge>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {generateEnvironments && suggestedEnvironments.length === 0 && (
+                      <p className="text-xs text-amber-500">⚠️ Envie uma foto para a IA sugerir os ambientes</p>
+                    )}
+                  </div>
+
+                  {/* Benefit toggle + prompt */}
+                  <div className="space-y-2 pt-2 border-t border-border">
+                    <div className="flex items-center justify-between">
+                      <Label className="flex items-center gap-2 text-xs">
+                        <ThumbsUp className="h-3.5 w-3.5" /> Imagens de Benefício (3 variações)
+                      </Label>
+                      <Switch checked={generateBenefitImages} onCheckedChange={setGenerateBenefitImages} />
+                    </div>
+                    {generateBenefitImages && (
+                      <>
+                        <Textarea
+                          placeholder="Ex: Transforma qualquer ambiente com elegância e sofisticação..."
+                          value={benefitPrompt}
+                          onChange={(e) => setBenefitPrompt(e.target.value)}
+                          className="text-sm min-h-[60px]"
+                        />
+                        {suggestedBenefit && benefitPrompt !== suggestedBenefit && (
+                          <p className="text-xs text-muted-foreground">
+                            💡 Sugestão da IA já preenchida. Edite se quiser.
+                          </p>
+                        )}
+                        {!benefitPrompt.trim() && (
+                          <p className="text-xs text-amber-500">⚠️ Envie uma foto para a IA sugerir o benefício</p>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </Card>
 
                 {/* PHASE 3: Shopee Text */}
