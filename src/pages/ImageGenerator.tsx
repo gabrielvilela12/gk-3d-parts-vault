@@ -83,6 +83,7 @@ const RECOLOR_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/recolor-p
 const MARKETING_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-marketing`;
 const SHOPEE_TEXT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-shopee-text`;
 const IDENTIFY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/identify-product`;
+const CLEANUP_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cleanup-product-image`;
 
 interface ShopeeText {
   title: string;
@@ -98,6 +99,7 @@ export default function ImageGenerator() {
   const [productName, setProductName] = useState("");
   const [productDescription, setProductDescription] = useState("");
   const [isIdentifying, setIsIdentifying] = useState(false);
+  const [cleanedImageData, setCleanedImageData] = useState<string | null>(null);
   const [baseImageData, setBaseImageData] = useState<string | null>(null);
   const [selectedColors, setSelectedColors] = useState<typeof PRESET_COLORS>([]);
   const [selectedFormats, setSelectedFormats] = useState<string[]>(["square"]);
@@ -223,6 +225,44 @@ export default function ImageGenerator() {
     );
   };
 
+  const callCleanupApi = async (): Promise<string | null> => {
+    try {
+      const resp = await fetch(CLEANUP_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          imageBase64: baseImageData,
+          productName,
+        }),
+      });
+
+      if (resp.status === 429) {
+        toast({ title: "Rate limit", description: "Aguarde e tente novamente.", variant: "destructive" });
+        return null;
+      }
+      if (resp.status === 402) {
+        toast({ title: "Créditos insuficientes", description: "Adicione créditos no workspace.", variant: "destructive" });
+        return null;
+      }
+      if (!resp.ok) {
+        console.error("Cleanup error:", await resp.text());
+        toast({ title: "Erro ao limpar imagem", description: "Usando imagem original.", variant: "destructive" });
+        return null;
+      }
+
+      const data = await resp.json();
+      return data.imageUrl || null;
+    } catch (e) {
+      console.error("Cleanup fetch error:", e);
+      return null;
+    }
+  };
+
+  const getWorkingImage = () => cleanedImageData || baseImageData;
+
   const callRecolorApi = async (
     color: typeof PRESET_COLORS[0],
     format: typeof FORMATS[0]
@@ -235,7 +275,7 @@ export default function ImageGenerator() {
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
         body: JSON.stringify({
-          imageBase64: baseImageData,
+          imageBase64: getWorkingImage(),
           colorName: color.name,
           colorHex: color.hex,
           productName,
@@ -275,7 +315,7 @@ export default function ImageGenerator() {
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
         body: JSON.stringify({
-          imageBase64: baseImageData,
+          imageBase64: getWorkingImage(),
           productName,
           marketingType,
           ...(marketingType === "benefit" ? { benefitPrompt, benefitIndex: benefitIdx || 1 } : {}),
@@ -314,7 +354,7 @@ export default function ImageGenerator() {
         },
         body: JSON.stringify({
           productName,
-          imageBase64: baseImageData,
+          imageBase64: getWorkingImage(),
         }),
       });
 
@@ -352,6 +392,7 @@ export default function ImageGenerator() {
     setIsGenerating(true);
     setGeneratedImages([]);
     setShopeeText(null);
+    setCleanedImageData(null);
     const results: GeneratedImage[] = [];
 
     const recolorTotal = selectedColors.length * selectedFormats.length;
@@ -360,8 +401,20 @@ export default function ImageGenerator() {
     const benefitCount = hasBenefit ? 3 : 0;
     const marketingTotal = environmentTypes.length + benefitCount;
     const shopeeStep = generateShopeeText && productName ? 1 : 0;
-    const total = recolorTotal + marketingTotal + shopeeStep;
+    const cleanupStep = 1; // Phase 0: always clean up the image first
+    const total = cleanupStep + recolorTotal + marketingTotal + shopeeStep;
     let done = 0;
+
+    // PHASE 0: Clean up image (professional 1024x1024 product photo)
+    setProgressLabel(`🧹 Limpando e padronizando imagem (1024x1024)...`);
+    setProgress(0);
+
+    const cleanedUrl = await callCleanupApi();
+    if (cleanedUrl) {
+      setCleanedImageData(cleanedUrl);
+    }
+    done++;
+
 
     // PHASE 1: Recolor images
     if (selectedColors.length > 0 && selectedFormats.length > 0) {
@@ -599,24 +652,39 @@ export default function ImageGenerator() {
                     onChange={handleImageUpload}
                   />
                   {baseImageData ? (
-                    <div className="relative group">
-                      <img
-                        src={baseImageData}
-                        alt="Base"
-                        className="w-full h-40 object-contain rounded-lg border border-border bg-muted"
-                      />
-                      <Button
-                        size="icon"
-                        variant="destructive"
-                        className="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={() => { setBaseImageData(null); setProductName(""); setProductDescription(""); }}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                      {isIdentifying && (
-                        <div className="absolute inset-0 bg-background/70 rounded-lg flex items-center justify-center gap-2">
-                          <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                          <span className="text-sm font-medium text-primary">Identificando produto...</span>
+                    <div className="space-y-2">
+                      <div className="relative group">
+                        <img
+                          src={baseImageData}
+                          alt="Original"
+                          className="w-full h-32 object-contain rounded-lg border border-border bg-muted"
+                        />
+                        <Button
+                          size="icon"
+                          variant="destructive"
+                          className="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => { setBaseImageData(null); setCleanedImageData(null); setProductName(""); setProductDescription(""); }}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                        {isIdentifying && (
+                          <div className="absolute inset-0 bg-background/70 rounded-lg flex items-center justify-center gap-2">
+                            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                            <span className="text-sm font-medium text-primary">Identificando produto...</span>
+                          </div>
+                        )}
+                        <span className="absolute bottom-1 left-1 text-[10px] bg-background/80 text-muted-foreground px-1.5 py-0.5 rounded">Original</span>
+                      </div>
+                      {cleanedImageData && (
+                        <div className="relative">
+                          <img
+                            src={cleanedImageData}
+                            alt="Limpa"
+                            className="w-full h-32 object-contain rounded-lg border-2 border-primary/30 bg-muted"
+                          />
+                          <span className="absolute bottom-1 left-1 text-[10px] bg-primary/90 text-primary-foreground px-1.5 py-0.5 rounded flex items-center gap-1">
+                            <CheckCircle2 className="h-3 w-3" /> Limpa 1024x1024
+                          </span>
                         </div>
                       )}
                     </div>
