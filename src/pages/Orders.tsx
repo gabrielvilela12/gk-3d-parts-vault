@@ -609,6 +609,28 @@ export default function Orders() {
         </div>
       </div>
 
+      {/* Queue Summary */}
+      {filterStatus !== "done" && filteredQueue.length > 0 && (
+        <div className="mb-4 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+          <Card className="p-3">
+            <div className="text-xs text-muted-foreground">Peças na fila</div>
+            <div className="text-lg font-bold">{filteredQueue.length}</div>
+          </Card>
+          <Card className="p-3">
+            <div className="text-xs text-muted-foreground">Tempo total</div>
+            <div className="text-lg font-bold">{formatTime(totalQueueMin)}</div>
+          </Card>
+          <Card className="p-3">
+            <div className="text-xs text-muted-foreground">Cores</div>
+            <div className="text-lg font-bold">{new Set(filteredQueue.map(o => o.color).filter(Boolean)).size || 1}</div>
+          </Card>
+          <Card className="p-3">
+            <div className="text-xs text-muted-foreground">Pedidos</div>
+            <div className="text-lg font-bold">{groupedQueue.length}</div>
+          </Card>
+        </div>
+      )}
+
       {/* Queue grouped by platform order */}
       {filterStatus !== "done" && (
         <div className="mb-8">
