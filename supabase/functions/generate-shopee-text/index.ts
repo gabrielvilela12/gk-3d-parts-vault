@@ -51,7 +51,9 @@ DESCRIÇÃO (máximo 2000 caracteres):
 - Use emojis estrategicamente para chamar atenção
 - Bullet points com benefícios claros
 - Palavras-chave distribuídas naturalmente no texto
-- Inclua especificações técnicas quando relevante
+- Inclua especificações técnicas quando relevante (EXCETO material de fabricação)
+- NUNCA mencione o material do produto (PLA, resina, plástico, impressão 3D, etc.)
+- Quando mencionar altura, SEMPRE use "aproximadamente" antes do valor
 ${isKit ? `- Destaque que o anúncio inclui ${qty} unidades` : ""}
 - Call-to-action convincente no final
 - Formato profissional de anúncio Shopee
