@@ -396,13 +396,14 @@ export default function ImageGenerator() {
     const results: GeneratedImage[] = [];
 
     const recolorTotal = selectedColors.length * selectedFormats.length;
-    const hasBenefit = selectedMarketingTypes.includes("benefit") && benefitPrompt.trim();
-    const environmentTypes = selectedMarketingTypes.filter((t) => t !== "benefit");
+    const activeEnvironments = generateEnvironments ? suggestedEnvironments : [];
+    const hasBenefit = generateBenefitImages && benefitPrompt.trim();
     const benefitCount = hasBenefit ? 3 : 0;
-    const marketingTotal = environmentTypes.length + benefitCount;
+    const marketingTotal = activeEnvironments.length + benefitCount;
     const shopeeStep = generateShopeeText && productName ? 1 : 0;
-    const cleanupStep = 1; // Phase 0: always clean up the image first
+    const cleanupStep = 1;
     const total = cleanupStep + recolorTotal + marketingTotal + shopeeStep;
+    let done = 0;
     let done = 0;
 
     // PHASE 0: Clean up image (professional 1024x1024 product photo)
