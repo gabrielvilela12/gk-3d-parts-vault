@@ -12,9 +12,10 @@ serve(async (req) => {
   }
 
   try {
-    const { productName, imageBase64, category, quantity } = await req.json();
+    const { productName, imageBase64, category, quantity, heights } = await req.json();
     const isKit = (quantity ?? 1) > 1;
     const qty = quantity ?? 1;
+    const heightList: string[] = Array.isArray(heights) ? heights.filter((h: string) => h && h.trim()) : [];
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
