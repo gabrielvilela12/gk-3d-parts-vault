@@ -108,6 +108,7 @@ export default function Orders() {
   const [filterSearch, setFilterSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | "queue" | "done">("all");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const { toast } = useToast();
 
   // Update "now" every minute for live countdown
