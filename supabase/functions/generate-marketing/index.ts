@@ -33,6 +33,8 @@ serve(async (req) => {
       studio: { name: "Estúdio", description: "professional photography studio with controlled lighting, clean backdrop" },
     };
 
+    const colorInstruction = mainColor ? `\n- The product MUST be shown in the color "${mainColor}" (hex: ${mainColorHex}). Change the product color to this specific color while keeping all other details.` : "";
+
     let prompt: string;
 
     if (marketingType === "benefit") {
