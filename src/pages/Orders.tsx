@@ -749,6 +749,7 @@ export default function Orders() {
       {/* AI Chat */}
       <QueueOptimizerChat
         queueData={filteredQueue.map(o => ({
+          id: o.id,
           name: o.pieces.name,
           color: o.color,
           quantity: o.quantity,
@@ -760,6 +761,19 @@ export default function Orders() {
         }))}
         isOpen={isChatOpen}
         onToggle={() => setIsChatOpen(!isChatOpen)}
+        onReorder={async (orderedIds, explanation) => {
+          try {
+            // Update position for each order
+            const updates = orderedIds.map((id, idx) =>
+              supabase.from("orders").update({ position: idx }).eq("id", id)
+            );
+            await Promise.all(updates);
+            toast({ title: "Fila reorganizada pela IA!", description: explanation });
+            fetchData();
+          } catch {
+            toast({ title: "Erro ao reorganizar fila", variant: "destructive" });
+          }
+        }}
       />
     </div>
   );
