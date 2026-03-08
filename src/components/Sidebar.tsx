@@ -14,6 +14,7 @@ import {
     ChevronRight,
     ClipboardList,
     Menu,
+    ImagePlus,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
@@ -36,6 +37,7 @@ const primaryNav = [
 const managementNav = [
     { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { path: "/orders", label: "Pedidos", icon: ClipboardList },
+    { path: "/image-generator", label: "Gerador de Imagens", icon: ImagePlus },
     { path: "/accounts", label: "Contas", icon: KeyRound },
     { path: "/gpts", label: "GPTs", icon: BotMessageSquare },
 ];

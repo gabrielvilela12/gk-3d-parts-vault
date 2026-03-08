@@ -20,6 +20,7 @@ import GptLinks from "./pages/GptLinks";
 import SettingsPage from "./pages/Settings";
 import Orders from "./pages/Orders";
 import NotFound from "./pages/NotFound";
+import ImageGenerator from "./pages/ImageGenerator";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -112,6 +113,10 @@ function AppContent() {
           <Route
             path="/orders"
             element={user ? <Orders /> : <Navigate to="/auth" replace />}
+          />
+          <Route
+            path="/image-generator"
+            element={user ? <ImageGenerator /> : <Navigate to="/auth" replace />}
           />
           <Route path="*" element={<NotFound />} />
         </Routes>

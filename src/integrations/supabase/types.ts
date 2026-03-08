@@ -170,6 +170,42 @@ export type Database = {
         }
         Relationships: []
       }
+      image_generations: {
+        Row: {
+          background_style: string
+          base_image_url: string
+          colors: string[]
+          created_at: string
+          formats: string[]
+          generated_images: Json
+          id: string
+          product_name: string
+          user_id: string
+        }
+        Insert: {
+          background_style?: string
+          base_image_url: string
+          colors?: string[]
+          created_at?: string
+          formats?: string[]
+          generated_images?: Json
+          id?: string
+          product_name: string
+          user_id: string
+        }
+        Update: {
+          background_style?: string
+          base_image_url?: string
+          colors?: string[]
+          created_at?: string
+          formats?: string[]
+          generated_images?: Json
+          id?: string
+          product_name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       mining_products: {
         Row: {
           acquisition_date: string
