@@ -359,6 +359,18 @@ export default function ImageGenerator() {
       }
     }
 
+    // PHASE 3: Shopee SEO text
+    if (generateShopeeText && productName) {
+      setProgressLabel(`📝 Gerando título e descrição Shopee...`);
+      setProgress(Math.round((done / total) * 100));
+
+      const textResult = await callShopeeTextApi();
+      if (textResult) {
+        setShopeeText(textResult);
+      }
+      done++;
+    }
+
     setProgress(100);
     setIsGenerating(false);
 
@@ -384,10 +396,11 @@ export default function ImageGenerator() {
       });
     }
 
+    const imageTotal = recolorTotal + marketingTotal;
     toast({
-      title: `${results.length} imagens geradas!`,
-      description: results.length < total
-        ? `${total - results.length} falharam. Tente novamente.`
+      title: `${results.length} imagens geradas!${shopeeStep ? " Texto Shopee pronto!" : ""}`,
+      description: results.length < imageTotal
+        ? `${imageTotal - results.length} falharam. Tente novamente.`
         : "Pronto para download.",
     });
   };
