@@ -39,7 +39,7 @@ const PRESET_COLORS = [
 const FORMATS = [
   { id: "square", label: "Quadrado", icon: Square, width: 1024, height: 1024 },
   { id: "story", label: "Story", icon: Smartphone, width: 1024, height: 1024 },
-  { id: "banner", label: "Banner", icon: Monitor, width: 1920, height: 1080 },
+  { id: "banner", label: "Banner", icon: Monitor, width: 1024, height: 1024 },
 ];
 
 const BACKGROUNDS = [
