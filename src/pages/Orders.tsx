@@ -103,6 +103,9 @@ export default function Orders() {
   const [importRows, setImportRows] = useState<ImportRow[]>([]);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [filterColor, setFilterColor] = useState<string>("all");
+  const [filterSearch, setFilterSearch] = useState("");
+  const [filterStatus, setFilterStatus] = useState<"all" | "queue" | "done">("all");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
