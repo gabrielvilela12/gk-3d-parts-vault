@@ -116,6 +116,10 @@ function AppContent() {
             element={user ? <Orders /> : <Navigate to="/auth" replace />}
           />
           <Route
+            path="/expenses"
+            element={user ? <Expenses /> : <Navigate to="/auth" replace />}
+          />
+          <Route
             path="/image-generator"
             element={user ? <ImageGenerator /> : <Navigate to="/auth" replace />}
           />
