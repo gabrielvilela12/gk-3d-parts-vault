@@ -122,6 +122,36 @@ export default function ImageGenerator() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [activeTab, setActiveTab] = useState("generator");
   const [resultFilter, setResultFilter] = useState<"all" | "recolor" | "marketing">("all");
+  const [rateLimitCooldown, setRateLimitCooldown] = useState(0);
+  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const startCooldown = useCallback((seconds: number) => {
+    if (cooldownRef.current) clearInterval(cooldownRef.current);
+    setRateLimitCooldown(seconds);
+    cooldownRef.current = setInterval(() => {
+      setRateLimitCooldown((prev) => {
+        if (prev <= 1) {
+          if (cooldownRef.current) clearInterval(cooldownRef.current);
+          cooldownRef.current = null;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (cooldownRef.current) clearInterval(cooldownRef.current);
+    };
+  }, []);
+
+  const handleRateLimit = (resp: Response) => {
+    const retryAfter = resp.headers.get("Retry-After");
+    const seconds = retryAfter ? parseInt(retryAfter, 10) : 60;
+    startCooldown(isNaN(seconds) ? 60 : seconds);
+    toast({ title: "Rate limit atingido", description: `Aguarde ${seconds}s antes de tentar novamente.`, variant: "destructive" });
+  };
 
   useEffect(() => {
     if (activeTab === "history") fetchHistory();
