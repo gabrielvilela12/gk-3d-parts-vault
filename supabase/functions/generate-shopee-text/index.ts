@@ -12,7 +12,8 @@ serve(async (req) => {
   }
 
   try {
-    const { productName, imageBase64, category } = await req.json();
+    const { productName, imageBase64, category, colorCount } = await req.json();
+    const isKit = (colorCount ?? 0) > 1;
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
