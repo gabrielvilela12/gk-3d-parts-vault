@@ -99,6 +99,7 @@ export default function ImageGenerator() {
   const [productName, setProductName] = useState("");
   const [productDescription, setProductDescription] = useState("");
   const [isIdentifying, setIsIdentifying] = useState(false);
+  const [cleanedImageData, setCleanedImageData] = useState<string | null>(null);
   const [baseImageData, setBaseImageData] = useState<string | null>(null);
   const [selectedColors, setSelectedColors] = useState<typeof PRESET_COLORS>([]);
   const [selectedFormats, setSelectedFormats] = useState<string[]>(["square"]);
