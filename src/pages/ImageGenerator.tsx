@@ -844,6 +844,80 @@ export default function ImageGenerator() {
                     </div>
                   </Card>
                 )}
+
+                {/* Shopee Text Results */}
+                {shopeeText && (
+                  <Card className="p-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold text-sm flex items-center gap-2">
+                        <FileText className="h-4 w-4" /> Texto Shopee Gerado
+                      </h3>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5"
+                        onClick={() => {
+                          const full = `${shopeeText.title}\n\n${shopeeText.description}\n\nTags: ${shopeeText.keywords.join(", ")}`;
+                          navigator.clipboard.writeText(full);
+                          toast({ title: "Tudo copiado!" });
+                        }}
+                      >
+                        <Copy className="h-3.5 w-3.5" /> Copiar Tudo
+                      </Button>
+                    </div>
+
+                    {/* Title */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Título ({shopeeText.title.length}/120 caracteres)</Label>
+                      <div className="flex items-start gap-2">
+                        <p className="flex-1 text-sm font-medium bg-muted p-3 rounded-lg">{shopeeText.title}</p>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 shrink-0"
+                          onClick={() => { navigator.clipboard.writeText(shopeeText.title); toast({ title: "Título copiado!" }); }}
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Description */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Descrição ({shopeeText.description.length}/2000 caracteres)</Label>
+                      <div className="flex items-start gap-2">
+                        <pre className="flex-1 text-sm bg-muted p-3 rounded-lg whitespace-pre-wrap font-sans">{shopeeText.description}</pre>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 shrink-0"
+                          onClick={() => { navigator.clipboard.writeText(shopeeText.description); toast({ title: "Descrição copiada!" }); }}
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Keywords */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Tag className="h-3 w-3" /> Palavras-chave ({shopeeText.keywords.length})
+                      </Label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {shopeeText.keywords.map((kw, i) => (
+                          <Badge
+                            key={i}
+                            variant="secondary"
+                            className="cursor-pointer hover:bg-primary/20"
+                            onClick={() => { navigator.clipboard.writeText(kw); toast({ title: `"${kw}" copiada!` }); }}
+                          >
+                            {kw}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  </Card>
+                )}
               </div>
             </div>
           </TabsContent>
