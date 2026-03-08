@@ -51,7 +51,7 @@ RULES:
 - The image should clearly communicate the benefit to the viewer.
 - Show the positive outcome or result described.
 - Use clean, bright lighting and professional composition.
-- Each variation should use a DIFFERENT angle, composition, or visual metaphor.
+- Each variation should use a DIFFERENT angle, composition, or visual metaphor.${colorInstruction}
 - Do NOT add any text, labels, watermarks, or overlays.
 - Keep it clean, professional, and aspirational.
 - Output at 1024x1024 resolution.`;
