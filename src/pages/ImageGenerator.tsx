@@ -250,18 +250,54 @@ export default function ImageGenerator() {
     }
   };
 
+  const callShopeeTextApi = async (): Promise<ShopeeText | null> => {
+    try {
+      const resp = await fetch(SHOPEE_TEXT_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          productName,
+          imageBase64: baseImageData,
+        }),
+      });
+
+      if (resp.status === 429) {
+        toast({ title: "Rate limit", description: "Aguarde um momento e tente novamente.", variant: "destructive" });
+        return null;
+      }
+      if (resp.status === 402) {
+        toast({ title: "Créditos insuficientes", description: "Adicione créditos no workspace.", variant: "destructive" });
+        return null;
+      }
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        console.error("Shopee text error:", err);
+        return null;
+      }
+
+      return await resp.json();
+    } catch (e) {
+      console.error("Shopee text fetch error:", e);
+      return null;
+    }
+  };
+
   const handleGenerate = async () => {
     if (!baseImageData) {
       toast({ title: "Envie uma imagem base", variant: "destructive" });
       return;
     }
-    if (selectedColors.length === 0 && selectedMarketingTypes.length === 0) {
-      toast({ title: "Selecione cores ou tipos de marketing", variant: "destructive" });
+    if (selectedColors.length === 0 && selectedMarketingTypes.length === 0 && !generateShopeeText) {
+      toast({ title: "Selecione cores, marketing ou texto Shopee", variant: "destructive" });
       return;
     }
 
     setIsGenerating(true);
     setGeneratedImages([]);
+    setShopeeText(null);
     const results: GeneratedImage[] = [];
 
     const recolorTotal = selectedColors.length * selectedFormats.length;
