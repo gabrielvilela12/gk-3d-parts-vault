@@ -14,8 +14,9 @@ import JSZip from "jszip";
 import {
   ImagePlus, Palette, Download, Loader2, Eye, Package,
   Square, Smartphone, Monitor, X, History, Sparkles, CheckCircle2,
-  Megaphone, Zap, Star
+  Megaphone, Zap, Star, Copy, FileText, Tag
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 const PRESET_COLORS = [
   { name: "Preto", hex: "#1a1a1a" },
