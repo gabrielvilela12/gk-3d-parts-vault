@@ -315,7 +315,7 @@ export default function ImageGenerator() {
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
         body: JSON.stringify({
-          imageBase64: baseImageData,
+          imageBase64: getWorkingImage(),
           productName,
           marketingType,
           ...(marketingType === "benefit" ? { benefitPrompt, benefitIndex: benefitIdx || 1 } : {}),
