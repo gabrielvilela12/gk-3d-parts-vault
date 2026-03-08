@@ -266,7 +266,7 @@ export default function ImageGenerator() {
     }
   };
 
-  const callMarketingApi = async (marketingType: string): Promise<string | null> => {
+  const callMarketingApi = async (marketingType: string, benefitIdx?: number): Promise<string | null> => {
     try {
       const resp = await fetch(MARKETING_URL, {
         method: "POST",
@@ -278,6 +278,7 @@ export default function ImageGenerator() {
           imageBase64: baseImageData,
           productName,
           marketingType,
+          ...(marketingType === "benefit" ? { benefitPrompt, benefitIndex: benefitIdx || 1 } : {}),
         }),
       });
 
