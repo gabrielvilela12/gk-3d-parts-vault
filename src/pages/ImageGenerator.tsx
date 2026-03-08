@@ -225,6 +225,44 @@ export default function ImageGenerator() {
     );
   };
 
+  const callCleanupApi = async (): Promise<string | null> => {
+    try {
+      const resp = await fetch(CLEANUP_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          imageBase64: baseImageData,
+          productName,
+        }),
+      });
+
+      if (resp.status === 429) {
+        toast({ title: "Rate limit", description: "Aguarde e tente novamente.", variant: "destructive" });
+        return null;
+      }
+      if (resp.status === 402) {
+        toast({ title: "Créditos insuficientes", description: "Adicione créditos no workspace.", variant: "destructive" });
+        return null;
+      }
+      if (!resp.ok) {
+        console.error("Cleanup error:", await resp.text());
+        toast({ title: "Erro ao limpar imagem", description: "Usando imagem original.", variant: "destructive" });
+        return null;
+      }
+
+      const data = await resp.json();
+      return data.imageUrl || null;
+    } catch (e) {
+      console.error("Cleanup fetch error:", e);
+      return null;
+    }
+  };
+
+  const getWorkingImage = () => cleanedImageData || baseImageData;
+
   const callRecolorApi = async (
     color: typeof PRESET_COLORS[0],
     format: typeof FORMATS[0]
@@ -237,7 +275,7 @@ export default function ImageGenerator() {
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
         body: JSON.stringify({
-          imageBase64: baseImageData,
+          imageBase64: getWorkingImage(),
           colorName: color.name,
           colorHex: color.hex,
           productName,
