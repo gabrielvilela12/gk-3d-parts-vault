@@ -1066,7 +1066,7 @@ export default function ImageGenerator() {
                         <p>📝 Título + Descrição Shopee</p>
                       )}
                       {(totalImages > 0 || (generateShopeeText && productName)) && (
-                        <p className="font-medium text-foreground">Total: {totalImages} imagens{generateShopeeText && productName ? " + texto SEO" : ""} via IA</p>
+                        <p className="font-medium text-foreground">Total: {totalImages} imagens{generateShopeeText && productName ? " + texto SEO" : ""} • <span className="text-primary">{totalApiCalls} chamadas à IA</span></p>
                       )}
                     </div>
                     <Button
