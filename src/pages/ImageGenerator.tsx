@@ -1140,7 +1140,9 @@ export default function ImageGenerator() {
                         variant="outline"
                         className="gap-1.5"
                         onClick={() => {
-                          const full = `${shopeeText.title}\n\n${shopeeText.description}\n\nTags: ${shopeeText.keywords.join(", ")}`;
+                          let full = `${shopeeText.title}\n\n${shopeeText.description}\n\nTags: ${shopeeText.keywords.join(", ")}`;
+                          if (packageWeight) full += `\n\nPeso: ${packageWeight} kg`;
+                          if (packageLength && packageWidth && packageHeight) full += `\nEmbalagem: ${packageLength} x ${packageWidth} x ${packageHeight} cm`;
                           navigator.clipboard.writeText(full);
                           toast({ title: "Tudo copiado!" });
                         }}
