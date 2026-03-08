@@ -1115,6 +1115,18 @@ export default function ImageGenerator() {
                     </div>
                   )}
 
+                  {rateLimitCooldown > 0 && (
+                    <div className="rounded-lg border border-destructive bg-destructive/10 p-3 flex items-center gap-3">
+                      <div className="flex items-center justify-center rounded-full bg-destructive/20 h-10 w-10 shrink-0">
+                        <span className="text-lg font-bold text-destructive">{rateLimitCooldown}</span>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-destructive">Rate limit atingido</p>
+                        <p className="text-xs text-muted-foreground">Aguarde {rateLimitCooldown}s para tentar novamente</p>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between gap-4 flex-wrap">
                     <p className="text-sm font-medium text-foreground">
                       {totalImages > 0 ? `${totalImages} imagens` : ""}{totalImages > 0 && generateShopeeText && productName ? " + " : ""}{generateShopeeText && productName ? "texto SEO" : ""}
@@ -1122,10 +1134,12 @@ export default function ImageGenerator() {
                     <Button
                       size="lg"
                       onClick={handleGenerate}
-                      disabled={isGenerating || isIdentifying || !baseImageData || (totalImages === 0 && !(generateShopeeText && productName)) || totalApiCalls > 20}
+                      disabled={isGenerating || isIdentifying || !baseImageData || (totalImages === 0 && !(generateShopeeText && productName)) || totalApiCalls > 20 || rateLimitCooldown > 0}
                       className="gap-2"
                     >
-                      {isGenerating ? (
+                      {rateLimitCooldown > 0 ? (
+                        <><Loader2 className="h-4 w-4 animate-spin" /> Aguarde {rateLimitCooldown}s</>
+                      ) : isGenerating ? (
                         <><Loader2 className="h-4 w-4 animate-spin" /> Gerando...</>
                       ) : (
                         <><Sparkles className="h-4 w-4" /> Gerar em Lote (IA)</>
