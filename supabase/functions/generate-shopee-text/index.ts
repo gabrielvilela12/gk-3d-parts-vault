@@ -32,9 +32,14 @@ REGRAS OBRIGATÓRIAS:
 - NUNCA mencione o material do produto (não fale PLA, resina, plástico, 3D, impressão 3D, etc.)
 - Quando mencionar altura/tamanho do produto, SEMPRE use "aproximadamente" antes do valor (ex: "aproximadamente 15cm de altura")`;
 
+    const heightInstruction = heightList.length > 0
+      ? `\nALTURAS DISPONÍVEIS: O produto possui ${heightList.length > 1 ? "as seguintes opções de altura" : "a seguinte altura"}: ${heightList.map(h => `aproximadamente ${h}cm`).join(", ")}. Mencione ${heightList.length > 1 ? "essas opções" : "essa medida"} na descrição usando SEMPRE "aproximadamente" antes do valor.`
+      : "";
+
     const userPrompt = `Gere um TÍTULO e DESCRIÇÃO otimizados para vender o produto "${productName}"${category ? ` na categoria "${category}"` : ""} na Shopee Brasil.
 
 ${isKit ? `IMPORTANTE: O anúncio é de um KIT com ${qty} unidades do produto. O título DEVE começar com "Kit ${qty}" seguido do nome do produto. NÃO mencione cores específicas no título.` : ""}
+${heightInstruction}
 
 TÍTULO (máximo 120 caracteres):
 - Use palavras-chave de ALTO VOLUME de busca na Shopee
