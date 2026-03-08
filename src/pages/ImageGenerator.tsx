@@ -355,7 +355,10 @@ export default function ImageGenerator() {
     const results: GeneratedImage[] = [];
 
     const recolorTotal = selectedColors.length * selectedFormats.length;
-    const marketingTotal = selectedMarketingTypes.length;
+    const hasBenefit = selectedMarketingTypes.includes("benefit") && benefitPrompt.trim();
+    const environmentTypes = selectedMarketingTypes.filter((t) => t !== "benefit");
+    const benefitCount = hasBenefit ? 3 : 0;
+    const marketingTotal = environmentTypes.length + benefitCount;
     const shopeeStep = generateShopeeText && productName ? 1 : 0;
     const total = recolorTotal + marketingTotal + shopeeStep;
     let done = 0;
