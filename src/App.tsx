@@ -21,6 +21,7 @@ import SettingsPage from "./pages/Settings";
 import Orders from "./pages/Orders";
 import NotFound from "./pages/NotFound";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const queryClient = new QueryClient();
 
