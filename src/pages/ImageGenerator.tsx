@@ -384,8 +384,8 @@ export default function ImageGenerator() {
       toast({ title: "Envie uma imagem base", variant: "destructive" });
       return;
     }
-    if (selectedColors.length === 0 && selectedMarketingTypes.length === 0 && !generateShopeeText) {
-      toast({ title: "Selecione cores, ambientes ou texto Shopee", variant: "destructive" });
+    if (selectedColors.length === 0 && !generateEnvironments && !generateBenefitImages && !generateShopeeText) {
+      toast({ title: "Selecione pelo menos uma opção de geração", variant: "destructive" });
       return;
     }
 
