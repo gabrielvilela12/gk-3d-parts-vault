@@ -14,7 +14,7 @@ import JSZip from "jszip";
 import {
   ImagePlus, Palette, Download, Loader2, Eye, Package,
   Square, Smartphone, Monitor, X, History, Sparkles, CheckCircle2,
-  Megaphone, Zap, Star, Copy, FileText, Tag, Home, Briefcase, Sun, UtensilsCrossed, ThumbsUp, ScanSearch, MessageSquare
+  Megaphone, Zap, Star, Copy, FileText, Tag, Home, Briefcase, Sun, UtensilsCrossed, ThumbsUp, ScanSearch, MessageSquare, Package2, Ruler
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
