@@ -293,7 +293,30 @@ export default function Orders() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const inserts = matchedRows.map(r => ({
+      // Check existing orders to avoid duplicates
+      const existingNotes = orders.map(o => o.notes || "");
+
+      const newRows = matchedRows.filter(r => {
+        const noteKey = r.platformOrderId || "";
+        if (!noteKey) return true; // No platform ID, always insert
+        // Check if an order with same platform order ID + same piece already exists
+        const isDuplicate = orders.some(o => {
+          const orderNote = o.notes || "";
+          return orderNote.includes(noteKey) && o.piece_id === r.matchedPieceId;
+        });
+        return !isDuplicate;
+      });
+
+      if (newRows.length === 0) {
+        toast({ title: "Todos os pedidos já existem na fila", description: `${matchedRows.length} pedido(s) já importado(s) anteriormente.` });
+        setIsImportDialogOpen(false);
+        setImportRows([]);
+        return;
+      }
+
+      const skipped = matchedRows.length - newRows.length;
+
+      const inserts = newRows.map(r => ({
         user_id: user.id,
         piece_id: r.matchedPieceId!,
         quantity: r.quantity,
@@ -304,7 +327,10 @@ export default function Orders() {
       const { error } = await supabase.from("orders").insert(inserts);
       if (error) throw error;
 
-      toast({ title: `${matchedRows.length} pedido(s) importado(s)!` });
+      const msg = skipped > 0
+        ? `${newRows.length} novo(s), ${skipped} duplicado(s) ignorado(s)`
+        : `${newRows.length} pedido(s) importado(s)!`;
+      toast({ title: "Importação concluída", description: msg });
       setIsImportDialogOpen(false);
       setImportRows([]);
       fetchData();
