@@ -2,3 +2,6 @@ project_id = "exdszczkyijgsqpgbvsp"
 
 [functions.recolor-product]
 verify_jwt = false
+
+[functions.generate-marketing]
+verify_jwt = false
