@@ -31,28 +31,17 @@ serve(async (req) => {
     };
     const dimText = dims[format] || "1080x1080";
 
-    // Build background instruction
-    let bgInstruction = "";
-    if (backgroundStyle === "white") {
-      bgInstruction = "Place the product on a clean, pure white background.";
-    } else if (backgroundStyle === "promo") {
-      bgInstruction =
-        "Place the product on a warm yellow/golden promotional background. Add a small red diagonal ribbon/banner in the top-right corner with the text 'PROMOÇÃO' in white.";
-    } else if (backgroundStyle === "premium") {
-      bgInstruction =
-        "Place the product on a dark, elegant gradient background (deep indigo/navy). Add subtle dot pattern for luxury feel.";
-    }
+    const prompt = `Edit this image. Change ONLY the color of the main highlighted product/object to the color "${colorName}" (hex: ${colorHex}).
 
-    const prompt = `You are a product photography editor. Take this product image and create a professional advertisement image.
-
-CRITICAL INSTRUCTIONS:
-1. Change ONLY the color of the main product/object to ${colorName} (${colorHex}). Keep the product shape, texture, and details intact.
-2. ${bgInstruction}
-3. The output must be exactly ${dimText} pixels.
-4. At the bottom of the image, add a small color label/badge showing the color name "${colorName}" with the background color ${colorHex}.
-${productName ? `5. Add the product name "${productName}" in elegant text above the color badge.` : ""}
-6. Keep the image professional and ready for e-commerce/marketplace listing.
-7. Do NOT change the shape or design of the product, only its color.`;
+ABSOLUTE RULES - DO NOT BREAK:
+- Keep the EXACT same image: same background, same lighting, same shadows, same composition, same angle, same position, same proportions.
+- Keep ALL details, textures, patterns, and surface features of the product exactly as they are.
+- Do NOT add any text, labels, badges, watermarks, or overlays.
+- Do NOT change the background in any way.
+- Do NOT move, resize, rotate, or reshape the product.
+- Do NOT add or remove any objects.
+- The ONLY change should be the color/hue of the main product object changing to ${colorName} (${colorHex}).
+- Output the image at the same resolution as the input.`;
 
     const response = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
@@ -63,7 +52,7 @@ ${productName ? `5. Add the product name "${productName}" in elegant text above 
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash-image",
+          model: "google/gemini-3-pro-image-preview",
           messages: [
             {
               role: "user",
