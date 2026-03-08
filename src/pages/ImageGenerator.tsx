@@ -14,9 +14,10 @@ import JSZip from "jszip";
 import {
   ImagePlus, Palette, Download, Loader2, Eye, Package,
   Square, Smartphone, Monitor, X, History, Sparkles, CheckCircle2,
-  Megaphone, Zap, Star, Copy, FileText, Tag, Home, Briefcase, Sun, UtensilsCrossed, ThumbsUp, ScanSearch
+  Megaphone, Zap, Star, Copy, FileText, Tag, Home, Briefcase, Sun, UtensilsCrossed, ThumbsUp, ScanSearch, MessageSquare
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 
 const PRESET_COLORS = [
   { name: "Preto", hex: "#1a1a1a" },
@@ -107,6 +108,7 @@ export default function ImageGenerator() {
     "environment_living_room", "environment_office", "environment_outdoor", "environment_kitchen", "benefit"
   ]);
   const [generateShopeeText, setGenerateShopeeText] = useState(true);
+  const [benefitPrompt, setBenefitPrompt] = useState("");
 
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
   const [shopeeText, setShopeeText] = useState<ShopeeText | null>(null);
@@ -264,7 +266,7 @@ export default function ImageGenerator() {
     }
   };
 
-  const callMarketingApi = async (marketingType: string): Promise<string | null> => {
+  const callMarketingApi = async (marketingType: string, benefitIdx?: number): Promise<string | null> => {
     try {
       const resp = await fetch(MARKETING_URL, {
         method: "POST",
@@ -276,6 +278,7 @@ export default function ImageGenerator() {
           imageBase64: baseImageData,
           productName,
           marketingType,
+          ...(marketingType === "benefit" ? { benefitPrompt, benefitIndex: benefitIdx || 1 } : {}),
         }),
       });
 
@@ -352,7 +355,10 @@ export default function ImageGenerator() {
     const results: GeneratedImage[] = [];
 
     const recolorTotal = selectedColors.length * selectedFormats.length;
-    const marketingTotal = selectedMarketingTypes.length;
+    const hasBenefit = selectedMarketingTypes.includes("benefit") && benefitPrompt.trim();
+    const environmentTypes = selectedMarketingTypes.filter((t) => t !== "benefit");
+    const benefitCount = hasBenefit ? 3 : 0;
+    const marketingTotal = environmentTypes.length + benefitCount;
     const shopeeStep = generateShopeeText && productName ? 1 : 0;
     const total = recolorTotal + marketingTotal + shopeeStep;
     let done = 0;
@@ -384,9 +390,9 @@ export default function ImageGenerator() {
       }
     }
 
-    // PHASE 2: Environment + Benefit images
-    if (selectedMarketingTypes.length > 0) {
-      for (const mktType of selectedMarketingTypes) {
+    // PHASE 2: Environment images
+    if (environmentTypes.length > 0) {
+      for (const mktType of environmentTypes) {
         const mktLabel = MARKETING_TYPES.find((m) => m.id === mktType)?.label || mktType;
         setProgressLabel(`📸 Gerando: ${mktLabel}`);
         setProgress(Math.round((done / total) * 100));
@@ -402,6 +408,31 @@ export default function ImageGenerator() {
             height: 1024,
             type: "marketing",
             marketingType: mktType,
+          };
+          results.push(result);
+          setGeneratedImages([...results]);
+        }
+        done++;
+      }
+    }
+
+    // PHASE 2b: Benefit images (3 variations)
+    if (hasBenefit) {
+      for (let i = 1; i <= 3; i++) {
+        setProgressLabel(`💡 Gerando Benefício: variação ${i}/3`);
+        setProgress(Math.round((done / total) * 100));
+
+        const imageUrl = await callMarketingApi("benefit", i);
+        if (imageUrl) {
+          const result: GeneratedImage = {
+            colorName: `Benefício ${i}`,
+            colorHex: "#ffffff",
+            format: "square",
+            dataUrl: imageUrl,
+            width: 1024,
+            height: 1024,
+            type: "marketing",
+            marketingType: "benefit",
           };
           results.push(result);
           setGeneratedImages([...results]);
@@ -514,7 +545,10 @@ export default function ImageGenerator() {
   };
 
   const recolorCount = selectedColors.length * selectedFormats.length;
-  const marketingCount = selectedMarketingTypes.length;
+  const hasBenefitSelected = selectedMarketingTypes.includes("benefit");
+  const environmentCount = selectedMarketingTypes.filter((t) => t !== "benefit").length;
+  const benefitImageCount = hasBenefitSelected && benefitPrompt.trim() ? 3 : 0;
+  const marketingCount = environmentCount + benefitImageCount;
   const totalImages = recolorCount + marketingCount;
 
   const filteredImages = generatedImages.filter((img) => {
@@ -761,30 +795,52 @@ export default function ImageGenerator() {
                   <p className="text-xs text-muted-foreground">
                     Gera o produto em 4 ambientes diferentes + 1 imagem destacando o benefício principal
                   </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    {MARKETING_TYPES.map((mkt) => {
-                      const Icon = mkt.icon;
-                      const sel = selectedMarketingTypes.includes(mkt.id);
-                      return (
-                        <button
-                          key={mkt.id}
-                          onClick={() => toggleMarketingType(mkt.id)}
-                          className={`p-3 rounded-lg border text-left transition-all ${
-                            sel
-                              ? "border-primary bg-primary/5 ring-1 ring-primary"
-                              : "border-border hover:border-primary/30"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2 mb-1">
-                            <Icon className="h-4 w-4" />
-                            <p className="text-sm font-medium">{mkt.label}</p>
-                            {sel && <CheckCircle2 className="h-3.5 w-3.5 text-primary ml-auto" />}
-                          </div>
-                          <p className="text-xs text-muted-foreground">{mkt.description}</p>
-                        </button>
-                      );
-                    })}
-                  </div>
+                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                     {MARKETING_TYPES.map((mkt) => {
+                       const Icon = mkt.icon;
+                       const sel = selectedMarketingTypes.includes(mkt.id);
+                       return (
+                         <button
+                           key={mkt.id}
+                           onClick={() => toggleMarketingType(mkt.id)}
+                           className={`p-3 rounded-lg border text-left transition-all ${
+                             sel
+                               ? "border-primary bg-primary/5 ring-1 ring-primary"
+                               : "border-border hover:border-primary/30"
+                           }`}
+                         >
+                           <div className="flex items-center gap-2 mb-1">
+                             <Icon className="h-4 w-4" />
+                             <p className="text-sm font-medium">{mkt.label}</p>
+                             {mkt.id === "benefit" && <span className="text-[10px] text-muted-foreground">(3 imgs)</span>}
+                             {sel && <CheckCircle2 className="h-3.5 w-3.5 text-primary ml-auto" />}
+                           </div>
+                           <p className="text-xs text-muted-foreground">{mkt.description}</p>
+                         </button>
+                       );
+                     })}
+                   </div>
+
+                   {/* Benefit prompt input */}
+                   {hasBenefitSelected && (
+                     <div className="space-y-2 pt-2 border-t border-border">
+                       <Label className="flex items-center gap-2 text-xs font-semibold">
+                         <MessageSquare className="h-3.5 w-3.5" /> Descreva o benefício do produto
+                       </Label>
+                       <Textarea
+                         placeholder="Ex: Mantém o celular firme mesmo em estradas esburacadas, permite usar GPS e carregar ao mesmo tempo..."
+                         value={benefitPrompt}
+                         onChange={(e) => setBenefitPrompt(e.target.value)}
+                         className="text-sm min-h-[80px]"
+                       />
+                       <p className="text-xs text-muted-foreground">
+                         💡 A IA gerará 3 imagens diferentes mostrando esse benefício
+                       </p>
+                       {!benefitPrompt.trim() && (
+                         <p className="text-xs text-amber-500">⚠️ Escreva o benefício para gerar as imagens</p>
+                       )}
+                     </div>
+                   )}
                 </Card>
 
                 {/* PHASE 3: Shopee Text */}
@@ -813,8 +869,11 @@ export default function ImageGenerator() {
                       {recolorCount > 0 && (
                         <p>🎨 {recolorCount} {recolorCount === 1 ? "imagem" : "imagens"} de cores</p>
                       )}
-                      {marketingCount > 0 && (
-                        <p>📸 {marketingCount} {marketingCount === 1 ? "imagem" : "imagens"} de ambientes/benefício</p>
+                      {environmentCount > 0 && (
+                        <p>📸 {environmentCount} {environmentCount === 1 ? "imagem" : "imagens"} de ambientes</p>
+                      )}
+                      {benefitImageCount > 0 && (
+                        <p>💡 3 imagens de benefício</p>
                       )}
                       {generateShopeeText && productName && (
                         <p>📝 Título + Descrição Shopee</p>
