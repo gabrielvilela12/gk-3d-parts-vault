@@ -14,7 +14,7 @@ import JSZip from "jszip";
 import {
   ImagePlus, Palette, Download, Loader2, Eye, Package,
   Square, Smartphone, Monitor, X, History, Sparkles, CheckCircle2,
-  Megaphone, Zap, Star, Copy, FileText, Tag, Home, Briefcase, Sun, UtensilsCrossed, ThumbsUp, ScanSearch, MessageSquare
+  Megaphone, Zap, Star, Copy, FileText, Tag, Home, Briefcase, Sun, UtensilsCrossed, ThumbsUp, ScanSearch, MessageSquare, Package2, Ruler
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -106,6 +106,10 @@ export default function ImageGenerator() {
   const [generateBenefitImages, setGenerateBenefitImages] = useState(true);
   const [generateShopeeText, setGenerateShopeeText] = useState(true);
   const [shopeeQuantity, setShopeeQuantity] = useState(1);
+  const [packageWeight, setPackageWeight] = useState("");
+  const [packageLength, setPackageLength] = useState("");
+  const [packageWidth, setPackageWidth] = useState("");
+  const [packageHeight, setPackageHeight] = useState("");
   const [benefitPrompt, setBenefitPrompt] = useState("");
 
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
@@ -948,6 +952,53 @@ export default function ImageGenerator() {
                       )}
                     </div>
                   )}
+                  {generateShopeeText && (
+                    <div className="space-y-3 pt-2 border-t border-border">
+                      <Label className="flex items-center gap-2 text-xs font-semibold">
+                        <Package2 className="h-3.5 w-3.5" /> Informações de Envio (para copiar)
+                      </Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-[11px] text-muted-foreground">Peso (kg)</Label>
+                          <Input
+                            type="text"
+                            placeholder="0,15"
+                            value={packageWeight}
+                            onChange={(e) => setPackageWeight(e.target.value)}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <Label className="text-[11px] text-muted-foreground flex items-center gap-1">
+                          <Ruler className="h-3 w-3" /> Tamanho da Embalagem (cm)
+                        </Label>
+                        <div className="grid grid-cols-3 gap-2 mt-1">
+                          <Input
+                            type="text"
+                            placeholder="C"
+                            value={packageLength}
+                            onChange={(e) => setPackageLength(e.target.value)}
+                            className="h-8 text-sm text-center"
+                          />
+                          <Input
+                            type="text"
+                            placeholder="L"
+                            value={packageWidth}
+                            onChange={(e) => setPackageWidth(e.target.value)}
+                            className="h-8 text-sm text-center"
+                          />
+                          <Input
+                            type="text"
+                            placeholder="A"
+                            value={packageHeight}
+                            onChange={(e) => setPackageHeight(e.target.value)}
+                            className="h-8 text-sm text-center"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   {!productName && generateShopeeText && (
                     <p className="text-xs text-amber-500">⚠️ Envie uma foto para identificar o produto automaticamente</p>
                   )}
@@ -1089,7 +1140,9 @@ export default function ImageGenerator() {
                         variant="outline"
                         className="gap-1.5"
                         onClick={() => {
-                          const full = `${shopeeText.title}\n\n${shopeeText.description}\n\nTags: ${shopeeText.keywords.join(", ")}`;
+                          let full = `${shopeeText.title}\n\n${shopeeText.description}\n\nTags: ${shopeeText.keywords.join(", ")}`;
+                          if (packageWeight) full += `\n\nPeso: ${packageWeight} kg`;
+                          if (packageLength && packageWidth && packageHeight) full += `\nEmbalagem: ${packageLength} x ${packageWidth} x ${packageHeight} cm`;
                           navigator.clipboard.writeText(full);
                           toast({ title: "Tudo copiado!" });
                         }}
@@ -1148,6 +1201,37 @@ export default function ImageGenerator() {
                         ))}
                       </div>
                     </div>
+
+                    {/* Shipping Info */}
+                    {(packageWeight || packageLength || packageWidth || packageHeight) && (
+                      <div className="space-y-2 pt-3 border-t border-border">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Package2 className="h-3 w-3" /> Informações de Envio
+                          </Label>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 gap-1 text-xs"
+                            onClick={() => {
+                              const lines = [];
+                              if (packageWeight) lines.push(`Peso: ${packageWeight} kg`);
+                              if (packageLength && packageWidth && packageHeight) lines.push(`Embalagem: ${packageLength} x ${packageWidth} x ${packageHeight} cm`);
+                              navigator.clipboard.writeText(lines.join("\n"));
+                              toast({ title: "Envio copiado!" });
+                            }}
+                          >
+                            <Copy className="h-3 w-3" /> Copiar
+                          </Button>
+                        </div>
+                        <div className="bg-muted p-3 rounded-lg text-sm space-y-1">
+                          {packageWeight && <p>📦 Peso do Pacote: <strong>{packageWeight} kg</strong></p>}
+                          {packageLength && packageWidth && packageHeight && (
+                            <p>📐 Embalagem: <strong>{packageLength} x {packageWidth} x {packageHeight} cm</strong></p>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </Card>
                 )}
               </div>
