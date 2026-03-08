@@ -952,6 +952,53 @@ export default function ImageGenerator() {
                       )}
                     </div>
                   )}
+                  {generateShopeeText && (
+                    <div className="space-y-3 pt-2 border-t border-border">
+                      <Label className="flex items-center gap-2 text-xs font-semibold">
+                        <Package2 className="h-3.5 w-3.5" /> Informações de Envio (para copiar)
+                      </Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-[11px] text-muted-foreground">Peso (kg)</Label>
+                          <Input
+                            type="text"
+                            placeholder="0,15"
+                            value={packageWeight}
+                            onChange={(e) => setPackageWeight(e.target.value)}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <Label className="text-[11px] text-muted-foreground flex items-center gap-1">
+                          <Ruler className="h-3 w-3" /> Tamanho da Embalagem (cm)
+                        </Label>
+                        <div className="grid grid-cols-3 gap-2 mt-1">
+                          <Input
+                            type="text"
+                            placeholder="C"
+                            value={packageLength}
+                            onChange={(e) => setPackageLength(e.target.value)}
+                            className="h-8 text-sm text-center"
+                          />
+                          <Input
+                            type="text"
+                            placeholder="L"
+                            value={packageWidth}
+                            onChange={(e) => setPackageWidth(e.target.value)}
+                            className="h-8 text-sm text-center"
+                          />
+                          <Input
+                            type="text"
+                            placeholder="A"
+                            value={packageHeight}
+                            onChange={(e) => setPackageHeight(e.target.value)}
+                            className="h-8 text-sm text-center"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   {!productName && generateShopeeText && (
                     <p className="text-xs text-amber-500">⚠️ Envie uma foto para identificar o produto automaticamente</p>
                   )}
