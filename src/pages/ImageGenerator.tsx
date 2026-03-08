@@ -78,6 +78,13 @@ interface HistoryEntry {
 
 const RECOLOR_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/recolor-product`;
 const MARKETING_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-marketing`;
+const SHOPEE_TEXT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-shopee-text`;
+
+interface ShopeeText {
+  title: string;
+  description: string;
+  keywords: string[];
+}
 
 export default function ImageGenerator() {
   const { toast } = useToast();
