@@ -14,7 +14,7 @@ import JSZip from "jszip";
 import {
   ImagePlus, Palette, Download, Loader2, Eye, Package,
   Square, Smartphone, Monitor, X, History, Sparkles, CheckCircle2,
-  Megaphone, Zap, Star, Copy, FileText, Tag
+  Megaphone, Zap, Star, Copy, FileText, Tag, Home, Briefcase, Sun, UtensilsCrossed, ThumbsUp, ScanSearch
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
@@ -50,9 +50,11 @@ const BACKGROUNDS = [
 ];
 
 const MARKETING_TYPES = [
-  { id: "highlight", label: "Destaque Premium", icon: Star, description: "Foto profissional com fundo branco e iluminação premium" },
-  { id: "pain_point", label: "Dor / Problema", icon: Zap, description: "Mostra o problema que o produto resolve" },
-  { id: "usage", label: "Uso / Lifestyle", icon: Megaphone, description: "Produto em contexto de uso real" },
+  { id: "environment_living_room", label: "Sala de Estar", icon: Home, description: "Produto em ambiente de sala de estar aconchegante" },
+  { id: "environment_office", label: "Escritório", icon: Briefcase, description: "Produto em ambiente de trabalho moderno" },
+  { id: "environment_outdoor", label: "Área Externa", icon: Sun, description: "Produto em ambiente ao ar livre" },
+  { id: "environment_kitchen", label: "Cozinha", icon: UtensilsCrossed, description: "Produto em ambiente de cozinha/jantar" },
+  { id: "benefit", label: "Benefício", icon: ThumbsUp, description: "Destaca o principal benefício do produto" },
 ];
 
 interface GeneratedImage {
@@ -79,6 +81,7 @@ interface HistoryEntry {
 const RECOLOR_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/recolor-product`;
 const MARKETING_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-marketing`;
 const SHOPEE_TEXT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-shopee-text`;
+const IDENTIFY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/identify-product`;
 
 interface ShopeeText {
   title: string;
@@ -92,13 +95,17 @@ export default function ImageGenerator() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [productName, setProductName] = useState("");
+  const [productDescription, setProductDescription] = useState("");
+  const [isIdentifying, setIsIdentifying] = useState(false);
   const [baseImageData, setBaseImageData] = useState<string | null>(null);
   const [selectedColors, setSelectedColors] = useState<typeof PRESET_COLORS>([]);
   const [selectedFormats, setSelectedFormats] = useState<string[]>(["square"]);
   const [backgroundStyle, setBackgroundStyle] = useState("white");
   const [customColorName, setCustomColorName] = useState("");
   const [customColorHex, setCustomColorHex] = useState("#000000");
-  const [selectedMarketingTypes, setSelectedMarketingTypes] = useState<string[]>(["highlight"]);
+  const [selectedMarketingTypes, setSelectedMarketingTypes] = useState<string[]>([
+    "environment_living_room", "environment_office", "environment_outdoor", "environment_kitchen", "benefit"
+  ]);
   const [generateShopeeText, setGenerateShopeeText] = useState(true);
 
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
@@ -127,7 +134,7 @@ export default function ImageGenerator() {
     if (data) setHistory(data as unknown as HistoryEntry[]);
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) {
@@ -135,10 +142,54 @@ export default function ImageGenerator() {
       return;
     }
     const reader = new FileReader();
-    reader.onload = (ev) => {
-      setBaseImageData(ev.target?.result as string);
+    reader.onload = async (ev) => {
+      const imageData = ev.target?.result as string;
+      setBaseImageData(imageData);
+      // Auto-identify product
+      await identifyProduct(imageData);
     };
     reader.readAsDataURL(file);
+  };
+
+  const identifyProduct = async (imageData: string) => {
+    setIsIdentifying(true);
+    try {
+      const resp = await fetch(IDENTIFY_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ imageBase64: imageData }),
+      });
+
+      if (resp.status === 429) {
+        toast({ title: "Rate limit", description: "Aguarde e tente novamente.", variant: "destructive" });
+        return;
+      }
+      if (resp.status === 402) {
+        toast({ title: "Créditos insuficientes", description: "Adicione créditos no workspace.", variant: "destructive" });
+        return;
+      }
+      if (!resp.ok) {
+        console.error("Identify error:", await resp.text());
+        toast({ title: "Não foi possível identificar o produto", description: "Preencha manualmente.", variant: "destructive" });
+        return;
+      }
+
+      const data = await resp.json();
+      if (data.name) {
+        setProductName(data.name);
+        toast({ title: "Produto identificado!", description: data.name });
+      }
+      if (data.description) {
+        setProductDescription(data.description);
+      }
+    } catch (e) {
+      console.error("Identify fetch error:", e);
+    } finally {
+      setIsIdentifying(false);
+    }
   };
 
   const toggleColor = (color: typeof PRESET_COLORS[0]) => {
@@ -291,7 +342,7 @@ export default function ImageGenerator() {
       return;
     }
     if (selectedColors.length === 0 && selectedMarketingTypes.length === 0 && !generateShopeeText) {
-      toast({ title: "Selecione cores, marketing ou texto Shopee", variant: "destructive" });
+      toast({ title: "Selecione cores, ambientes ou texto Shopee", variant: "destructive" });
       return;
     }
 
@@ -333,11 +384,11 @@ export default function ImageGenerator() {
       }
     }
 
-    // PHASE 2: Marketing images
+    // PHASE 2: Environment + Benefit images
     if (selectedMarketingTypes.length > 0) {
       for (const mktType of selectedMarketingTypes) {
         const mktLabel = MARKETING_TYPES.find((m) => m.id === mktType)?.label || mktType;
-        setProgressLabel(`📸 Marketing: ${mktLabel}`);
+        setProgressLabel(`📸 Gerando: ${mktLabel}`);
         setProgress(Math.round((done / total) * 100));
 
         const imageUrl = await callMarketingApi(mktType);
@@ -412,7 +463,7 @@ export default function ImageGenerator() {
 
     for (let i = 0; i < filteredImages.length; i++) {
       const img = filteredImages[i];
-      const prefix = img.type === "marketing" ? "marketing" : "cor";
+      const prefix = img.type === "marketing" ? "ambiente" : "cor";
       const fileName = `${productName || "produto"}_${prefix}_${img.colorName}_${img.format}.png`;
 
       if (img.dataUrl.startsWith("data:")) {
@@ -439,7 +490,7 @@ export default function ImageGenerator() {
   };
 
   const downloadSingle = async (img: GeneratedImage) => {
-    const prefix = img.type === "marketing" ? "marketing" : "cor";
+    const prefix = img.type === "marketing" ? "ambiente" : "cor";
     const fileName = `${productName || "produto"}_${prefix}_${img.colorName}_${img.format}.png`;
     if (img.dataUrl.startsWith("data:")) {
       const a = document.createElement("a");
@@ -485,7 +536,7 @@ export default function ImageGenerator() {
             </div>
             <div>
               <h1 className="page-title">Gerador de Imagens</h1>
-              <p className="page-subtitle">Recolore produtos + crie fotos de marketing chamativas com IA</p>
+              <p className="page-subtitle">Identifica o produto, gera variações de cor, ambientes e texto SEO com IA</p>
             </div>
           </div>
         </div>
@@ -504,17 +555,6 @@ export default function ImageGenerator() {
             <div className={`grid gap-6 ${isMobile ? "grid-cols-1" : "grid-cols-3"}`}>
               {/* Left panel */}
               <div className="space-y-5 col-span-1">
-                <Card className="p-4 space-y-3">
-                  <Label className="flex items-center gap-2 text-sm font-semibold">
-                    <Package className="h-4 w-4" /> Nome do Produto
-                  </Label>
-                  <Input
-                    placeholder="Ex: Vaso Decorativo"
-                    value={productName}
-                    onChange={(e) => setProductName(e.target.value)}
-                  />
-                </Card>
-
                 <Card className="p-4 space-y-3">
                   <Label className="text-sm font-semibold">Imagem Base</Label>
                   <input
@@ -535,10 +575,16 @@ export default function ImageGenerator() {
                         size="icon"
                         variant="destructive"
                         className="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={() => setBaseImageData(null)}
+                        onClick={() => { setBaseImageData(null); setProductName(""); setProductDescription(""); }}
                       >
                         <X className="h-3 w-3" />
                       </Button>
+                      {isIdentifying && (
+                        <div className="absolute inset-0 bg-background/70 rounded-lg flex items-center justify-center gap-2">
+                          <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                          <span className="text-sm font-medium text-primary">Identificando produto...</span>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <button
@@ -547,7 +593,41 @@ export default function ImageGenerator() {
                     >
                       <ImagePlus className="h-8 w-8 text-muted-foreground" />
                       <span className="text-sm text-muted-foreground">Clique para enviar</span>
+                      <span className="text-xs text-muted-foreground">A IA identificará o produto automaticamente</span>
                     </button>
+                  )}
+                </Card>
+
+                {/* Auto-identified product info */}
+                <Card className="p-4 space-y-3">
+                  <Label className="flex items-center gap-2 text-sm font-semibold">
+                    <ScanSearch className="h-4 w-4" /> Produto Identificado
+                  </Label>
+                  <div className="space-y-2">
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Nome</Label>
+                      <Input
+                        placeholder={isIdentifying ? "Identificando..." : "Ex: Vaso Decorativo"}
+                        value={productName}
+                        onChange={(e) => setProductName(e.target.value)}
+                        disabled={isIdentifying}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Descrição</Label>
+                      <Input
+                        placeholder={isIdentifying ? "Identificando..." : "Descrição do produto"}
+                        value={productDescription}
+                        onChange={(e) => setProductDescription(e.target.value)}
+                        disabled={isIdentifying}
+                      />
+                    </div>
+                  </div>
+                  {productName && !isIdentifying && (
+                    <div className="flex items-center gap-1.5 text-xs text-green-600">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Produto identificado pela IA
+                    </div>
                   )}
                 </Card>
 
@@ -603,7 +683,7 @@ export default function ImageGenerator() {
                 <Card className="p-4 space-y-4">
                   <div className="flex items-center justify-between">
                     <Label className="flex items-center gap-2 text-sm font-semibold">
-                      <Palette className="h-4 w-4" /> Fase 1: Recolorir Produto
+                      <Palette className="h-4 w-4" /> Fase 1: Imagens das Cores
                     </Label>
                     <Badge variant="secondary">{selectedColors.length} cores</Badge>
                   </div>
@@ -670,16 +750,16 @@ export default function ImageGenerator() {
                   )}
                 </Card>
 
-                {/* PHASE 2: Marketing */}
+                {/* PHASE 2: Environments + Benefit */}
                 <Card className="p-4 space-y-4">
                   <div className="flex items-center justify-between">
                     <Label className="flex items-center gap-2 text-sm font-semibold">
-                      <Megaphone className="h-4 w-4" /> Fase 2: Imagens de Marketing
+                      <Megaphone className="h-4 w-4" /> Fase 2: Ambientes e Benefício
                     </Label>
-                    <Badge variant="secondary">{selectedMarketingTypes.length} tipos</Badge>
+                    <Badge variant="secondary">{selectedMarketingTypes.length} imagens</Badge>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Gera imagens chamativas para anúncios — fundo branco, contexto de uso e dor do cliente
+                    Gera o produto em 4 ambientes diferentes + 1 imagem destacando o benefício principal
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     {MARKETING_TYPES.map((mkt) => {
@@ -722,7 +802,7 @@ export default function ImageGenerator() {
                     Gera título SEO, descrição otimizada e palavras-chave para anúncio na Shopee
                   </p>
                   {!productName && generateShopeeText && (
-                    <p className="text-xs text-amber-500">⚠️ Preencha o nome do produto para gerar o texto</p>
+                    <p className="text-xs text-amber-500">⚠️ Envie uma foto para identificar o produto automaticamente</p>
                   )}
                 </Card>
 
@@ -731,10 +811,10 @@ export default function ImageGenerator() {
                   <div className="flex items-center justify-between gap-4 flex-wrap">
                     <div className="text-sm text-muted-foreground space-y-0.5">
                       {recolorCount > 0 && (
-                        <p>🎨 {recolorCount} {recolorCount === 1 ? "imagem" : "imagens"} recoloridas</p>
+                        <p>🎨 {recolorCount} {recolorCount === 1 ? "imagem" : "imagens"} de cores</p>
                       )}
                       {marketingCount > 0 && (
-                        <p>📸 {marketingCount} {marketingCount === 1 ? "imagem" : "imagens"} de marketing</p>
+                        <p>📸 {marketingCount} {marketingCount === 1 ? "imagem" : "imagens"} de ambientes/benefício</p>
                       )}
                       {generateShopeeText && productName && (
                         <p>📝 Título + Descrição Shopee</p>
@@ -746,7 +826,7 @@ export default function ImageGenerator() {
                     <Button
                       size="lg"
                       onClick={handleGenerate}
-                      disabled={isGenerating || !baseImageData || (totalImages === 0 && !(generateShopeeText && productName))}
+                      disabled={isGenerating || isIdentifying || !baseImageData || (totalImages === 0 && !(generateShopeeText && productName))}
                       className="gap-2"
                     >
                       {isGenerating ? (
@@ -773,7 +853,6 @@ export default function ImageGenerator() {
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <h3 className="font-semibold text-sm">{generatedImages.length} imagens geradas</h3>
                       <div className="flex items-center gap-2">
-                        {/* Filter tabs */}
                         <div className="flex rounded-lg border border-border overflow-hidden text-xs">
                           <button
                             onClick={() => setResultFilter("all")}
@@ -794,7 +873,7 @@ export default function ImageGenerator() {
                               onClick={() => setResultFilter("marketing")}
                               className={`px-3 py-1.5 border-l border-border transition-colors ${resultFilter === "marketing" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
                             >
-                              📸 Marketing ({marketingResults})
+                              📸 Ambientes ({marketingResults})
                             </button>
                           )}
                         </div>
@@ -839,7 +918,7 @@ export default function ImageGenerator() {
                               <span className="text-xs text-white font-medium truncate">{img.colorName}</span>
                             </div>
                             <Badge variant="secondary" className="text-[10px] mt-1 px-1.5 py-0">
-                              {img.type === "recolor" ? "Cor" : "Marketing"}
+                              {img.type === "recolor" ? "Cor" : img.marketingType === "benefit" ? "Benefício" : "Ambiente"}
                             </Badge>
                           </div>
                         </div>
@@ -968,7 +1047,7 @@ export default function ImageGenerator() {
               ) : (
                 <span>📸</span>
               )}
-              {previewImage?.colorName} — {previewImage?.type === "recolor" ? "Recolorido" : "Marketing"}
+              {previewImage?.colorName} — {previewImage?.type === "recolor" ? "Cor" : previewImage?.marketingType === "benefit" ? "Benefício" : "Ambiente"}
             </DialogTitle>
           </DialogHeader>
           {previewImage && (
