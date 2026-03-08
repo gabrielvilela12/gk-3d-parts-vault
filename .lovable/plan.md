@@ -1,32 +1,52 @@
 
 
-## Nova Página: Links de GPTs
+## Plano: Gerar Titulo e Descrição otimizados para Shopee via IA
 
-Criar uma nova página "GPTs" acessível pela navbar, exibindo cards com links para os GPTs customizados do projeto.
+### O que será feito
 
-### GPTs a incluir:
-1. **Precificação de Produtos** - https://chatgpt.com/g/g-6990868786e4819180fd385f4e9e5d16-precificacao-produtos
-2. **Criador de Anúncio** - https://chatgpt.com/g/g-69908c8d62788191bdf2d7cf34d118cf-criador-de-anuncio
-3. **Responder Comentários** - https://chatgpt.com/g/g-69908ddcd5608191a88527d97d03db60-responder-comentarios
-4. **Minerador** - https://chatgpt.com/g/g-699093b077c481919000940f9971d55b-minerador
+Adicionar uma **Fase 3** no gerador de imagens que, após gerar as imagens (recolor + marketing), chama a IA para criar um **titulo** e **descrição** do produto otimizados com as melhores palavras-chave da Shopee.
 
-### Alterações
+### Mudanças
 
-**1. Criar `src/pages/GptLinks.tsx`**
-- Página com cards visuais para cada GPT
-- Cada card com icone, nome, descrição curta e botão que abre o link em nova aba
-- Layout responsivo em grid
+#### 1. Nova Edge Function: `supabase/functions/generate-shopee-text/index.ts`
+- Recebe `productName`, `imageBase64` (opcional, para contexto visual), e `category` (opcional)
+- Usa o modelo `google/gemini-3-flash-preview` (texto puro, rápido e barato)
+- Prompt especializado em SEO Shopee:
+  - Gera um **titulo** com até 120 caracteres usando palavras-chave de alto volume da Shopee
+  - Gera uma **descrição** estruturada com emojis, bullet points, palavras-chave relevantes, e call-to-action
+  - Retorna JSON estruturado via tool calling: `{ title: string, description: string, keywords: string[] }`
+- Registrar em `supabase/config.toml` com `verify_jwt = false`
 
-**2. Atualizar `src/components/Navbar.tsx`**
-- Adicionar item "GPTs" com icone `BotMessageSquare` (do lucide-react) apontando para `/gpts`
+#### 2. Atualizar `src/pages/ImageGenerator.tsx`
+- Adicionar estado para `generatedTitle`, `generatedDescription`, `generatedKeywords`
+- Adicionar checkbox/toggle "Gerar Titulo e Descrição Shopee" na UI (ativado por padrão)
+- Na `handleGenerate`, após Fase 2 (marketing), executar **Fase 3**: chamar `generate-shopee-text`
+- Exibir resultado em um Card abaixo das imagens com:
+  - Titulo gerado (com botão copiar)
+  - Descrição gerada (com botão copiar)
+  - Lista de palavras-chave sugeridas como badges
+- Botão "Copiar Tudo" para facilitar colar na Shopee
 
-**3. Atualizar `src/App.tsx`**
-- Adicionar rota `/gpts` (protegida, requer login)
-- Importar o componente `GptLinks`
+#### 3. Prompt da IA (dentro da edge function)
+```text
+Você é um especialista em SEO e vendas na Shopee Brasil.
+Gere um TÍTULO e DESCRIÇÃO otimizados para o produto "{productName}".
 
-### Detalhes Técnicos
+TÍTULO (max 120 caracteres):
+- Use palavras-chave de alto volume de busca na Shopee
+- Inclua variações relevantes (ex: "Suporte Celular Carro Veicular Universal")
+- Formato: Palavra-chave principal + Características + Diferencial
 
-- A página usará os componentes `Card`, `CardHeader`, `CardTitle`, `CardContent` e `Button` já existentes
-- Links abrem em `target="_blank"` com `rel="noopener noreferrer"`
-- Segue o mesmo padrão visual das outras páginas (dark theme, card-gradient, etc.)
+DESCRIÇÃO:
+- Use emojis estrategicamente
+- Bullet points com benefícios
+- Palavras-chave naturais no texto
+- Call-to-action no final
+- Máximo 2000 caracteres
+
+Também retorne as 10 melhores palavras-chave para esse produto na Shopee.
+```
+
+### Nenhuma mudança no banco de dados
+Os textos gerados serão exibidos na UI para o usuário copiar. Não precisa de nova tabela.
 
