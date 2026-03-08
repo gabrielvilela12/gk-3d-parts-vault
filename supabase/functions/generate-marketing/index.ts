@@ -23,52 +23,20 @@ serve(async (req) => {
       throw new Error("imageBase64 is required");
     }
 
-    const prompts: Record<string, string> = {
-      pain_point: `You are a professional product photographer and marketing expert. 
-Edit this product image to create a compelling marketing photo that highlights the PROBLEM this product solves.
+    const environmentLabels: Record<string, { name: string; description: string }> = {
+      living_room: { name: "Sala de Estar", description: "modern, well-decorated living room with warm lighting, cozy sofa, shelves, plants" },
+      office: { name: "Escritório", description: "modern office or workspace with clean desk, monitor, stationery, professional lighting" },
+      outdoor: { name: "Área Externa", description: "outdoor setting like garden, patio, terrace, or nature with natural sunlight and vibrant colors" },
+      kitchen: { name: "Cozinha", description: "modern kitchen or dining area with warm appetizing lighting, countertop, tableware" },
+      bedroom: { name: "Quarto", description: "cozy bedroom with soft lighting, bed, nightstand, warm textiles" },
+      bathroom: { name: "Banheiro", description: "clean modern bathroom with tiles, mirror, elegant fixtures" },
+      studio: { name: "Estúdio", description: "professional photography studio with controlled lighting, clean backdrop" },
+    };
 
-Product: "${productName || "this product"}"
+    let prompt: string;
 
-RULES:
-- Keep the product as the MAIN FOCUS, centered and prominent.
-- Use a CLEAN WHITE background as the base.
-- Add subtle visual context that shows the PAIN POINT or PROBLEM the product solves.
-- Make it look like a professional e-commerce/marketplace listing photo.
-- The image should make the viewer FEEL they NEED this product.
-- Do NOT add any text, labels, watermarks, or overlays.
-- Keep it clean, professional, and eye-catching.
-- Output at 1024x1024 resolution.`,
-
-      usage: `You are a professional product photographer and marketing expert.
-Edit this product image to create a compelling marketing photo showing the product IN USE.
-
-Product: "${productName || "this product"}"
-
-RULES:
-- Keep the product as the MAIN FOCUS, centered and prominent.
-- Use a CLEAN WHITE or very light neutral background.
-- Show the product being used in a natural, aspirational lifestyle context.
-- Make it look like a premium e-commerce product photo with context.
-- Do NOT add any text, labels, watermarks, or overlays.
-- Keep it clean, professional, and eye-catching.
-- Output at 1024x1024 resolution.`,
-
-      highlight: `You are a professional product photographer and marketing expert.
-Edit this product image to create an eye-catching hero product photo.
-
-Product: "${productName || "this product"}"
-
-RULES:
-- Keep the product as the MAIN FOCUS, centered and prominent.
-- Use a CLEAN WHITE background with subtle professional lighting effects.
-- Make the product look PREMIUM and DESIRABLE.
-- Add subtle depth: soft shadow beneath the product, slight glow or rim lighting.
-- Do NOT add any text, labels, watermarks, or overlays.
-- Do NOT change the product's color, shape, or details.
-- Keep it clean, minimal, and high-end.
-- Output at 1024x1024 resolution.`,
-
-      benefit: `You are a professional product photographer and marketing expert.
+    if (marketingType === "benefit") {
+      prompt = `You are a professional product photographer and marketing expert.
 Edit this product image to create a compelling photo that highlights a specific BENEFIT of using this product.
 
 Product: "${productName || "this product"}"
@@ -84,70 +52,52 @@ RULES:
 - Each variation should use a DIFFERENT angle, composition, or visual metaphor.
 - Do NOT add any text, labels, watermarks, or overlays.
 - Keep it clean, professional, and aspirational.
-- Output at 1024x1024 resolution.`,
-
-      environment_living_room: `You are a professional product photographer and interior design expert.
-Edit this product image to show it in a beautiful LIVING ROOM environment.
+- Output at 1024x1024 resolution.`;
+    } else if (marketingType.startsWith("environment_")) {
+      // Legacy support for old format
+      const envKey = marketingType.replace("environment_", "");
+      const env = environmentLabels[envKey] || environmentLabels["living_room"];
+      prompt = `You are a professional product photographer and interior design expert.
+Edit this product image to show it in a beautiful ${env.name} environment.
 
 Product: "${productName || "this product"}"
 
 RULES:
-- Place the product naturally in a modern, well-decorated living room setting.
+- Place the product naturally in a ${env.description} setting.
 - The product should be the MAIN FOCUS but integrated into the environment.
-- Use warm, inviting lighting typical of a cozy living room.
-- Include subtle decor elements (sofa, shelves, plants) to create context WITHOUT overwhelming the product.
 - Make it look like a high-end lifestyle/interior design photo.
 - Do NOT add any text, labels, watermarks, or overlays.
 - Keep it professional and aspirational.
-- Output at 1024x1024 resolution.`,
-
-      environment_office: `You are a professional product photographer and interior design expert.
-Edit this product image to show it in a modern OFFICE or WORKSPACE environment.
-
-Product: "${productName || "this product"}"
-
-RULES:
-- Place the product naturally on a desk or workspace setting.
-- The product should be the MAIN FOCUS but integrated into the environment.
-- Use clean, professional lighting typical of a modern office.
-- Include subtle office elements (desk, monitor, stationery) to create context WITHOUT overwhelming the product.
-- Make it look like a professional workspace lifestyle photo.
-- Do NOT add any text, labels, watermarks, or overlays.
-- Keep it clean and professional.
-- Output at 1024x1024 resolution.`,
-
-      environment_outdoor: `You are a professional product photographer.
-Edit this product image to show it in a beautiful OUTDOOR environment.
+- Output at 1024x1024 resolution.`;
+    } else if (environmentLabels[marketingType]) {
+      // New direct environment key format
+      const env = environmentLabels[marketingType];
+      prompt = `You are a professional product photographer and interior design expert.
+Edit this product image to show it in a beautiful ${env.name} environment.
 
 Product: "${productName || "this product"}"
 
 RULES:
-- Place the product naturally in an outdoor setting (garden, patio, terrace, or nature).
+- Place the product naturally in a ${env.description} setting.
 - The product should be the MAIN FOCUS but integrated into the environment.
-- Use natural sunlight and fresh, vibrant colors.
-- Include subtle outdoor elements (plants, sky, natural textures) to create context WITHOUT overwhelming the product.
-- Make it look like a premium outdoor lifestyle photo.
+- Make it look like a high-end lifestyle/interior design photo.
 - Do NOT add any text, labels, watermarks, or overlays.
-- Keep it natural and aspirational.
-- Output at 1024x1024 resolution.`,
-
-      environment_kitchen: `You are a professional product photographer and interior design expert.
-Edit this product image to show it in a modern KITCHEN or DINING environment.
+- Keep it professional and aspirational.
+- Output at 1024x1024 resolution.`;
+    } else {
+      prompt = `You are a professional product photographer and marketing expert.
+Edit this product image to create an eye-catching hero product photo.
 
 Product: "${productName || "this product"}"
 
 RULES:
-- Place the product naturally in a kitchen or dining area setting.
-- The product should be the MAIN FOCUS but integrated into the environment.
-- Use warm, appetizing lighting typical of kitchen photography.
-- Include subtle kitchen/dining elements (countertop, tableware, ingredients) to create context WITHOUT overwhelming the product.
-- Make it look like a high-end kitchen lifestyle photo.
+- Keep the product as the MAIN FOCUS, centered and prominent.
+- Use a CLEAN WHITE background with subtle professional lighting effects.
+- Make the product look PREMIUM and DESIRABLE.
 - Do NOT add any text, labels, watermarks, or overlays.
-- Keep it warm, inviting, and professional.
-- Output at 1024x1024 resolution.`,
-    };
-
-    const prompt = prompts[marketingType] || prompts.highlight;
+- Keep it clean, minimal, and high-end.
+- Output at 1024x1024 resolution.`;
+    }
 
     const response = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
