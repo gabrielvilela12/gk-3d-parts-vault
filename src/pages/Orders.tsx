@@ -239,18 +239,18 @@ export default function Orders() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
+    <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8 max-w-4xl">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-3xl font-bold">Fila de Produção</h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <h1 className="text-2xl sm:text-3xl font-bold">Fila de Produção</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
             Organize a ordem de impressão e acompanhe os horários
           </p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button><Plus className="mr-2 h-4 w-4" />Novo Pedido</Button>
+            <Button className="w-full sm:w-auto"><Plus className="mr-2 h-4 w-4" />Novo Pedido</Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
@@ -476,43 +476,54 @@ export default function Orders() {
 
               return (
                 <Card key={order.id} className="border-l-4 border-l-primary/60 hover:border-l-primary transition-colors">
-                  <CardContent className="py-3 px-4">
-                    <div className="flex items-center gap-3">
+                  <CardContent className="py-3 px-3 sm:px-4">
+                    <div className="flex items-start sm:items-center gap-2 sm:gap-3">
                       {/* Position */}
-                      <div className="flex flex-col items-center justify-center w-8 shrink-0">
+                      <div className="flex flex-col items-center justify-center w-6 sm:w-8 shrink-0 pt-0.5 sm:pt-0">
                         <span className="text-xs text-muted-foreground font-mono">#{idx + 1}</span>
                       </div>
 
                       {/* Image */}
                       {order.pieces.image_url ? (
-                        <img src={order.pieces.image_url} alt={order.pieces.name} className="h-12 w-12 rounded-lg object-cover shrink-0" />
+                        <img src={order.pieces.image_url} alt={order.pieces.name} className="h-10 w-10 sm:h-12 sm:w-12 rounded-lg object-cover shrink-0" />
                       ) : (
-                        <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                          <Package className="h-5 w-5 text-muted-foreground" />
+                        <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                          <Package className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
                         </div>
                       )}
 
-                      {/* Info */}
+                      {/* Info + time stacked on mobile */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium text-sm truncate">{order.pieces.name}</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-medium text-xs sm:text-sm truncate">{order.pieces.name}</span>
                           {order.quantity > 1 && (
-                            <Badge variant="secondary" className="text-xs">x{order.quantity}</Badge>
+                            <Badge variant="secondary" className="text-[10px] sm:text-xs">x{order.quantity}</Badge>
                           )}
                           {order.color && (
-                            <Badge variant="outline" className="text-xs">{order.color}</Badge>
+                            <Badge variant="outline" className="text-[10px] sm:text-xs">{order.color}</Badge>
                           )}
                           {order.piece_price_variations && (
-                            <Badge variant="outline" className="text-xs">{order.piece_price_variations.variation_name}</Badge>
+                            <Badge variant="outline" className="text-[10px] sm:text-xs hidden sm:inline-flex">{order.piece_price_variations.variation_name}</Badge>
                           )}
                         </div>
                         {order.notes && (
-                          <p className="text-xs text-muted-foreground truncate mt-0.5">{order.notes}</p>
+                          <p className="text-[10px] sm:text-xs text-muted-foreground truncate mt-0.5">{order.notes}</p>
                         )}
+                        {/* Time info inline on mobile */}
+                        <div className="flex items-center gap-3 mt-1 sm:hidden">
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-[11px] font-medium">{formatTime(totalMin)}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <CalendarClock className="h-3 w-3 text-primary" />
+                            <span className="text-[11px] text-primary font-medium">{formatDateTime(finishAt)}</span>
+                          </div>
+                        </div>
                       </div>
 
-                      {/* Time info */}
-                      <div className="text-right shrink-0 space-y-0.5">
+                      {/* Time info - desktop only */}
+                      <div className="text-right shrink-0 space-y-0.5 hidden sm:block">
                         <div className="flex items-center gap-1 justify-end">
                           <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                           <span className="text-sm font-medium">{formatTime(totalMin)}</span>
@@ -524,14 +535,14 @@ export default function Orders() {
                       </div>
 
                       {/* Actions */}
-                      <div className="flex items-center gap-1 shrink-0">
+                      <div className="flex items-center gap-0.5 shrink-0">
                         <Checkbox
                           checked={false}
                           onCheckedChange={() => handleTogglePrinted(order.id, false)}
                           className="h-5 w-5"
                         />
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteOrder(order.id)}>
-                          <Trash2 className="h-4 w-4" />
+                        <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteOrder(order.id)}>
+                          <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         </Button>
                       </div>
                     </div>

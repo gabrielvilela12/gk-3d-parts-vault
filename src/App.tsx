@@ -21,6 +21,7 @@ import SettingsPage from "./pages/Settings";
 import Orders from "./pages/Orders";
 import NotFound from "./pages/NotFound";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +29,7 @@ function AppContent() {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -63,7 +65,8 @@ function AppContent() {
       <main
         className={cn(
           "flex-1 min-h-screen transition-all duration-300",
-          user ? "ml-[220px]" : ""
+          user && !isMobile ? "ml-[220px]" : "",
+          user && isMobile ? "pt-14" : ""
         )}
       >
         <Routes>
