@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Package, Plus, Trash2, Clock, CheckCircle2, GripVertical, Timer, CalendarClock, Search, X, Upload, FileSpreadsheet, AlertCircle, Check, Filter, ShoppingBag } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import * as XLSX from "xlsx";
+import QueueOptimizerChat from "@/components/QueueOptimizerChat";
 
 interface ImportRow {
   platformOrderId: string;
@@ -107,6 +108,7 @@ export default function Orders() {
   const [filterSearch, setFilterSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | "queue" | "done">("all");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const { toast } = useToast();
 
   // Update "now" every minute for live countdown
@@ -743,6 +745,22 @@ export default function Orders() {
           </div>
         </div>
       )}
+
+      {/* AI Chat */}
+      <QueueOptimizerChat
+        queueData={filteredQueue.map(o => ({
+          name: o.pieces.name,
+          color: o.color,
+          quantity: o.quantity,
+          tempo_min: o.variation_id && o.piece_price_variations
+            ? o.piece_price_variations.tempo_impressao_min
+            : o.pieces.tempo_impressao_min,
+          variation: o.piece_price_variations?.variation_name || null,
+          platformOrderId: (o.notes || "").split(" - ")[0] || "",
+        }))}
+        isOpen={isChatOpen}
+        onToggle={() => setIsChatOpen(!isChatOpen)}
+      />
     </div>
   );
 }
