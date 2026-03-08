@@ -745,6 +745,22 @@ export default function Orders() {
           </div>
         </div>
       )}
+
+      {/* AI Chat */}
+      <QueueOptimizerChat
+        queueData={filteredQueue.map(o => ({
+          name: o.pieces.name,
+          color: o.color,
+          quantity: o.quantity,
+          tempo_min: o.variation_id && o.piece_price_variations
+            ? o.piece_price_variations.tempo_impressao_min
+            : o.pieces.tempo_impressao_min,
+          variation: o.piece_price_variations?.variation_name || null,
+          platformOrderId: (o.notes || "").split(" - ")[0] || "",
+        }))}
+        isOpen={isChatOpen}
+        onToggle={() => setIsChatOpen(!isChatOpen)}
+      />
     </div>
   );
 }
