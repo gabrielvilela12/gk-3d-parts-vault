@@ -652,24 +652,39 @@ export default function ImageGenerator() {
                     onChange={handleImageUpload}
                   />
                   {baseImageData ? (
-                    <div className="relative group">
-                      <img
-                        src={baseImageData}
-                        alt="Base"
-                        className="w-full h-40 object-contain rounded-lg border border-border bg-muted"
-                      />
-                      <Button
-                        size="icon"
-                        variant="destructive"
-                        className="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={() => { setBaseImageData(null); setProductName(""); setProductDescription(""); }}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                      {isIdentifying && (
-                        <div className="absolute inset-0 bg-background/70 rounded-lg flex items-center justify-center gap-2">
-                          <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                          <span className="text-sm font-medium text-primary">Identificando produto...</span>
+                    <div className="space-y-2">
+                      <div className="relative group">
+                        <img
+                          src={baseImageData}
+                          alt="Original"
+                          className="w-full h-32 object-contain rounded-lg border border-border bg-muted"
+                        />
+                        <Button
+                          size="icon"
+                          variant="destructive"
+                          className="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => { setBaseImageData(null); setCleanedImageData(null); setProductName(""); setProductDescription(""); }}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                        {isIdentifying && (
+                          <div className="absolute inset-0 bg-background/70 rounded-lg flex items-center justify-center gap-2">
+                            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                            <span className="text-sm font-medium text-primary">Identificando produto...</span>
+                          </div>
+                        )}
+                        <span className="absolute bottom-1 left-1 text-[10px] bg-background/80 text-muted-foreground px-1.5 py-0.5 rounded">Original</span>
+                      </div>
+                      {cleanedImageData && (
+                        <div className="relative">
+                          <img
+                            src={cleanedImageData}
+                            alt="Limpa"
+                            className="w-full h-32 object-contain rounded-lg border-2 border-primary/30 bg-muted"
+                          />
+                          <span className="absolute bottom-1 left-1 text-[10px] bg-primary/90 text-primary-foreground px-1.5 py-0.5 rounded flex items-center gap-1">
+                            <CheckCircle2 className="h-3 w-3" /> Limpa 1024x1024
+                          </span>
                         </div>
                       )}
                     </div>
