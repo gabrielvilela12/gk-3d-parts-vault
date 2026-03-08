@@ -392,6 +392,7 @@ export default function ImageGenerator() {
     setIsGenerating(true);
     setGeneratedImages([]);
     setShopeeText(null);
+    setCleanedImageData(null);
     const results: GeneratedImage[] = [];
 
     const recolorTotal = selectedColors.length * selectedFormats.length;
@@ -400,8 +401,20 @@ export default function ImageGenerator() {
     const benefitCount = hasBenefit ? 3 : 0;
     const marketingTotal = environmentTypes.length + benefitCount;
     const shopeeStep = generateShopeeText && productName ? 1 : 0;
-    const total = recolorTotal + marketingTotal + shopeeStep;
+    const cleanupStep = 1; // Phase 0: always clean up the image first
+    const total = cleanupStep + recolorTotal + marketingTotal + shopeeStep;
     let done = 0;
+
+    // PHASE 0: Clean up image (professional 1024x1024 product photo)
+    setProgressLabel(`🧹 Limpando e padronizando imagem (1024x1024)...`);
+    setProgress(0);
+
+    const cleanedUrl = await callCleanupApi();
+    if (cleanedUrl) {
+      setCleanedImageData(cleanedUrl);
+    }
+    done++;
+
 
     // PHASE 1: Recolor images
     if (selectedColors.length > 0 && selectedFormats.length > 0) {
