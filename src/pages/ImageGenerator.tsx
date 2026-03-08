@@ -83,6 +83,7 @@ const RECOLOR_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/recolor-p
 const MARKETING_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-marketing`;
 const SHOPEE_TEXT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-shopee-text`;
 const IDENTIFY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/identify-product`;
+const CLEANUP_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cleanup-product-image`;
 
 interface ShopeeText {
   title: string;
