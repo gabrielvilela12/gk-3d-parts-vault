@@ -131,6 +131,7 @@ export default function Orders() {
           .from("orders")
           .select(`*, pieces(name, tempo_impressao_min, image_url), piece_price_variations(variation_name, tempo_impressao_min)`)
           .eq("user_id", user.id)
+          .order("position", { ascending: true })
           .order("created_at", { ascending: true }),
         supabase
           .from("pieces")
