@@ -4,7 +4,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
@@ -14,7 +13,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import JSZip from "jszip";
 import {
   ImagePlus, Palette, Download, Loader2, Eye, Package,
-  Square, Smartphone, Monitor, X, History, Sparkles, CheckCircle2
+  Square, Smartphone, Monitor, X, History, Sparkles, CheckCircle2,
+  Megaphone, Zap, Star
 } from "lucide-react";
 
 const PRESET_COLORS = [
@@ -48,6 +48,12 @@ const BACKGROUNDS = [
   { id: "premium", label: "Premium", description: "Gradiente elegante" },
 ];
 
+const MARKETING_TYPES = [
+  { id: "highlight", label: "Destaque Premium", icon: Star, description: "Foto profissional com fundo branco e iluminação premium" },
+  { id: "pain_point", label: "Dor / Problema", icon: Zap, description: "Mostra o problema que o produto resolve" },
+  { id: "usage", label: "Uso / Lifestyle", icon: Megaphone, description: "Produto em contexto de uso real" },
+];
+
 interface GeneratedImage {
   colorName: string;
   colorHex: string;
@@ -55,6 +61,8 @@ interface GeneratedImage {
   dataUrl: string;
   width: number;
   height: number;
+  type: "recolor" | "marketing";
+  marketingType?: string;
 }
 
 interface HistoryEntry {
@@ -68,6 +76,7 @@ interface HistoryEntry {
 }
 
 const RECOLOR_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/recolor-product`;
+const MARKETING_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-marketing`;
 
 export default function ImageGenerator() {
   const { toast } = useToast();
@@ -81,6 +90,7 @@ export default function ImageGenerator() {
   const [backgroundStyle, setBackgroundStyle] = useState("white");
   const [customColorName, setCustomColorName] = useState("");
   const [customColorHex, setCustomColorHex] = useState("#000000");
+  const [selectedMarketingTypes, setSelectedMarketingTypes] = useState<string[]>(["highlight"]);
 
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -89,6 +99,7 @@ export default function ImageGenerator() {
   const [previewImage, setPreviewImage] = useState<GeneratedImage | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [activeTab, setActiveTab] = useState("generator");
+  const [resultFilter, setResultFilter] = useState<"all" | "recolor" | "marketing">("all");
 
   useEffect(() => {
     if (activeTab === "history") fetchHistory();
@@ -143,6 +154,12 @@ export default function ImageGenerator() {
     );
   };
 
+  const toggleMarketingType = (typeId: string) => {
+    setSelectedMarketingTypes((prev) =>
+      prev.includes(typeId) ? prev.filter((t) => t !== typeId) : [...prev, typeId]
+    );
+  };
+
   const callRecolorApi = async (
     color: typeof PRESET_COLORS[0],
     format: typeof FORMATS[0]
@@ -186,41 +203,107 @@ export default function ImageGenerator() {
     }
   };
 
+  const callMarketingApi = async (marketingType: string): Promise<string | null> => {
+    try {
+      const resp = await fetch(MARKETING_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          imageBase64: baseImageData,
+          productName,
+          marketingType,
+        }),
+      });
+
+      if (resp.status === 429) {
+        toast({ title: "Rate limit", description: "Aguarde um momento e tente novamente.", variant: "destructive" });
+        return null;
+      }
+      if (resp.status === 402) {
+        toast({ title: "Créditos insuficientes", description: "Adicione créditos no workspace.", variant: "destructive" });
+        return null;
+      }
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        console.error("Marketing error:", err);
+        return null;
+      }
+
+      const data = await resp.json();
+      return data.imageUrl || null;
+    } catch (e) {
+      console.error("Marketing fetch error:", e);
+      return null;
+    }
+  };
+
   const handleGenerate = async () => {
     if (!baseImageData) {
       toast({ title: "Envie uma imagem base", variant: "destructive" });
       return;
     }
-    if (selectedColors.length === 0) {
-      toast({ title: "Selecione pelo menos uma cor", variant: "destructive" });
-      return;
-    }
-    if (selectedFormats.length === 0) {
-      toast({ title: "Selecione pelo menos um formato", variant: "destructive" });
+    if (selectedColors.length === 0 && selectedMarketingTypes.length === 0) {
+      toast({ title: "Selecione cores ou tipos de marketing", variant: "destructive" });
       return;
     }
 
     setIsGenerating(true);
     setGeneratedImages([]);
     const results: GeneratedImage[] = [];
-    const total = selectedColors.length * selectedFormats.length;
+
+    const recolorTotal = selectedColors.length * selectedFormats.length;
+    const marketingTotal = selectedMarketingTypes.length;
+    const total = recolorTotal + marketingTotal;
     let done = 0;
 
-    for (const color of selectedColors) {
-      for (const fmtId of selectedFormats) {
-        const fmt = FORMATS.find((f) => f.id === fmtId)!;
-        setProgressLabel(`${color.name} — ${fmt.label}`);
+    // PHASE 1: Recolor images
+    if (selectedColors.length > 0 && selectedFormats.length > 0) {
+      for (const color of selectedColors) {
+        for (const fmtId of selectedFormats) {
+          const fmt = FORMATS.find((f) => f.id === fmtId)!;
+          setProgressLabel(`🎨 Recolorindo: ${color.name} — ${fmt.label}`);
+          setProgress(Math.round((done / total) * 100));
+
+          const imageUrl = await callRecolorApi(color, fmt);
+          if (imageUrl) {
+            const result: GeneratedImage = {
+              colorName: color.name,
+              colorHex: color.hex,
+              format: fmtId,
+              dataUrl: imageUrl,
+              width: fmt.width,
+              height: fmt.height,
+              type: "recolor",
+            };
+            results.push(result);
+            setGeneratedImages([...results]);
+          }
+          done++;
+        }
+      }
+    }
+
+    // PHASE 2: Marketing images
+    if (selectedMarketingTypes.length > 0) {
+      for (const mktType of selectedMarketingTypes) {
+        const mktLabel = MARKETING_TYPES.find((m) => m.id === mktType)?.label || mktType;
+        setProgressLabel(`📸 Marketing: ${mktLabel}`);
         setProgress(Math.round((done / total) * 100));
 
-        const imageUrl = await callRecolorApi(color, fmt);
+        const imageUrl = await callMarketingApi(mktType);
         if (imageUrl) {
           const result: GeneratedImage = {
-            colorName: color.name,
-            colorHex: color.hex,
-            format: fmtId,
+            colorName: mktLabel,
+            colorHex: "#ffffff",
+            format: "square",
             dataUrl: imageUrl,
-            width: fmt.width,
-            height: fmt.height,
+            width: 1024,
+            height: 1024,
+            type: "marketing",
+            marketingType: mktType,
           };
           results.push(result);
           setGeneratedImages([...results]);
@@ -248,6 +331,8 @@ export default function ImageGenerator() {
           format: r.format,
           width: r.width,
           height: r.height,
+          type: r.type,
+          marketingType: r.marketingType,
         })),
       });
     }
@@ -261,20 +346,19 @@ export default function ImageGenerator() {
   };
 
   const downloadAll = async () => {
-    if (generatedImages.length === 0) return;
+    if (filteredImages.length === 0) return;
     const zip = new JSZip();
     const folder = zip.folder(productName || "imagens")!;
 
-    for (let i = 0; i < generatedImages.length; i++) {
-      const img = generatedImages[i];
-      const fileName = `${productName || "produto"}_${img.colorName}_${img.format}.png`;
+    for (let i = 0; i < filteredImages.length; i++) {
+      const img = filteredImages[i];
+      const prefix = img.type === "marketing" ? "marketing" : "cor";
+      const fileName = `${productName || "produto"}_${prefix}_${img.colorName}_${img.format}.png`;
 
-      // Handle base64 data URLs
       if (img.dataUrl.startsWith("data:")) {
         const base64 = img.dataUrl.split(",")[1];
         folder.file(fileName, base64, { base64: true });
       } else {
-        // If it's a URL, fetch it
         try {
           const resp = await fetch(img.dataUrl);
           const blob = await resp.blob();
@@ -295,10 +379,12 @@ export default function ImageGenerator() {
   };
 
   const downloadSingle = async (img: GeneratedImage) => {
+    const prefix = img.type === "marketing" ? "marketing" : "cor";
+    const fileName = `${productName || "produto"}_${prefix}_${img.colorName}_${img.format}.png`;
     if (img.dataUrl.startsWith("data:")) {
       const a = document.createElement("a");
       a.href = img.dataUrl;
-      a.download = `${productName || "produto"}_${img.colorName}_${img.format}.png`;
+      a.download = fileName;
       a.click();
     } else {
       try {
@@ -307,7 +393,7 @@ export default function ImageGenerator() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `${productName || "produto"}_${img.colorName}_${img.format}.png`;
+        a.download = fileName;
         a.click();
         URL.revokeObjectURL(url);
       } catch {
@@ -316,7 +402,17 @@ export default function ImageGenerator() {
     }
   };
 
-  const totalImages = selectedColors.length * selectedFormats.length;
+  const recolorCount = selectedColors.length * selectedFormats.length;
+  const marketingCount = selectedMarketingTypes.length;
+  const totalImages = recolorCount + marketingCount;
+
+  const filteredImages = generatedImages.filter((img) => {
+    if (resultFilter === "all") return true;
+    return img.type === resultFilter;
+  });
+
+  const recolorResults = generatedImages.filter((i) => i.type === "recolor").length;
+  const marketingResults = generatedImages.filter((i) => i.type === "marketing").length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -329,7 +425,7 @@ export default function ImageGenerator() {
             </div>
             <div>
               <h1 className="page-title">Gerador de Imagens</h1>
-              <p className="page-subtitle">IA recolore somente o produto — gere anúncios em lote</p>
+              <p className="page-subtitle">Recolore produtos + crie fotos de marketing chamativas com IA</p>
             </div>
           </div>
         </div>
@@ -396,7 +492,7 @@ export default function ImageGenerator() {
                 </Card>
 
                 <Card className="p-4 space-y-3">
-                  <Label className="text-sm font-semibold">Estilo de Fundo</Label>
+                  <Label className="text-sm font-semibold">Estilo de Fundo (Recolorir)</Label>
                   <div className="grid grid-cols-1 gap-2">
                     {BACKGROUNDS.map((bg) => (
                       <button
@@ -416,7 +512,7 @@ export default function ImageGenerator() {
                 </Card>
 
                 <Card className="p-4 space-y-3">
-                  <Label className="text-sm font-semibold">Formatos</Label>
+                  <Label className="text-sm font-semibold">Formatos (Recolorir)</Label>
                   <div className="flex flex-wrap gap-2">
                     {FORMATS.map((fmt) => {
                       const Icon = fmt.icon;
@@ -443,12 +539,13 @@ export default function ImageGenerator() {
 
               {/* Right panel */}
               <div className={`space-y-5 ${isMobile ? "col-span-1" : "col-span-2"}`}>
+                {/* PHASE 1: Colors */}
                 <Card className="p-4 space-y-4">
                   <div className="flex items-center justify-between">
                     <Label className="flex items-center gap-2 text-sm font-semibold">
-                      <Palette className="h-4 w-4" /> Cores
+                      <Palette className="h-4 w-4" /> Fase 1: Recolorir Produto
                     </Label>
-                    <Badge variant="secondary">{selectedColors.length} selecionadas</Badge>
+                    <Badge variant="secondary">{selectedColors.length} cores</Badge>
                   </div>
 
                   <div className="flex flex-wrap gap-2">
@@ -513,18 +610,61 @@ export default function ImageGenerator() {
                   )}
                 </Card>
 
+                {/* PHASE 2: Marketing */}
+                <Card className="p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label className="flex items-center gap-2 text-sm font-semibold">
+                      <Megaphone className="h-4 w-4" /> Fase 2: Imagens de Marketing
+                    </Label>
+                    <Badge variant="secondary">{selectedMarketingTypes.length} tipos</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Gera imagens chamativas para anúncios — fundo branco, contexto de uso e dor do cliente
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {MARKETING_TYPES.map((mkt) => {
+                      const Icon = mkt.icon;
+                      const sel = selectedMarketingTypes.includes(mkt.id);
+                      return (
+                        <button
+                          key={mkt.id}
+                          onClick={() => toggleMarketingType(mkt.id)}
+                          className={`p-3 rounded-lg border text-left transition-all ${
+                            sel
+                              ? "border-primary bg-primary/5 ring-1 ring-primary"
+                              : "border-border hover:border-primary/30"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <Icon className="h-4 w-4" />
+                            <p className="text-sm font-medium">{mkt.label}</p>
+                            {sel && <CheckCircle2 className="h-3.5 w-3.5 text-primary ml-auto" />}
+                          </div>
+                          <p className="text-xs text-muted-foreground">{mkt.description}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </Card>
+
                 {/* Generate button + progress */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-4 flex-wrap">
-                    <div className="text-sm text-muted-foreground">
-                      {totalImages > 0
-                        ? `${totalImages} ${totalImages === 1 ? "imagem será gerada" : "imagens serão geradas"} via IA`
-                        : "Configure cores e formatos"}
+                    <div className="text-sm text-muted-foreground space-y-0.5">
+                      {recolorCount > 0 && (
+                        <p>🎨 {recolorCount} {recolorCount === 1 ? "imagem" : "imagens"} recoloridas</p>
+                      )}
+                      {marketingCount > 0 && (
+                        <p>📸 {marketingCount} {marketingCount === 1 ? "imagem" : "imagens"} de marketing</p>
+                      )}
+                      {totalImages > 0 && (
+                        <p className="font-medium text-foreground">Total: {totalImages} imagens via IA</p>
+                      )}
                     </div>
                     <Button
                       size="lg"
                       onClick={handleGenerate}
-                      disabled={isGenerating || !baseImageData || selectedColors.length === 0 || selectedFormats.length === 0}
+                      disabled={isGenerating || !baseImageData || totalImages === 0}
                       className="gap-2"
                     >
                       {isGenerating ? (
@@ -548,14 +688,41 @@ export default function ImageGenerator() {
                 {/* Results gallery */}
                 {generatedImages.length > 0 && (
                   <Card className="p-4 space-y-4">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
                       <h3 className="font-semibold text-sm">{generatedImages.length} imagens geradas</h3>
-                      <Button size="sm" onClick={downloadAll} className="gap-1.5">
-                        <Download className="h-4 w-4" /> Baixar ZIP
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        {/* Filter tabs */}
+                        <div className="flex rounded-lg border border-border overflow-hidden text-xs">
+                          <button
+                            onClick={() => setResultFilter("all")}
+                            className={`px-3 py-1.5 transition-colors ${resultFilter === "all" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                          >
+                            Todas ({generatedImages.length})
+                          </button>
+                          {recolorResults > 0 && (
+                            <button
+                              onClick={() => setResultFilter("recolor")}
+                              className={`px-3 py-1.5 border-l border-border transition-colors ${resultFilter === "recolor" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                            >
+                              🎨 Cores ({recolorResults})
+                            </button>
+                          )}
+                          {marketingResults > 0 && (
+                            <button
+                              onClick={() => setResultFilter("marketing")}
+                              className={`px-3 py-1.5 border-l border-border transition-colors ${resultFilter === "marketing" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                            >
+                              📸 Marketing ({marketingResults})
+                            </button>
+                          )}
+                        </div>
+                        <Button size="sm" onClick={downloadAll} className="gap-1.5">
+                          <Download className="h-4 w-4" /> Baixar ZIP
+                        </Button>
+                      </div>
                     </div>
                     <div className={`grid gap-3 ${isMobile ? "grid-cols-2" : "grid-cols-3 lg:grid-cols-4"}`}>
-                      {generatedImages.map((img, i) => (
+                      {filteredImages.map((img, i) => (
                         <div key={i} className="group relative rounded-lg overflow-hidden border border-border bg-muted">
                           <img
                             src={img.dataUrl}
@@ -582,9 +749,16 @@ export default function ImageGenerator() {
                           </div>
                           <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/70 to-transparent">
                             <div className="flex items-center gap-1.5">
-                              <span className="h-3 w-3 rounded-full border border-white/30" style={{ backgroundColor: img.colorHex }} />
+                              {img.type === "recolor" ? (
+                                <span className="h-3 w-3 rounded-full border border-white/30" style={{ backgroundColor: img.colorHex }} />
+                              ) : (
+                                <span className="text-xs">📸</span>
+                              )}
                               <span className="text-xs text-white font-medium truncate">{img.colorName}</span>
                             </div>
+                            <Badge variant="secondary" className="text-[10px] mt-1 px-1.5 py-0">
+                              {img.type === "recolor" ? "Cor" : "Marketing"}
+                            </Badge>
                           </div>
                         </div>
                       ))}
@@ -633,8 +807,12 @@ export default function ImageGenerator() {
         <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <span className="h-4 w-4 rounded-full" style={{ backgroundColor: previewImage?.colorHex }} />
-              {previewImage?.colorName} — {previewImage?.format} ({previewImage?.width}x{previewImage?.height})
+              {previewImage?.type === "recolor" ? (
+                <span className="h-4 w-4 rounded-full" style={{ backgroundColor: previewImage?.colorHex }} />
+              ) : (
+                <span>📸</span>
+              )}
+              {previewImage?.colorName} — {previewImage?.type === "recolor" ? "Recolorido" : "Marketing"}
             </DialogTitle>
           </DialogHeader>
           {previewImage && (
