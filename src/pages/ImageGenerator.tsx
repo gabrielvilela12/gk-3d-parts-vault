@@ -354,7 +354,7 @@ export default function ImageGenerator() {
         },
         body: JSON.stringify({
           productName,
-          imageBase64: baseImageData,
+          imageBase64: getWorkingImage(),
         }),
       });
 
