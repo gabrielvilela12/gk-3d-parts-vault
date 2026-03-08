@@ -746,7 +746,7 @@ export default function ImageGenerator() {
                     <Button
                       size="lg"
                       onClick={handleGenerate}
-                      disabled={isGenerating || !baseImageData || totalImages === 0}
+                      disabled={isGenerating || !baseImageData || (totalImages === 0 && !(generateShopeeText && productName))}
                       className="gap-2"
                     >
                       {isGenerating ? (
