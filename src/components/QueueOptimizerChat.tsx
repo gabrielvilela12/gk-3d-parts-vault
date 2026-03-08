@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Bot, Send, X, Sparkles, Loader2 } from "lucide-react";
+import { Bot, Send, X, Sparkles, Loader2, Wand2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { useToast } from "@/hooks/use-toast";
 
@@ -14,6 +14,7 @@ interface ChatMessage {
 }
 
 interface QueueItem {
+  id: string;
   name: string;
   color: string | null;
   quantity: number;
@@ -26,6 +27,7 @@ interface QueueOptimizerChatProps {
   queueData: QueueItem[];
   isOpen: boolean;
   onToggle: () => void;
+  onReorder: (orderedIds: string[], explanation: string) => Promise<void>;
 }
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/optimize-queue`;
@@ -37,10 +39,12 @@ const SUGGESTIONS = [
   "Qual a ordem mais eficiente para imprimir tudo?",
 ];
 
-export default function QueueOptimizerChat({ queueData, isOpen, onToggle }: QueueOptimizerChatProps) {
+export default function QueueOptimizerChat({ queueData, isOpen, onToggle, onReorder }: QueueOptimizerChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isReordering, setIsReordering] = useState(false);
+  const [hasAssistantResponse, setHasAssistantResponse] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -65,6 +69,7 @@ export default function QueueOptimizerChat({ queueData, isOpen, onToggle }: Queu
     setMessages(allMessages);
     setInput("");
     setIsLoading(true);
+    setHasAssistantResponse(false);
 
     let assistantSoFar = "";
 
@@ -78,6 +83,7 @@ export default function QueueOptimizerChat({ queueData, isOpen, onToggle }: Queu
         body: JSON.stringify({
           messages: allMessages.map(m => ({ role: m.role, content: m.content })),
           queueData,
+          mode: "chat",
         }),
       });
 
@@ -153,11 +159,72 @@ export default function QueueOptimizerChat({ queueData, isOpen, onToggle }: Queu
           } catch { /* ignore */ }
         }
       }
+
+      setHasAssistantResponse(true);
     } catch (e) {
       console.error("Chat error:", e);
       toast({ title: "Erro na conexão com IA", variant: "destructive" });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleApplyReorder = async () => {
+    if (isReordering || queueData.length === 0) return;
+    setIsReordering(true);
+
+    try {
+      const resp = await fetch(CHAT_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          messages: messages.map(m => ({ role: m.role, content: m.content })),
+          queueData,
+          mode: "reorder",
+        }),
+      });
+
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({}));
+        toast({ title: errData.error || "Erro ao reorganizar", variant: "destructive" });
+        return;
+      }
+
+      const data = await resp.json();
+      const { ordered_indices, explanation } = data;
+
+      if (!ordered_indices || !Array.isArray(ordered_indices)) {
+        toast({ title: "IA não retornou uma ordem válida", variant: "destructive" });
+        return;
+      }
+
+      // Map indices to order IDs
+      const orderedIds = ordered_indices
+        .filter((i: number) => i >= 0 && i < queueData.length)
+        .map((i: number) => queueData[i].id);
+
+      // Add any missing IDs at the end
+      const missingIds = queueData
+        .map(q => q.id)
+        .filter(id => !orderedIds.includes(id));
+      const finalOrderedIds = [...orderedIds, ...missingIds];
+
+      await onReorder(finalOrderedIds, explanation);
+
+      // Add confirmation message
+      setMessages(prev => [
+        ...prev,
+        { role: "assistant", content: `✅ **Fila reorganizada!**\n\n${explanation}` },
+      ]);
+      setHasAssistantResponse(false);
+    } catch (e) {
+      console.error("Reorder error:", e);
+      toast({ title: "Erro ao aplicar reorganização", variant: "destructive" });
+    } finally {
+      setIsReordering(false);
     }
   };
 
@@ -237,7 +304,27 @@ export default function QueueOptimizerChat({ queueData, isOpen, onToggle }: Queu
         )}
       </div>
 
-      <div className="p-3 border-t shrink-0">
+      <div className="p-3 border-t shrink-0 space-y-2">
+        {hasAssistantResponse && !isLoading && queueData.length > 0 && (
+          <Button
+            onClick={handleApplyReorder}
+            disabled={isReordering}
+            className="w-full gap-2"
+            variant="default"
+          >
+            {isReordering ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Reorganizando...
+              </>
+            ) : (
+              <>
+                <Wand2 className="h-4 w-4" />
+                Aplicar ordem sugerida na fila
+              </>
+            )}
+          </Button>
+        )}
         <form
           onSubmit={(e) => {
             e.preventDefault();
