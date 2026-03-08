@@ -1199,6 +1199,37 @@ export default function ImageGenerator() {
                         ))}
                       </div>
                     </div>
+
+                    {/* Shipping Info */}
+                    {(packageWeight || packageLength || packageWidth || packageHeight) && (
+                      <div className="space-y-2 pt-3 border-t border-border">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Package2 className="h-3 w-3" /> Informações de Envio
+                          </Label>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 gap-1 text-xs"
+                            onClick={() => {
+                              const lines = [];
+                              if (packageWeight) lines.push(`Peso: ${packageWeight} kg`);
+                              if (packageLength && packageWidth && packageHeight) lines.push(`Embalagem: ${packageLength} x ${packageWidth} x ${packageHeight} cm`);
+                              navigator.clipboard.writeText(lines.join("\n"));
+                              toast({ title: "Envio copiado!" });
+                            }}
+                          >
+                            <Copy className="h-3 w-3" /> Copiar
+                          </Button>
+                        </div>
+                        <div className="bg-muted p-3 rounded-lg text-sm space-y-1">
+                          {packageWeight && <p>📦 Peso do Pacote: <strong>{packageWeight} kg</strong></p>}
+                          {packageLength && packageWidth && packageHeight && (
+                            <p>📐 Embalagem: <strong>{packageLength} x {packageWidth} x {packageHeight} cm</strong></p>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </Card>
                 )}
               </div>
