@@ -302,7 +302,8 @@ export default function ImageGenerator() {
 
     const recolorTotal = selectedColors.length * selectedFormats.length;
     const marketingTotal = selectedMarketingTypes.length;
-    const total = recolorTotal + marketingTotal;
+    const shopeeStep = generateShopeeText && productName ? 1 : 0;
+    const total = recolorTotal + marketingTotal + shopeeStep;
     let done = 0;
 
     // PHASE 1: Recolor images
