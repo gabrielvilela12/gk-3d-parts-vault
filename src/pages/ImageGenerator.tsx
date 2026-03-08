@@ -100,9 +100,10 @@ export default function ImageGenerator() {
   const [backgroundStyle, setBackgroundStyle] = useState("white");
   const [customColorName, setCustomColorName] = useState("");
   const [customColorHex, setCustomColorHex] = useState("#000000");
-  const [selectedMarketingTypes, setSelectedMarketingTypes] = useState<string[]>([
-    "environment_living_room", "environment_office", "environment_outdoor", "environment_kitchen", "benefit"
-  ]);
+  const [suggestedEnvironments, setSuggestedEnvironments] = useState<string[]>([]);
+  const [suggestedBenefit, setSuggestedBenefit] = useState("");
+  const [generateEnvironments, setGenerateEnvironments] = useState(true);
+  const [generateBenefitImages, setGenerateBenefitImages] = useState(true);
   const [generateShopeeText, setGenerateShopeeText] = useState(true);
   const [shopeeQuantity, setShopeeQuantity] = useState(1);
   const [benefitPrompt, setBenefitPrompt] = useState("");
