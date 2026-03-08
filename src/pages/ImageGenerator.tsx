@@ -26,7 +26,6 @@ const PRESET_COLORS = [
   { name: "Azul", hex: "#2563eb" },
   { name: "Verde", hex: "#16a34a" },
   { name: "Rosa", hex: "#ec4899" },
-  { name: "Marrom Claro", hex: "#c4a882" },
   { name: "Marrom Escuro", hex: "#5c3317" },
   { name: "Bege", hex: "#f5f0e1" },
 ];
