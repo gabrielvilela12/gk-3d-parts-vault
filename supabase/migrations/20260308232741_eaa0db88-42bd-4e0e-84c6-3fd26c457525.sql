@@ -1,0 +1,1 @@
+ALTER TABLE public.orders ADD COLUMN position integer DEFAULT 0;
