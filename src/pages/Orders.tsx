@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,8 +10,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { Package, Plus, Trash2, Clock, CheckCircle2, GripVertical, Timer, CalendarClock, Search, X } from "lucide-react";
+import { Package, Plus, Trash2, Clock, CheckCircle2, GripVertical, Timer, CalendarClock, Search, X, Upload, FileSpreadsheet, AlertCircle, Check } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import * as XLSX from "xlsx";
+
+interface ImportRow {
+  platformOrderId: string;
+  productName: string;
+  variation: string;
+  color: string;
+  quantity: number;
+  buyerNotes: string;
+  matchedPieceId: string | null;
+  matchedPieceName: string | null;
+  imageUrl: string | null;
+}
 
 interface Order {
   id: string;
