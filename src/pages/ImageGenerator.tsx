@@ -404,7 +404,6 @@ export default function ImageGenerator() {
     const cleanupStep = 1;
     const total = cleanupStep + recolorTotal + marketingTotal + shopeeStep;
     let done = 0;
-    let done = 0;
 
     // PHASE 0: Clean up image (professional 1024x1024 product photo)
     setProgressLabel(`🧹 Limpando e padronizando imagem (1024x1024)...`);
