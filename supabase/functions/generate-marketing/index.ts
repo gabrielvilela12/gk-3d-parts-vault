@@ -82,7 +82,7 @@ Product: "${productName || "this product"}"
 RULES:
 - Place the product naturally in a ${env.description} setting.
 - The product should be the MAIN FOCUS but integrated into the environment.
-- Make it look like a high-end lifestyle/interior design photo.
+- Make it look like a high-end lifestyle/interior design photo.${colorInstruction}
 - Do NOT add any text, labels, watermarks, or overlays.
 - Keep it professional and aspirational.
 - Output at 1024x1024 resolution.`;
