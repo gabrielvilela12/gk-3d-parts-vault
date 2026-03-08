@@ -707,6 +707,25 @@ export default function ImageGenerator() {
                   </div>
                 </Card>
 
+                {/* PHASE 3: Shopee Text */}
+                <Card className="p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label className="flex items-center gap-2 text-sm font-semibold">
+                      <FileText className="h-4 w-4" /> Fase 3: Título e Descrição Shopee
+                    </Label>
+                    <Switch
+                      checked={generateShopeeText}
+                      onCheckedChange={setGenerateShopeeText}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Gera título SEO, descrição otimizada e palavras-chave para anúncio na Shopee
+                  </p>
+                  {!productName && generateShopeeText && (
+                    <p className="text-xs text-amber-500">⚠️ Preencha o nome do produto para gerar o texto</p>
+                  )}
+                </Card>
+
                 {/* Generate button + progress */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-4 flex-wrap">
