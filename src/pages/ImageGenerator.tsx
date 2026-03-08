@@ -608,6 +608,10 @@ export default function ImageGenerator() {
   const benefitImageCount = generateBenefitImages && benefitPrompt.trim() ? 3 : 0;
   const marketingCount = environmentCount + benefitImageCount;
   const totalImages = recolorCount + marketingCount;
+  // Each image generation = 1 API call; cleanup = 1 call; shopee text = 1 call
+  const cleanupCalls = baseImageData ? 1 : 0;
+  const shopeeCalls = generateShopeeText && productName ? 1 : 0;
+  const totalApiCalls = cleanupCalls + recolorCount + marketingCount + shopeeCalls;
 
   const filteredImages = generatedImages.filter((img) => {
     if (resultFilter === "all") return true;
@@ -1062,7 +1066,7 @@ export default function ImageGenerator() {
                         <p>📝 Título + Descrição Shopee</p>
                       )}
                       {(totalImages > 0 || (generateShopeeText && productName)) && (
-                        <p className="font-medium text-foreground">Total: {totalImages} imagens{generateShopeeText && productName ? " + texto SEO" : ""} via IA</p>
+                        <p className="font-medium text-foreground">Total: {totalImages} imagens{generateShopeeText && productName ? " + texto SEO" : ""} • <span className="text-primary">{totalApiCalls} chamadas à IA</span></p>
                       )}
                     </div>
                     <Button
