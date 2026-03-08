@@ -42,13 +42,15 @@ const BACKGROUNDS = [
   { id: "premium", label: "Premium", description: "Gradiente elegante" },
 ];
 
-const MARKETING_TYPES = [
-  { id: "environment_living_room", label: "Sala de Estar", icon: Home, description: "Produto em ambiente de sala de estar aconchegante" },
-  { id: "environment_office", label: "Escritório", icon: Briefcase, description: "Produto em ambiente de trabalho moderno" },
-  { id: "environment_outdoor", label: "Área Externa", icon: Sun, description: "Produto em ambiente ao ar livre" },
-  { id: "environment_kitchen", label: "Cozinha", icon: UtensilsCrossed, description: "Produto em ambiente de cozinha/jantar" },
-  { id: "benefit", label: "Benefício", icon: ThumbsUp, description: "Destaca o principal benefício do produto" },
-];
+const ENVIRONMENT_LABELS: Record<string, { label: string; icon: any }> = {
+  living_room: { label: "Sala de Estar", icon: Home },
+  office: { label: "Escritório", icon: Briefcase },
+  outdoor: { label: "Área Externa", icon: Sun },
+  kitchen: { label: "Cozinha", icon: UtensilsCrossed },
+  bedroom: { label: "Quarto", icon: Home },
+  bathroom: { label: "Banheiro", icon: Home },
+  studio: { label: "Estúdio", icon: Sparkles },
+};
 
 interface GeneratedImage {
   colorName: string;
@@ -98,9 +100,10 @@ export default function ImageGenerator() {
   const [backgroundStyle, setBackgroundStyle] = useState("white");
   const [customColorName, setCustomColorName] = useState("");
   const [customColorHex, setCustomColorHex] = useState("#000000");
-  const [selectedMarketingTypes, setSelectedMarketingTypes] = useState<string[]>([
-    "environment_living_room", "environment_office", "environment_outdoor", "environment_kitchen", "benefit"
-  ]);
+  const [suggestedEnvironments, setSuggestedEnvironments] = useState<string[]>([]);
+  const [suggestedBenefit, setSuggestedBenefit] = useState("");
+  const [generateEnvironments, setGenerateEnvironments] = useState(true);
+  const [generateBenefitImages, setGenerateBenefitImages] = useState(true);
   const [generateShopeeText, setGenerateShopeeText] = useState(true);
   const [shopeeQuantity, setShopeeQuantity] = useState(1);
   const [benefitPrompt, setBenefitPrompt] = useState("");
@@ -182,6 +185,13 @@ export default function ImageGenerator() {
       if (data.description) {
         setProductDescription(data.description);
       }
+      if (data.suggested_environments && Array.isArray(data.suggested_environments)) {
+        setSuggestedEnvironments(data.suggested_environments);
+      }
+      if (data.benefit_prompt) {
+        setSuggestedBenefit(data.benefit_prompt);
+        setBenefitPrompt(data.benefit_prompt);
+      }
     } catch (e) {
       console.error("Identify fetch error:", e);
     } finally {
@@ -212,11 +222,7 @@ export default function ImageGenerator() {
     );
   };
 
-  const toggleMarketingType = (typeId: string) => {
-    setSelectedMarketingTypes((prev) =>
-      prev.includes(typeId) ? prev.filter((t) => t !== typeId) : [...prev, typeId]
-    );
-  };
+  // removed toggleMarketingType - now automatic
 
   const callCleanupApi = async (): Promise<string | null> => {
     try {
@@ -378,8 +384,8 @@ export default function ImageGenerator() {
       toast({ title: "Envie uma imagem base", variant: "destructive" });
       return;
     }
-    if (selectedColors.length === 0 && selectedMarketingTypes.length === 0 && !generateShopeeText) {
-      toast({ title: "Selecione cores, ambientes ou texto Shopee", variant: "destructive" });
+    if (selectedColors.length === 0 && !generateEnvironments && !generateBenefitImages && !generateShopeeText) {
+      toast({ title: "Selecione pelo menos uma opção de geração", variant: "destructive" });
       return;
     }
 
@@ -390,12 +396,12 @@ export default function ImageGenerator() {
     const results: GeneratedImage[] = [];
 
     const recolorTotal = selectedColors.length * selectedFormats.length;
-    const hasBenefit = selectedMarketingTypes.includes("benefit") && benefitPrompt.trim();
-    const environmentTypes = selectedMarketingTypes.filter((t) => t !== "benefit");
+    const activeEnvironments = generateEnvironments ? suggestedEnvironments : [];
+    const hasBenefit = generateBenefitImages && benefitPrompt.trim();
     const benefitCount = hasBenefit ? 3 : 0;
-    const marketingTotal = environmentTypes.length + benefitCount;
+    const marketingTotal = activeEnvironments.length + benefitCount;
     const shopeeStep = generateShopeeText && productName ? 1 : 0;
-    const cleanupStep = 1; // Phase 0: always clean up the image first
+    const cleanupStep = 1;
     const total = cleanupStep + recolorTotal + marketingTotal + shopeeStep;
     let done = 0;
 
@@ -437,24 +443,24 @@ export default function ImageGenerator() {
       }
     }
 
-    // PHASE 2: Environment images
-    if (environmentTypes.length > 0) {
-      for (const mktType of environmentTypes) {
-        const mktLabel = MARKETING_TYPES.find((m) => m.id === mktType)?.label || mktType;
-        setProgressLabel(`📸 Gerando: ${mktLabel}`);
+    // PHASE 2: Environment images (AI-suggested)
+    if (activeEnvironments.length > 0) {
+      for (const envKey of activeEnvironments) {
+        const envLabel = ENVIRONMENT_LABELS[envKey]?.label || envKey;
+        setProgressLabel(`📸 Gerando: ${envLabel}`);
         setProgress(Math.round((done / total) * 100));
 
-        const imageUrl = await callMarketingApi(mktType);
+        const imageUrl = await callMarketingApi(envKey);
         if (imageUrl) {
           const result: GeneratedImage = {
-            colorName: mktLabel,
+            colorName: envLabel,
             colorHex: "#ffffff",
             format: "square",
             dataUrl: imageUrl,
             width: 1024,
             height: 1024,
             type: "marketing",
-            marketingType: mktType,
+            marketingType: envKey,
           };
           results.push(result);
           setGeneratedImages([...results]);
@@ -592,9 +598,8 @@ export default function ImageGenerator() {
   };
 
   const recolorCount = selectedColors.length * selectedFormats.length;
-  const hasBenefitSelected = selectedMarketingTypes.includes("benefit");
-  const environmentCount = selectedMarketingTypes.filter((t) => t !== "benefit").length;
-  const benefitImageCount = hasBenefitSelected && benefitPrompt.trim() ? 3 : 0;
+  const environmentCount = generateEnvironments ? suggestedEnvironments.length : 0;
+  const benefitImageCount = generateBenefitImages && benefitPrompt.trim() ? 3 : 0;
   const marketingCount = environmentCount + benefitImageCount;
   const totalImages = recolorCount + marketingCount;
 
@@ -846,63 +851,71 @@ export default function ImageGenerator() {
                   )}
                 </Card>
 
-                {/* PHASE 2: Environments + Benefit */}
+                {/* PHASE 2: Ambientes + Benefício (automático via IA) */}
                 <Card className="p-4 space-y-4">
                   <div className="flex items-center justify-between">
                     <Label className="flex items-center gap-2 text-sm font-semibold">
                       <Megaphone className="h-4 w-4" /> Fase 2: Ambientes e Benefício
                     </Label>
-                    <Badge variant="secondary">{selectedMarketingTypes.length} imagens</Badge>
+                    <Badge variant="secondary">{marketingCount} imagens</Badge>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Gera o produto em 4 ambientes diferentes + 1 imagem destacando o benefício principal
+                    A IA identifica os melhores ambientes para o produto automaticamente
                   </p>
-                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                     {MARKETING_TYPES.map((mkt) => {
-                       const Icon = mkt.icon;
-                       const sel = selectedMarketingTypes.includes(mkt.id);
-                       return (
-                         <button
-                           key={mkt.id}
-                           onClick={() => toggleMarketingType(mkt.id)}
-                           className={`p-3 rounded-lg border text-left transition-all ${
-                             sel
-                               ? "border-primary bg-primary/5 ring-1 ring-primary"
-                               : "border-border hover:border-primary/30"
-                           }`}
-                         >
-                           <div className="flex items-center gap-2 mb-1">
-                             <Icon className="h-4 w-4" />
-                             <p className="text-sm font-medium">{mkt.label}</p>
-                             {mkt.id === "benefit" && <span className="text-[10px] text-muted-foreground">(3 imgs)</span>}
-                             {sel && <CheckCircle2 className="h-3.5 w-3.5 text-primary ml-auto" />}
-                           </div>
-                           <p className="text-xs text-muted-foreground">{mkt.description}</p>
-                         </button>
-                       );
-                     })}
-                   </div>
 
-                   {/* Benefit prompt input */}
-                   {hasBenefitSelected && (
-                     <div className="space-y-2 pt-2 border-t border-border">
-                       <Label className="flex items-center gap-2 text-xs font-semibold">
-                         <MessageSquare className="h-3.5 w-3.5" /> Descreva o benefício do produto
-                       </Label>
-                       <Textarea
-                         placeholder="Ex: Mantém o celular firme mesmo em estradas esburacadas, permite usar GPS e carregar ao mesmo tempo..."
-                         value={benefitPrompt}
-                         onChange={(e) => setBenefitPrompt(e.target.value)}
-                         className="text-sm min-h-[80px]"
-                       />
-                       <p className="text-xs text-muted-foreground">
-                         💡 A IA gerará 3 imagens diferentes mostrando esse benefício
-                       </p>
-                       {!benefitPrompt.trim() && (
-                         <p className="text-xs text-amber-500">⚠️ Escreva o benefício para gerar as imagens</p>
-                       )}
-                     </div>
-                   )}
+                  {/* Environments toggle + display */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs">Imagens de Ambiente</Label>
+                      <Switch checked={generateEnvironments} onCheckedChange={setGenerateEnvironments} />
+                    </div>
+                    {generateEnvironments && suggestedEnvironments.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {suggestedEnvironments.map((envKey) => {
+                          const env = ENVIRONMENT_LABELS[envKey];
+                          if (!env) return null;
+                          const Icon = env.icon;
+                          return (
+                            <Badge key={envKey} variant="secondary" className="gap-1.5 py-1">
+                              <Icon className="h-3 w-3" />
+                              {env.label}
+                            </Badge>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {generateEnvironments && suggestedEnvironments.length === 0 && (
+                      <p className="text-xs text-amber-500">⚠️ Envie uma foto para a IA sugerir os ambientes</p>
+                    )}
+                  </div>
+
+                  {/* Benefit toggle + prompt */}
+                  <div className="space-y-2 pt-2 border-t border-border">
+                    <div className="flex items-center justify-between">
+                      <Label className="flex items-center gap-2 text-xs">
+                        <ThumbsUp className="h-3.5 w-3.5" /> Imagens de Benefício (3 variações)
+                      </Label>
+                      <Switch checked={generateBenefitImages} onCheckedChange={setGenerateBenefitImages} />
+                    </div>
+                    {generateBenefitImages && (
+                      <>
+                        <Textarea
+                          placeholder="Ex: Transforma qualquer ambiente com elegância e sofisticação..."
+                          value={benefitPrompt}
+                          onChange={(e) => setBenefitPrompt(e.target.value)}
+                          className="text-sm min-h-[60px]"
+                        />
+                        {suggestedBenefit && benefitPrompt !== suggestedBenefit && (
+                          <p className="text-xs text-muted-foreground">
+                            💡 Sugestão da IA já preenchida. Edite se quiser.
+                          </p>
+                        )}
+                        {!benefitPrompt.trim() && (
+                          <p className="text-xs text-amber-500">⚠️ Envie uma foto para a IA sugerir o benefício</p>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </Card>
 
                 {/* PHASE 3: Shopee Text */}

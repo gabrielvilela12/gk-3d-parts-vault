@@ -36,7 +36,11 @@ serve(async (req) => {
           messages: [
             {
               role: "system",
-              content: "Você é um especialista em identificar produtos a partir de fotos. Analise a imagem e identifique o produto com precisão.",
+              content: `Você é um especialista em identificar produtos e em marketing para e-commerce. Analise a imagem e:
+1. Identifique o produto com precisão
+2. Sugira os melhores ambientes/cenários para fotografar esse produto (entre: living_room, office, outdoor, kitchen, bedroom, bathroom, studio)
+3. Sugira o principal benefício desse produto para usar em imagens de marketing
+Escolha APENAS ambientes que façam sentido para o produto. Ex: um vaso decorativo → sala, escritório. Um utensílio de cozinha → cozinha. Um item de jardim → outdoor.`,
             },
             {
               role: "user",
@@ -44,10 +48,10 @@ serve(async (req) => {
                 {
                   type: "text",
                   text: `Analise esta foto de produto e retorne:
-1. O nome do produto (curto, específico, como seria listado em um marketplace - ex: "Suporte de Celular Veicular", "Vaso Decorativo Geométrico")
-2. Uma descrição curta do produto (1-2 frases descrevendo o que é e para que serve)
-
-Seja preciso e objetivo.`,
+1. Nome do produto (curto, específico, como seria listado em marketplace)
+2. Descrição curta (1-2 frases)
+3. Lista dos ambientes mais adequados para fotografar esse produto (apenas os que fazem sentido)
+4. Uma frase descrevendo o principal benefício do produto para imagens de marketing`,
                 },
                 {
                   type: "image_url",
@@ -61,7 +65,7 @@ Seja preciso e objetivo.`,
               type: "function",
               function: {
                 name: "identify_product",
-                description: "Return the identified product name and description.",
+                description: "Return the identified product info with suggested environments and benefit.",
                 parameters: {
                   type: "object",
                   properties: {
@@ -73,8 +77,20 @@ Seja preciso e objetivo.`,
                       type: "string",
                       description: "Short product description (1-2 sentences)",
                     },
+                    suggested_environments: {
+                      type: "array",
+                      items: {
+                        type: "string",
+                        enum: ["living_room", "office", "outdoor", "kitchen", "bedroom", "bathroom", "studio"],
+                      },
+                      description: "List of environments that make sense for this product (2-4 items)",
+                    },
+                    benefit_prompt: {
+                      type: "string",
+                      description: "A sentence describing the main benefit of this product for marketing images (e.g. 'Transforma qualquer ambiente com elegância e sofisticação')",
+                    },
                   },
-                  required: ["name", "description"],
+                  required: ["name", "description", "suggested_environments", "benefit_prompt"],
                   additionalProperties: false,
                 },
               },
