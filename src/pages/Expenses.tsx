@@ -1300,11 +1300,11 @@ export default function Expenses() {
                         <div className="flex gap-3 text-xs text-muted-foreground">
                           <span>{group.expenses.length} item(s)</span>
                           <span>•</span>
-                          <span className="text-green-500">{group.paidCount} pago(s)</span>
+                          <span>{group.paidCount} pago(s)</span>
                           {group.pendingCount > 0 && (
                             <>
                               <span>•</span>
-                              <span className="text-amber-500">{group.pendingCount} pendente(s)</span>
+                              <span>{group.pendingCount} pendente(s)</span>
                             </>
                           )}
                         </div>
