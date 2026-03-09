@@ -351,10 +351,15 @@ export default function Expenses() {
         return { cost: 0, price: 0 };
       };
 
-      // Check for duplicates by platform_order_id + SKU
-      const existingExpenses = expenses.filter((e) => e.expense_type === "order");
+      // Check for duplicates by platform_order_id + SKU (query ALL existing, not just current page)
+      const { data: existingData } = await supabase
+        .from("expenses")
+        .select("platform_order_id, sku")
+        .eq("user_id", user.id)
+        .eq("expense_type", "order");
+
       const existingKeys = new Set(
-        existingExpenses.map((e) => `${e.platform_order_id}-${e.sku}`)
+        (existingData || []).map((e) => `${e.platform_order_id}-${e.sku}`)
       );
 
       const newExpenses = importData
