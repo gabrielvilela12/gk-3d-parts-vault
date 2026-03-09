@@ -1311,19 +1311,6 @@ export default function Expenses() {
 
                         <Progress value={progressPercent} className="h-1.5" />
 
-                        {group.nextInstallment && (
-                          <div className="rounded-md bg-muted p-2 mt-2">
-                            <p className="text-xs font-medium truncate">
-                              {group.nextInstallment.description}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              Vence em {group.nextInstallment.order_date
-                                ? new Date(group.nextInstallment.order_date).toLocaleDateString("pt-BR")
-                                : "—"}
-                              {" · "}R$ {(group.nextInstallment.amount || 0).toFixed(2)}
-                            </p>
-                          </div>
-                        )}
 
                         {group.pendingCount > 0 && (() => {
                           const now = new Date();
