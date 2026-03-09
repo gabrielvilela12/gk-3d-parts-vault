@@ -1137,7 +1137,7 @@ export default function Expenses() {
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">
+              <div className={`text-3xl font-bold ${totalProfit >= 0 ? "text-success" : "text-destructive"}`}>
                 R$ {totalProfit.toFixed(2)}
               </div>
             </CardContent>
