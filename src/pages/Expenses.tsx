@@ -96,10 +96,15 @@ interface ExcelRow {
 export default function Expenses() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [manualDialogOpen, setManualDialogOpen] = useState(false);
   const [importData, setImportData] = useState<ExcelRow[]>([]);
+  const [deletingAll, setDeletingAll] = useState(false);
   const { toast } = useToast();
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   const [manualForm, setManualForm] = useState({
     expense_type: "manual" as "manual" | "installment",
@@ -111,7 +116,7 @@ export default function Expenses() {
 
   useEffect(() => {
     fetchExpenses();
-  }, []);
+  }, [currentPage]);
 
   const fetchExpenses = async () => {
     try {
