@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Link, useLocation } from "react-router-dom";
 import {
     Box,
@@ -180,7 +181,10 @@ export function Sidebar({ user }: SidebarProps) {
 
             {/* Footer */}
             {user && (
-                <div className="border-t border-border/60 p-2">
+                <div className="border-t border-border/60 p-2 space-y-1">
+                    <div className="flex items-center justify-between px-1">
+                        <ThemeToggle />
+                    </div>
                     <button
                         onClick={handleLogout}
                         className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all duration-200"
