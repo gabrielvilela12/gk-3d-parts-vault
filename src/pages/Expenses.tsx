@@ -1483,9 +1483,7 @@ export default function Expenses() {
                                   Vence: {dueDate ? dueDate.toLocaleDateString("pt-BR") : "—"}
                                 </span>
                                 {daysUntil !== null && !isPaid && (
-                                  <span className={cn(
-                                    daysUntil <= 0 ? "text-destructive" : daysUntil <= 3 ? "text-amber-500" : "text-muted-foreground"
-                                  )}>
+                                   <span className="text-muted-foreground">
                                     {daysUntil <= 0 ? "Vencida!" : daysUntil === 1 ? "Amanhã" : `em ${daysUntil} dias`}
                                   </span>
                                 )}
