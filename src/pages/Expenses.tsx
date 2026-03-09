@@ -267,25 +267,22 @@ export default function Expenses() {
       const normalizeName = (v: string) =>
         v.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-      const pieceCostMap = new Map<string, number>();
+      const pieceCostMap = new Map<string, { cost: number; price: number }>();
       for (const p of pieces) {
         const totalCost = (p.custo_material || 0) + (p.custo_energia || 0) + (p.custo_acessorios || 0);
         const costToUse = totalCost > 0 ? totalCost : (p.cost || 0);
         if (costToUse > 0) {
-          pieceCostMap.set(normalizeName(p.name), costToUse);
+          pieceCostMap.set(normalizeName(p.name), { cost: costToUse, price: p.preco_venda || 0 });
         }
       }
 
-      // Try to find the production cost for a given product name
-      const findPieceCost = (productName: string): number => {
+      const findPieceInfo = (productName: string): { cost: number; price: number } => {
         const normalized = normalizeName(productName);
-        // Exact match
         if (pieceCostMap.has(normalized)) return pieceCostMap.get(normalized)!;
-        // Partial match: piece name contained in product name or vice versa
-        for (const [name, cost] of pieceCostMap) {
-          if (normalized.includes(name) || name.includes(normalized)) return cost;
+        for (const [name, info] of pieceCostMap) {
+          if (normalized.includes(name) || name.includes(normalized)) return info;
         }
-        return 0;
+        return { cost: 0, price: 0 };
       };
 
       // Check for duplicates by platform_order_id + SKU
@@ -303,12 +300,22 @@ export default function Expenses() {
         })
         .map((row) => {
           const totalReleased = parseNumericValue(row["Quantia total lançada (R$)"]);
+          const productPrice = parseNumericValue(row["Preço do produto"]);
 
-          // Get production cost from pieces catalog
           const productName = String(row["Nome do produto"] || "");
-          const productionCost = findPieceCost(productName);
+          const pieceInfo = findPieceInfo(productName);
+
+          // Try to get quantity from Excel column or derive from price
+          const rawQty = parseNumericValue(row["Quantidade"]);
+          let quantity = rawQty > 0 ? rawQty : 1;
           
-          // Lucro líquido = valor liberado na conta - custo de produção
+          // If no explicit qty column, derive from product price / unit sale price
+          if (rawQty <= 0 && pieceInfo.price > 0 && productPrice > 0) {
+            const derived = Math.round(productPrice / pieceInfo.price);
+            if (derived > 1) quantity = derived;
+          }
+
+          const productionCost = pieceInfo.cost * quantity;
           const estimatedProfit = totalReleased - productionCost;
           
           return {
@@ -320,11 +327,11 @@ export default function Expenses() {
             order_date: parseExcelDate(String(row["Data de criação do pedido"] || "")),
             payment_date: parseExcelDate(String(row["Data de conclusão do pagamento"] || "")),
             order_value: totalReleased,
-            amount: productionCost, // custo de produção
+            amount: productionCost,
             estimated_profit: estimatedProfit,
             product_name: productName,
             sku: String(row["SKU"] || ""),
-            quantity: 1,
+            quantity,
           };
         });
 
