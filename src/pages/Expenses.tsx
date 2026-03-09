@@ -119,6 +119,10 @@ export default function Expenses() {
     fetchExpenses();
   }, [currentPage]);
 
+  useEffect(() => {
+    fetchGlobalTotals();
+  }, []);
+
   const fetchExpenses = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
