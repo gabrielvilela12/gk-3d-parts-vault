@@ -730,10 +730,44 @@ export default function Expenses() {
                     </div>
                   </div>
 
-                  {parseInt(manualForm.installments) > 1 && manualForm.amount && (
-                    <div className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">
-                      {parseInt(manualForm.installments)}x de R$ {(parseFloat(manualForm.amount) / parseInt(manualForm.installments)).toFixed(2)}
-                    </div>
+                  {parseInt(manualForm.installments) > 1 && (
+                    <>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="startDate">Início da 1ª parcela</Label>
+                          <Input
+                            id="startDate"
+                            type="date"
+                            value={manualForm.startDate}
+                            onChange={(e) => setManualForm({ ...manualForm, startDate: e.target.value })}
+                          />
+                          <p className="text-xs text-muted-foreground">Mês da primeira parcela</p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="dueDay">Dia de vencimento</Label>
+                          <Input
+                            id="dueDay"
+                            type="number"
+                            min="1"
+                            max="28"
+                            value={manualForm.dueDay}
+                            onChange={(e) => setManualForm({ ...manualForm, dueDay: e.target.value })}
+                            placeholder="10"
+                          />
+                          <p className="text-xs text-muted-foreground">Todo dia {manualForm.dueDay || "10"} do mês</p>
+                        </div>
+                      </div>
+
+                      {manualForm.amount && (
+                        <div className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">
+                          {parseInt(manualForm.installments)}x de R$ {(parseFloat(manualForm.amount) / parseInt(manualForm.installments)).toFixed(2)}
+                          {manualForm.startDate && (
+                            <span> — parcelas já vencidas serão marcadas como pagas automaticamente</span>
+                          )}
+                        </div>
+                      )}
+                    </>
                   )}
 
                   <div className="grid grid-cols-2 gap-4">
