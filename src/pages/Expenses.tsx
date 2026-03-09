@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,10 +12,11 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { Progress } from "@/components/ui/progress";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Upload, DollarSign, TrendingUp, TrendingDown, FileSpreadsheet, Plus, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search, CalendarIcon, Filter, Check, Eye, Clock } from "lucide-react";
+import { Upload, DollarSign, TrendingUp, TrendingDown, FileSpreadsheet, Plus, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search, CalendarIcon, Filter, Check, Eye, Clock, Calendar as CalendarIconLucide, ChevronDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { format, addMonths, setDate, isBefore, startOfDay } from "date-fns";
+import { format, addMonths, setDate, isBefore, startOfDay, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import * as XLSX from "xlsx";
@@ -99,8 +100,23 @@ interface ExcelRow extends Record<string, any> {
   "Valor Reembolsado ao Comprador": number;
 }
 
+interface MonthGroup {
+  key: string;
+  label: string;
+  year: number;
+  month: number;
+  expenses: Expense[];
+  totalAmount: number;
+  paidCount: number;
+  pendingCount: number;
+  isCurrentMonth: boolean;
+  hasNextInstallment: boolean;
+  nextInstallment?: Expense;
+}
+
 export default function Expenses() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
@@ -110,6 +126,7 @@ export default function Expenses() {
   const [importData, setImportData] = useState<ExcelRow[]>([]);
   const [deletingAll, setDeletingAll] = useState(false);
   const [detailExpense, setDetailExpense] = useState<Expense | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<MonthGroup | null>(null);
   const { toast } = useToast();
 
   // View mode: pedidos vs despesas
@@ -119,7 +136,7 @@ export default function Expenses() {
   const [filterSearch, setFilterSearch] = useState("");
   const [filterDateFrom, setFilterDateFrom] = useState<Date | undefined>();
   const [filterDateTo, setFilterDateTo] = useState<Date | undefined>();
-  const [filterSubType, setFilterSubType] = useState<string>("all"); // for expenses tab: all, manual, installment
+  const [filterSubType, setFilterSubType] = useState<string>("all");
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
@@ -135,7 +152,11 @@ export default function Expenses() {
   });
 
   useEffect(() => {
-    fetchExpenses();
+    if (activeView === "orders") {
+      fetchExpenses();
+    } else {
+      fetchAllExpenses();
+    }
   }, [currentPage, activeView, filterSearch, filterDateFrom, filterDateTo, filterSubType]);
 
   useEffect(() => {
@@ -153,20 +174,9 @@ export default function Expenses() {
       let query = supabase
         .from("expenses")
         .select("*", { count: "exact" })
-        .eq("user_id", user.id);
+        .eq("user_id", user.id)
+        .eq("expense_type", "order");
 
-      // Apply view filter
-      if (activeView === "orders") {
-        query = query.eq("expense_type", "order");
-      } else {
-        if (filterSubType === "manual") {
-          query = query.eq("expense_type", "manual");
-        } else if (filterSubType === "installment") {
-          query = query.eq("expense_type", "installment");
-        } else {
-          query = query.in("expense_type", ["manual", "installment"]);
-        }
-      }
       if (filterSearch.trim()) {
         query = query.or(`product_name.ilike.%${filterSearch.trim()}%,description.ilike.%${filterSearch.trim()}%`);
       }
@@ -197,12 +207,111 @@ export default function Expenses() {
     }
   };
 
+  const fetchAllExpenses = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuário não autenticado");
+
+      let query = supabase
+        .from("expenses")
+        .select("*")
+        .eq("user_id", user.id)
+        .in("expense_type", ["manual", "installment"]);
+
+      if (filterSubType === "manual") {
+        query = supabase.from("expenses").select("*").eq("user_id", user.id).eq("expense_type", "manual");
+      } else if (filterSubType === "installment") {
+        query = supabase.from("expenses").select("*").eq("user_id", user.id).eq("expense_type", "installment");
+      }
+
+      if (filterSearch.trim()) {
+        query = query.or(`product_name.ilike.%${filterSearch.trim()}%,description.ilike.%${filterSearch.trim()}%`);
+      }
+
+      const { data, error } = await query.order("order_date", { ascending: true });
+
+      if (error) throw error;
+      setAllExpenses((data || []) as Expense[]);
+    } catch (error: any) {
+      toast({
+        title: "Erro ao carregar despesas",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Group expenses by month
+  const monthGroups = useMemo(() => {
+    const now = new Date();
+    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+    const groups = new Map<string, MonthGroup>();
+
+    for (const expense of allExpenses) {
+      const date = expense.order_date ? new Date(expense.order_date) : new Date(expense.created_at);
+      const year = date.getFullYear();
+      const month = date.getMonth();
+      const key = `${year}-${String(month + 1).padStart(2, "0")}`;
+
+      if (!groups.has(key)) {
+        const label = format(date, "MMMM yyyy", { locale: ptBR });
+        groups.set(key, {
+          key,
+          label: label.charAt(0).toUpperCase() + label.slice(1),
+          year,
+          month,
+          expenses: [],
+          totalAmount: 0,
+          paidCount: 0,
+          pendingCount: 0,
+          isCurrentMonth: key === currentMonthKey,
+          hasNextInstallment: false,
+        });
+      }
+
+      const group = groups.get(key)!;
+      group.expenses.push(expense);
+      group.totalAmount += expense.amount || 0;
+      if (expense.order_status === "pago") {
+        group.paidCount++;
+      } else {
+        group.pendingCount++;
+      }
+    }
+
+    // Find the global next installment
+    const nextInstallment = allExpenses
+      .filter(e => e.expense_type === "installment" && e.order_status !== "pago")
+      .sort((a, b) => {
+        const da = a.order_date ? new Date(a.order_date).getTime() : 0;
+        const db = b.order_date ? new Date(b.order_date).getTime() : 0;
+        return da - db;
+      })[0];
+
+    if (nextInstallment) {
+      const date = nextInstallment.order_date ? new Date(nextInstallment.order_date) : new Date(nextInstallment.created_at);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+      const group = groups.get(key);
+      if (group) {
+        group.hasNextInstallment = true;
+        group.nextInstallment = nextInstallment;
+      }
+    }
+
+    return Array.from(groups.values()).sort((a, b) => {
+      if (a.year !== b.year) return a.year - b.year;
+      return a.month - b.month;
+    });
+  }, [allExpenses]);
+
   const fetchGlobalTotals = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Fetch all expenses but only needed columns for totals
       const { data } = await supabase
         .from("expenses")
         .select("expense_type, order_value, amount, estimated_profit")
@@ -238,6 +347,7 @@ export default function Expenses() {
       toast({ title: "Todas as despesas foram apagadas!" });
       setCurrentPage(0);
       fetchExpenses();
+      fetchAllExpenses();
       fetchGlobalTotals();
     } catch (error: any) {
       toast({
@@ -271,7 +381,6 @@ export default function Expenses() {
           .normalize("NFD")
           .replace(/[\u0300-\u036f]/g, "");
 
-      // Prefer the sheet named "Renda" (as in Shopee PT-BR export)
       const preferredSheetName = workbook.SheetNames.find((name) => {
         const n = normalize(name);
         return n === "renda" || n.includes("renda");
@@ -280,8 +389,6 @@ export default function Expenses() {
       const sheetName = preferredSheetName || workbook.SheetNames[3] || workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
 
-      // Shopee "Renda" sheet usually has 2 grouping rows before the real header.
-      // Detect the header row by searching for required columns.
       const rows = XLSX.utils.sheet_to_json(worksheet, {
         header: 1,
         defval: "",
@@ -295,7 +402,7 @@ export default function Expenses() {
       });
 
       if (headerRowIndex === -1) {
-        throw new Error(`Não encontrei o cabeçalho da aba \"${sheetName}\" (esperava colunas como: Ver, ID do pedido, SKU, Nome do produto).`);
+        throw new Error(`Não encontrei o cabeçalho da aba "${sheetName}" (esperava colunas como: Ver, ID do pedido, SKU, Nome do produto).`);
       }
 
       const jsonData = XLSX.utils.sheet_to_json(worksheet, {
@@ -303,7 +410,6 @@ export default function Expenses() {
         range: headerRowIndex,
       }) as ExcelRow[];
 
-      // Filter only "Sku" rows (each order has 2 rows: Order + Sku)
       const skuRows = jsonData.filter((row) => normalize(row["Ver"]) === "sku");
 
       setImportData(skuRows);
@@ -323,7 +429,6 @@ export default function Expenses() {
   const parseExcelDate = (dateStr: string): string | undefined => {
     if (!dateStr || dateStr === "-") return undefined;
     try {
-      // Shopee format: "2026-03-04"
       return dateStr;
     } catch {
       return undefined;
@@ -335,7 +440,6 @@ export default function Expenses() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não autenticado");
 
-      // Fetch all pieces to match by name/SKU and get production costs
       const { data: piecesData } = await supabase
         .from("pieces")
         .select("id, name, cost, custo_material, custo_energia, custo_acessorios, preco_venda")
@@ -343,7 +447,6 @@ export default function Expenses() {
 
       const pieces = piecesData || [];
 
-      // Build a lookup: normalize piece name -> piece cost
       const normalizeName = (v: string) =>
         v.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
@@ -365,7 +468,6 @@ export default function Expenses() {
         return { cost: 0, price: 0 };
       };
 
-      // Check for duplicates by platform_order_id + SKU (query ALL existing, not just current page)
       const { data: existingData } = await supabase
         .from("expenses")
         .select("platform_order_id, sku")
@@ -390,11 +492,9 @@ export default function Expenses() {
           const productName = String(row["Nome do produto"] || "");
           const pieceInfo = findPieceInfo(productName);
 
-          // Try to get quantity from Excel column or derive from price
           const rawQty = parseNumericValue(row["Quantidade"]);
           let quantity = rawQty > 0 ? rawQty : 1;
-          
-          // If no explicit qty column, derive from product price / unit sale price
+
           if (rawQty <= 0 && pieceInfo.price > 0 && productPrice > 0) {
             const derived = Math.round(productPrice / pieceInfo.price);
             if (derived > 1) quantity = derived;
@@ -402,7 +502,7 @@ export default function Expenses() {
 
           const productionCost = pieceInfo.cost * quantity;
           const estimatedProfit = totalReleased - productionCost;
-          
+
           return {
             user_id: user.id,
             expense_type: "order" as const,
@@ -440,6 +540,7 @@ export default function Expenses() {
       setImportData([]);
       setUploadDialogOpen(false);
       fetchExpenses();
+      fetchAllExpenses();
       fetchGlobalTotals();
     } catch (error: any) {
       toast({
@@ -464,9 +565,8 @@ export default function Expenses() {
       const entries: any[] = [];
       const today = startOfDay(new Date());
       const dueDay = 10;
-      
+
       if (numInstallments > 1) {
-        // Installments mode
         const dueDayCustom = Math.min(28, Math.max(1, parseInt(manualForm.dueDay) || 10));
         let startMonth: Date;
         if (manualForm.startDate) {
@@ -491,7 +591,6 @@ export default function Expenses() {
           });
         }
       } else {
-        // Single manual expense — due on the 10th of next month
         const now = new Date();
         const nextDue = now.getDate() >= dueDay
           ? setDate(addMonths(now, 1), dueDay)
@@ -531,6 +630,7 @@ export default function Expenses() {
       });
       setManualDialogOpen(false);
       fetchExpenses();
+      fetchAllExpenses();
       fetchGlobalTotals();
     } catch (error: any) {
       toast({
@@ -551,6 +651,7 @@ export default function Expenses() {
 
       toast({ title: "Parcela aprovada!", description: "Marcada como paga." });
       fetchExpenses();
+      fetchAllExpenses();
       fetchGlobalTotals();
     } catch (error: any) {
       toast({ title: "Erro ao aprovar", description: error.message, variant: "destructive" });
@@ -562,11 +663,17 @@ export default function Expenses() {
       const { error } = await supabase.from("expenses").delete().eq("id", id);
       if (error) throw error;
 
-      toast({
-        title: "Despesa excluída!",
-      });
+      toast({ title: "Despesa excluída!" });
       fetchExpenses();
+      fetchAllExpenses();
       fetchGlobalTotals();
+      // Update selected month if open
+      if (selectedMonth) {
+        setSelectedMonth(prev => prev ? {
+          ...prev,
+          expenses: prev.expenses.filter(e => e.id !== id),
+        } : null);
+      }
     } catch (error: any) {
       toast({
         title: "Erro ao excluir",
@@ -601,7 +708,7 @@ export default function Expenses() {
           <div className="flex gap-2">
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="destructive" className="gap-2" disabled={totalCount === 0 || deletingAll}>
+                <Button variant="destructive" className="gap-2" disabled={totalCount === 0 && allExpenses.length === 0 || deletingAll}>
                   <Trash2 className="h-4 w-4" />
                   Apagar Todos
                 </Button>
@@ -610,7 +717,7 @@ export default function Expenses() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Apagar todas as despesas?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Essa ação é irreversível. Todos os {totalCount} registros serão removidos permanentemente.
+                    Essa ação é irreversível. Todos os registros serão removidos permanentemente.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -873,35 +980,39 @@ export default function Expenses() {
                 </div>
               )}
 
-              <div className="w-auto">
-                <Label className="text-xs text-muted-foreground mb-1 block">De</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className={cn("w-[140px] justify-start text-left font-normal", !filterDateFrom && "text-muted-foreground")}>
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {filterDateFrom ? format(filterDateFrom, "dd/MM/yy") : "Início"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar mode="single" selected={filterDateFrom} onSelect={(d) => { setFilterDateFrom(d); setCurrentPage(0); }} className={cn("p-3 pointer-events-auto")} locale={ptBR} />
-                  </PopoverContent>
-                </Popover>
-              </div>
+              {activeView === "orders" && (
+                <>
+                  <div className="w-auto">
+                    <Label className="text-xs text-muted-foreground mb-1 block">De</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className={cn("w-[140px] justify-start text-left font-normal", !filterDateFrom && "text-muted-foreground")}>
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {filterDateFrom ? format(filterDateFrom, "dd/MM/yy") : "Início"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar mode="single" selected={filterDateFrom} onSelect={(d) => { setFilterDateFrom(d); setCurrentPage(0); }} className={cn("p-3 pointer-events-auto")} locale={ptBR} />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
 
-              <div className="w-auto">
-                <Label className="text-xs text-muted-foreground mb-1 block">Até</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className={cn("w-[140px] justify-start text-left font-normal", !filterDateTo && "text-muted-foreground")}>
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {filterDateTo ? format(filterDateTo, "dd/MM/yy") : "Fim"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar mode="single" selected={filterDateTo} onSelect={(d) => { setFilterDateTo(d); setCurrentPage(0); }} className={cn("p-3 pointer-events-auto")} locale={ptBR} />
-                  </PopoverContent>
-                </Popover>
-              </div>
+                  <div className="w-auto">
+                    <Label className="text-xs text-muted-foreground mb-1 block">Até</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className={cn("w-[140px] justify-start text-left font-normal", !filterDateTo && "text-muted-foreground")}>
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {filterDateTo ? format(filterDateTo, "dd/MM/yy") : "Fim"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar mode="single" selected={filterDateTo} onSelect={(d) => { setFilterDateTo(d); setCurrentPage(0); }} className={cn("p-3 pointer-events-auto")} locale={ptBR} />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </>
+              )}
 
               {(filterSearch || filterDateFrom || filterDateTo || filterSubType !== "all") && (
                 <Button variant="ghost" size="sm" onClick={() => { setFilterSearch(""); setFilterDateFrom(undefined); setFilterDateTo(undefined); setFilterSubType("all"); setCurrentPage(0); }}>
@@ -951,64 +1062,39 @@ export default function Expenses() {
           </Card>
         </div>
 
-        {/* Table */}
-        <Card className="card-gradient border-border/50">
-          <CardHeader>
-            <CardTitle>{activeView === "orders" ? "Pedidos Importados" : "Despesas e Parcelas"}</CardTitle>
-            <CardDescription>
-              {totalCount} registros — Página {currentPage + 1} de {totalPages}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {expenses.length === 0 ? (
-              <div className="text-center py-8">
-                <FileSpreadsheet className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">
-                  {activeView === "orders" ? "Nenhum pedido importado" : "Nenhuma despesa registrada"}
-                </p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      {activeView === "orders" ? (
-                        <>
-                          <TableHead>Produto</TableHead>
-                          <TableHead>Pedido</TableHead>
-                          <TableHead>Qtd</TableHead>
-                          <TableHead>Valor Recebido</TableHead>
-                          <TableHead>Custo Produção</TableHead>
-                          <TableHead>Lucro Líquido</TableHead>
-                          <TableHead>Data</TableHead>
-                          <TableHead>Ações</TableHead>
-                        </>
-                      ) : (
-                         <>
-                           <TableHead>Tipo</TableHead>
-                           <TableHead>Descrição</TableHead>
-                           <TableHead>Categoria</TableHead>
-                           <TableHead>Valor</TableHead>
-                           <TableHead>Vencimento</TableHead>
-                           <TableHead>Status</TableHead>
-                           <TableHead>Ações</TableHead>
-                         </>
-                      )}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(() => {
-                      // Find the next unpaid installment (earliest due date)
-                      const nextInstallmentId = expenses
-                        .filter(e => e.expense_type === "installment" && e.order_status !== "pago")
-                        .sort((a, b) => {
-                          const da = a.order_date ? new Date(a.order_date).getTime() : 0;
-                          const db = b.order_date ? new Date(b.order_date).getTime() : 0;
-                          return da - db;
-                        })[0]?.id;
-
-                      return expenses.map((expense) => {
-                      if (activeView === "orders") {
+        {/* Content based on active view */}
+        {activeView === "orders" ? (
+          /* Orders Table */
+          <Card className="card-gradient border-border/50">
+            <CardHeader>
+              <CardTitle>Pedidos Importados</CardTitle>
+              <CardDescription>
+                {totalCount} registros — Página {currentPage + 1} de {totalPages}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {expenses.length === 0 ? (
+                <div className="text-center py-8">
+                  <FileSpreadsheet className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">Nenhum pedido importado</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Produto</TableHead>
+                        <TableHead>Pedido</TableHead>
+                        <TableHead>Qtd</TableHead>
+                        <TableHead>Valor Recebido</TableHead>
+                        <TableHead>Custo Produção</TableHead>
+                        <TableHead>Lucro Líquido</TableHead>
+                        <TableHead>Data</TableHead>
+                        <TableHead>Ações</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {expenses.map((expense) => {
                         const received = expense.order_value || 0;
                         const productionCost = expense.amount || 0;
                         const profit = expense.estimated_profit ?? (received - productionCost);
@@ -1042,120 +1128,262 @@ export default function Expenses() {
                             </TableCell>
                           </TableRow>
                         );
-                      } else {
-                        const isPaid = expense.order_status === "pago";
-                        const isInstallment = expense.expense_type === "installment";
-                        const dueDate = expense.order_date ? new Date(expense.order_date) : null;
-                        const isNext = expense.id === nextInstallmentId;
-                        const isOverdue = dueDate && !isPaid && !isNext && dueDate <= new Date();
-                        return (
-                          <TableRow
-                            key={expense.id}
-                            className={cn(
-                              isNext && "bg-primary/10 border-l-2 border-l-primary",
-                              isOverdue && "bg-destructive/10",
-                            )}
-                          >
-                            <TableCell>
-                              <Badge variant={isInstallment ? "secondary" : "outline"}>
-                                {isInstallment ? "Parcela" : "Manual"}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="max-w-[300px]">
-                              <p className="font-medium text-sm truncate">{expense.description || "-"}</p>
-                              {expense.notes && <p className="text-xs text-muted-foreground truncate">{expense.notes}</p>}
-                            </TableCell>
-                            <TableCell>
-                              {expense.category && <Badge variant="outline" className="text-xs">{expense.category}</Badge>}
-                            </TableCell>
-                            <TableCell className="font-medium text-destructive">
-                              R$ {(expense.amount || 0).toFixed(2)}
-                            </TableCell>
-                            <TableCell className="text-sm text-muted-foreground">
-                              {dueDate ? dueDate.toLocaleDateString("pt-BR") : new Date(expense.created_at).toLocaleDateString("pt-BR")}
-                              {isOverdue && <span className="block text-xs text-destructive font-medium">Vencida</span>}
-                            </TableCell>
-                            <TableCell>
-                              {isInstallment ? (
-                                <Badge
-                                  variant={isPaid ? "default" : "destructive"}
-                                  className={cn(isNext && "bg-primary text-primary-foreground animate-pulse")}
-                                >
-                                  {isPaid ? "Pago" : isNext ? "⏳ Próxima" : "Pendente"}
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-2 mt-4 pt-4 border-t border-border">
+                  <Button variant="outline" size="icon" onClick={() => setCurrentPage(0)} disabled={currentPage === 0}>
+                    <ChevronsLeft className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="icon" onClick={() => setCurrentPage((p) => Math.max(0, p - 1))} disabled={currentPage === 0}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="text-sm text-muted-foreground px-3">
+                    {currentPage + 1} / {totalPages}
+                  </span>
+                  <Button variant="outline" size="icon" onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))} disabled={currentPage >= totalPages - 1}>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="icon" onClick={() => setCurrentPage(totalPages - 1)} disabled={currentPage >= totalPages - 1}>
+                    <ChevronsRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          /* Monthly Cards View */
+          <div className="space-y-4">
+            {monthGroups.length === 0 ? (
+              <Card className="card-gradient border-border/50">
+                <CardContent className="py-12">
+                  <div className="text-center">
+                    <CalendarIconLucide className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">Nenhuma despesa ou parcela registrada</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {monthGroups.map((group) => {
+                  const allPaid = group.pendingCount === 0;
+                  const progressPercent = group.expenses.length > 0
+                    ? (group.paidCount / group.expenses.length) * 100
+                    : 0;
+
+                  return (
+                    <Card
+                      key={group.key}
+                      className={cn(
+                        "card-gradient border-border/50 cursor-pointer transition-all hover:shadow-lg hover:scale-[1.02]",
+                        group.hasNextInstallment && "border-primary/60 ring-1 ring-primary/30",
+                        group.isCurrentMonth && !group.hasNextInstallment && "border-accent/60",
+                      )}
+                      onClick={() => setSelectedMonth(group)}
+                    >
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-lg flex items-center gap-2">
+                            <CalendarIconLucide className="h-5 w-5 text-muted-foreground" />
+                            {group.label}
+                          </CardTitle>
+                          {group.hasNextInstallment && (
+                            <Badge className="bg-primary text-primary-foreground animate-pulse text-xs">
+                              ⏳ Próxima
+                            </Badge>
+                          )}
+                          {allPaid && group.expenses.length > 0 && !group.hasNextInstallment && (
+                            <Badge variant="outline" className="text-green-500 border-green-500/50 text-xs">
+                              ✓ Pago
+                            </Badge>
+                          )}
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <div className="flex justify-between items-baseline">
+                          <span className="text-sm text-muted-foreground">Total do mês</span>
+                          <span className="text-2xl font-bold text-destructive">
+                            R$ {group.totalAmount.toFixed(2)}
+                          </span>
+                        </div>
+
+                        <div className="flex gap-3 text-xs text-muted-foreground">
+                          <span>{group.expenses.length} item(s)</span>
+                          <span>•</span>
+                          <span className="text-green-500">{group.paidCount} pago(s)</span>
+                          {group.pendingCount > 0 && (
+                            <>
+                              <span>•</span>
+                              <span className="text-amber-500">{group.pendingCount} pendente(s)</span>
+                            </>
+                          )}
+                        </div>
+
+                        <Progress value={progressPercent} className="h-1.5" />
+
+                        {group.nextInstallment && (
+                          <div className="rounded-md bg-primary/10 p-2 mt-2">
+                            <p className="text-xs font-medium text-primary truncate">
+                              {group.nextInstallment.description}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Vence em {group.nextInstallment.order_date
+                                ? new Date(group.nextInstallment.order_date).toLocaleDateString("pt-BR")
+                                : "—"}
+                              {" · "}R$ {(group.nextInstallment.amount || 0).toFixed(2)}
+                            </p>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Month Detail Dialog */}
+        <Dialog open={!!selectedMonth} onOpenChange={(open) => !open && setSelectedMonth(null)}>
+          <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <CalendarIconLucide className="h-5 w-5 text-primary" />
+                {selectedMonth?.label}
+              </DialogTitle>
+              <DialogDescription>
+                {selectedMonth?.expenses.length} item(s) · Total: R$ {(selectedMonth?.totalAmount || 0).toFixed(2)}
+              </DialogDescription>
+            </DialogHeader>
+            {selectedMonth && (() => {
+              const nextInstallmentId = selectedMonth.expenses
+                .filter(e => e.expense_type === "installment" && e.order_status !== "pago")
+                .sort((a, b) => {
+                  const da = a.order_date ? new Date(a.order_date).getTime() : 0;
+                  const db = b.order_date ? new Date(b.order_date).getTime() : 0;
+                  return da - db;
+                })[0]?.id;
+
+              return (
+                <div className="space-y-3">
+                  {selectedMonth.expenses.map((expense) => {
+                    const isPaid = expense.order_status === "pago";
+                    const isInstallment = expense.expense_type === "installment";
+                    const dueDate = expense.order_date ? new Date(expense.order_date) : null;
+                    const isNext = expense.id === nextInstallmentId;
+                    const isOverdue = dueDate && !isPaid && !isNext && dueDate <= new Date();
+                    const daysUntil = dueDate ? differenceInDays(dueDate, new Date()) : null;
+
+                    return (
+                      <Card
+                        key={expense.id}
+                        className={cn(
+                          "border-border/50",
+                          isNext && "border-primary ring-1 ring-primary/30 bg-primary/5",
+                          isOverdue && "border-destructive/50 bg-destructive/5",
+                          isPaid && "opacity-70",
+                        )}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Badge variant={isInstallment ? "secondary" : "outline"} className="text-xs shrink-0">
+                                  {isInstallment ? "Parcela" : "Manual"}
                                 </Badge>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">—</span>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex gap-1">
-                                {isInstallment && isNext && (
-                                  <Button variant="ghost" size="sm" onClick={() => setDetailExpense(expense)} title="Ver detalhes">
-                                    <Eye className="h-4 w-4 text-primary" />
-                                  </Button>
+                                {isNext && (
+                                  <Badge className="bg-primary text-primary-foreground animate-pulse text-xs shrink-0">
+                                    ⏳ Próxima
+                                  </Badge>
                                 )}
+                                {isPaid && (
+                                  <Badge variant="outline" className="text-green-500 border-green-500/50 text-xs shrink-0">
+                                    ✓ Pago
+                                  </Badge>
+                                )}
+                                {isOverdue && (
+                                  <Badge variant="destructive" className="text-xs shrink-0">
+                                    Vencida
+                                  </Badge>
+                                )}
+                                {expense.category && (
+                                  <Badge variant="outline" className="text-xs shrink-0">{expense.category}</Badge>
+                                )}
+                              </div>
+                              <p className="font-medium text-sm truncate">{expense.description || "—"}</p>
+                              {expense.notes && <p className="text-xs text-muted-foreground truncate mt-0.5">{expense.notes}</p>}
+                              <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                                <span>
+                                  Vence: {dueDate ? dueDate.toLocaleDateString("pt-BR") : "—"}
+                                </span>
+                                {daysUntil !== null && !isPaid && (
+                                  <span className={cn(
+                                    daysUntil <= 0 ? "text-destructive" : daysUntil <= 3 ? "text-amber-500" : "text-muted-foreground"
+                                  )}>
+                                    {daysUntil <= 0 ? "Vencida!" : daysUntil === 1 ? "Amanhã" : `em ${daysUntil} dias`}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="font-bold text-lg text-destructive">
+                                R$ {(expense.amount || 0).toFixed(2)}
+                              </span>
+                              <div className="flex gap-1">
                                 {isInstallment && !isPaid && (
-                                  <Button variant="ghost" size="sm" onClick={() => handleApproveInstallment(expense.id)} title="Marcar como pago">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleApproveInstallment(expense.id);
+                                    }}
+                                    title="Marcar como pago"
+                                  >
                                     <Check className="h-4 w-4 text-green-500" />
                                   </Button>
                                 )}
-                                <Button variant="ghost" size="sm" onClick={() => handleDeleteExpense(expense.id)}>
+                                {isNext && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setDetailExpense(expense);
+                                    }}
+                                    title="Ver detalhes"
+                                  >
+                                    <Eye className="h-4 w-4 text-primary" />
+                                  </Button>
+                                )}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteExpense(expense.id);
+                                  }}
+                                >
                                   <Trash2 className="h-4 w-4 text-destructive" />
                                 </Button>
                               </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      }
-                    });
-                    })()}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-2 mt-4 pt-4 border-t border-border">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setCurrentPage(0)}
-                  disabled={currentPage === 0}
-                >
-                  <ChevronsLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
-                  disabled={currentPage === 0}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="text-sm text-muted-foreground px-3">
-                  {currentPage + 1} / {totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
-                  disabled={currentPage >= totalPages - 1}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setCurrentPage(totalPages - 1)}
-                  disabled={currentPage >= totalPages - 1}
-                >
-                  <ChevronsRight className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </DialogContent>
+        </Dialog>
 
         {/* Detail Dialog for next installment */}
         <Dialog open={!!detailExpense} onOpenChange={(open) => !open && setDetailExpense(null)}>
@@ -1172,9 +1400,8 @@ export default function Expenses() {
               const today = new Date();
               const daysUntil = dueDate ? Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)) : null;
 
-              // Find all installments with same base description to show progress
               const baseName = detailExpense.description?.replace(/\s*\(\d+\/\d+\)$/, "") || "";
-              const allRelated = expenses.filter(e =>
+              const allRelated = allExpenses.filter(e =>
                 e.expense_type === "installment" && e.description?.startsWith(baseName)
               );
               const paidCount = allRelated.filter(e => e.order_status === "pago").length;
