@@ -111,6 +111,12 @@ export default function Expenses() {
   const [deletingAll, setDeletingAll] = useState(false);
   const { toast } = useToast();
 
+  // Filters
+  const [filterType, setFilterType] = useState<string>("all");
+  const [filterSearch, setFilterSearch] = useState("");
+  const [filterDateFrom, setFilterDateFrom] = useState<Date | undefined>();
+  const [filterDateTo, setFilterDateTo] = useState<Date | undefined>();
+
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   const [manualForm, setManualForm] = useState({
@@ -118,12 +124,13 @@ export default function Expenses() {
     description: "",
     category: "",
     amount: "",
+    installments: "1",
     notes: "",
   });
 
   useEffect(() => {
     fetchExpenses();
-  }, [currentPage]);
+  }, [currentPage, filterType, filterSearch, filterDateFrom, filterDateTo]);
 
   useEffect(() => {
     fetchGlobalTotals();
