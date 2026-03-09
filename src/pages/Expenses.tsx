@@ -451,6 +451,7 @@ export default function Expenses() {
         title: "Despesa excluída!",
       });
       fetchExpenses();
+      fetchGlobalTotals();
     } catch (error: any) {
       toast({
         title: "Erro ao excluir",
