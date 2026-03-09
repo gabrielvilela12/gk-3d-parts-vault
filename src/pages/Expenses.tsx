@@ -179,7 +179,7 @@ export default function Expenses() {
     } catch {
       // silent
     }
-  
+  };
 
   const handleDeleteAll = async () => {
     try {
