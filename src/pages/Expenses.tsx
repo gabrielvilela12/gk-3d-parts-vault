@@ -302,24 +302,13 @@ export default function Expenses() {
           return !existingKeys.has(key);
         })
         .map((row) => {
-          // Calculate totals
           const totalReleased = parseNumericValue(row["Quantia total lançada (R$)"]);
-          const productPrice = parseNumericValue(row["Preço do produto"]);
-          const commission = Math.abs(parseNumericValue(row["Taxa de comissão líquida"]));
-          const serviceFee = Math.abs(parseNumericValue(row["Taxa de serviço líquida"]));
-          const transactionFee = Math.abs(parseNumericValue(row["Taxa de transação"]));
-          const buyerShipping = parseNumericValue(row["Taxa de frete paga pelo comprador"]);
-          const shopeeShippingDiscount = parseNumericValue(row["Desconto de frete pela Shopee"]);
-          const partnerShippingCost = Math.abs(parseNumericValue(row["Frete cobrado pelo parceiro logístico"]));
-          
-          const totalFees = commission + serviceFee + transactionFee;
-          const netShippingCost = partnerShippingCost - shopeeShippingDiscount - buyerShipping;
 
           // Get production cost from pieces catalog
           const productName = String(row["Nome do produto"] || "");
           const productionCost = findPieceCost(productName);
           
-          // Lucro = valor liberado - custo de produção da peça
+          // Lucro líquido = valor liberado na conta - custo de produção
           const estimatedProfit = totalReleased - productionCost;
           
           return {
@@ -331,15 +320,10 @@ export default function Expenses() {
             order_date: parseExcelDate(String(row["Data de criação do pedido"] || "")),
             payment_date: parseExcelDate(String(row["Data de conclusão do pagamento"] || "")),
             order_value: totalReleased,
-            product_value: productPrice,
-            discounts: Math.abs(parseNumericValue(row["Voucher subsidiado pelo Seller"])),
-            commission: totalFees,
-            buyer_shipping: buyerShipping,
-            total_shipping: netShippingCost,
+            amount: productionCost, // custo de produção
             estimated_profit: estimatedProfit,
             product_name: productName,
             sku: String(row["SKU"] || ""),
-            product_price: productPrice,
             quantity: 1,
           };
         });
@@ -436,17 +420,15 @@ export default function Expenses() {
     const orderExpenses = expenses.filter((e) => e.expense_type === "order");
     const manualExpenses = expenses.filter((e) => e.expense_type !== "order");
 
-    const totalRevenue = orderExpenses.reduce((sum, e) => sum + (e.order_value || 0), 0);
-    const totalCosts = orderExpenses.reduce(
-      (sum, e) => sum + (e.commission || 0) + (e.total_shipping || 0),
-      0
-    ) + manualExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+    const totalReceived = orderExpenses.reduce((sum, e) => sum + (e.order_value || 0), 0);
+    const totalProductionCost = orderExpenses.reduce((sum, e) => sum + (e.amount || 0), 0)
+      + manualExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
     const totalProfit = orderExpenses.reduce((sum, e) => sum + (e.estimated_profit || 0), 0);
 
-    return { totalRevenue, totalCosts, totalProfit, netProfit: totalProfit - totalCosts };
+    return { totalReceived, totalProductionCost, totalProfit };
   };
 
-  const { totalRevenue, totalCosts, totalProfit, netProfit } = calculateTotals();
+  const { totalReceived, totalProductionCost, totalProfit } = calculateTotals();
 
   if (loading) {
     return (
@@ -648,34 +630,24 @@ export default function Expenses() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid md:grid-cols-4 gap-6">
+        <div className="grid md:grid-cols-3 gap-6">
           <Card className="card-gradient border-border/50">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Receita Total</CardTitle>
+              <CardTitle className="text-sm font-medium">Valor Recebido</CardTitle>
               <TrendingUp className="h-4 w-4 text-green-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-green-500">R$ {totalRevenue.toFixed(2)}</div>
+              <div className="text-3xl font-bold text-green-500">R$ {totalReceived.toFixed(2)}</div>
             </CardContent>
           </Card>
 
           <Card className="card-gradient border-border/50">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Custos Totais</CardTitle>
+              <CardTitle className="text-sm font-medium">Custo de Produção</CardTitle>
               <TrendingDown className="h-4 w-4 text-red-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-red-500">R$ {totalCosts.toFixed(2)}</div>
-            </CardContent>
-          </Card>
-
-          <Card className="card-gradient border-border/50">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Lucro Estimado</CardTitle>
-              <DollarSign className="h-4 w-4 text-primary" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-primary">R$ {totalProfit.toFixed(2)}</div>
+              <div className="text-3xl font-bold text-red-500">R$ {totalProductionCost.toFixed(2)}</div>
             </CardContent>
           </Card>
 
@@ -687,10 +659,10 @@ export default function Expenses() {
             <CardContent>
               <div
                 className={`text-3xl font-bold ${
-                  netProfit >= 0 ? "text-primary" : "text-red-500"
+                  totalProfit >= 0 ? "text-green-500" : "text-red-500"
                 }`}
               >
-                R$ {netProfit.toFixed(2)}
+                R$ {totalProfit.toFixed(2)}
               </div>
             </CardContent>
           </Card>
@@ -716,88 +688,74 @@ export default function Expenses() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Tipo</TableHead>
-                      <TableHead>Descrição/Produto</TableHead>
+                      <TableHead>Produto</TableHead>
                       <TableHead>Pedido</TableHead>
                       <TableHead>Qtd</TableHead>
-                      <TableHead>Valor</TableHead>
-                      <TableHead>Comissão</TableHead>
-                      <TableHead>Frete</TableHead>
-                      <TableHead>Lucro</TableHead>
+                      <TableHead>Valor Recebido</TableHead>
+                      <TableHead>Custo Produção</TableHead>
+                      <TableHead>Lucro Líquido</TableHead>
                       <TableHead>Data</TableHead>
                       <TableHead>Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {expenses.map((expense) => (
-                      <TableRow key={expense.id}>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              expense.expense_type === "order"
-                                ? "default"
+                    {expenses.map((expense) => {
+                      const received = expense.order_value || 0;
+                      const productionCost = expense.amount || 0;
+                      const profit = expense.estimated_profit ?? (received - productionCost);
+                      
+                      return (
+                        <TableRow key={expense.id}>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                expense.expense_type === "order"
+                                  ? "default"
+                                  : expense.expense_type === "installment"
+                                  ? "secondary"
+                                  : "outline"
+                              }
+                            >
+                              {expense.expense_type === "order"
+                                ? "Pedido"
                                 : expense.expense_type === "installment"
-                                ? "secondary"
-                                : "outline"
-                            }
-                          >
-                            {expense.expense_type === "order"
-                              ? "Pedido"
-                              : expense.expense_type === "installment"
-                              ? "Parcela"
-                              : "Manual"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="max-w-[250px]">
-                          <div className="space-y-1">
+                                ? "Parcela"
+                                : "Manual"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="max-w-[250px]">
                             <p className="font-medium text-sm truncate">
                               {expense.product_name || expense.description}
                             </p>
-                            {expense.variation && (
-                              <p className="text-xs text-muted-foreground">{expense.variation}</p>
-                            )}
-                            {expense.category && (
-                              <Badge variant="outline" className="text-xs">
-                                {expense.category}
-                              </Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-mono text-xs">
-                          {expense.platform_order_id || "-"}
-                        </TableCell>
-                        <TableCell>{expense.quantity || "-"}</TableCell>
-                        <TableCell className="font-medium">
-                          R$ {(expense.order_value || expense.amount || 0).toFixed(2)}
-                        </TableCell>
-                        <TableCell className="text-red-500">
-                          {expense.commission
-                            ? `R$ ${expense.commission.toFixed(2)}`
-                            : "-"}
-                        </TableCell>
-                        <TableCell className="text-red-500">
-                          {expense.total_shipping
-                            ? `R$ ${expense.total_shipping.toFixed(2)}`
-                            : "-"}
-                        </TableCell>
-                        <TableCell className="font-bold text-green-500">
-                          {expense.estimated_profit
-                            ? `R$ ${expense.estimated_profit.toFixed(2)}`
-                            : "-"}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {new Date(expense.created_at).toLocaleDateString("pt-BR")}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteExpense(expense.id)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {expense.platform_order_id || "-"}
+                          </TableCell>
+                          <TableCell>{expense.quantity || "-"}</TableCell>
+                          <TableCell className="font-medium text-green-500">
+                            R$ {received.toFixed(2)}
+                          </TableCell>
+                          <TableCell className="font-medium text-red-500">
+                            {productionCost > 0 ? `R$ ${productionCost.toFixed(2)}` : "-"}
+                          </TableCell>
+                          <TableCell className={`font-bold ${profit >= 0 ? "text-green-500" : "text-red-500"}`}>
+                            R$ {profit.toFixed(2)}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {new Date(expense.created_at).toLocaleDateString("pt-BR")}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteExpense(expense.id)}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
