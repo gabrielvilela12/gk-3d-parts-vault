@@ -963,11 +963,15 @@ export default function Expenses() {
                           </TableRow>
                         );
                       } else {
+                        const isPaid = expense.order_status === "pago";
+                        const isInstallment = expense.expense_type === "installment";
+                        const dueDate = expense.order_date ? new Date(expense.order_date) : null;
+                        const isOverdue = dueDate && !isPaid && dueDate <= new Date();
                         return (
-                          <TableRow key={expense.id}>
+                          <TableRow key={expense.id} className={isOverdue ? "bg-destructive/10" : ""}>
                             <TableCell>
-                              <Badge variant={expense.expense_type === "installment" ? "secondary" : "outline"}>
-                                {expense.expense_type === "installment" ? "Parcela" : "Manual"}
+                              <Badge variant={isInstallment ? "secondary" : "outline"}>
+                                {isInstallment ? "Parcela" : "Manual"}
                               </Badge>
                             </TableCell>
                             <TableCell className="max-w-[300px]">
@@ -977,16 +981,33 @@ export default function Expenses() {
                             <TableCell>
                               {expense.category && <Badge variant="outline" className="text-xs">{expense.category}</Badge>}
                             </TableCell>
-                            <TableCell className="font-medium text-red-500">
+                            <TableCell className="font-medium text-destructive">
                               R$ {(expense.amount || 0).toFixed(2)}
                             </TableCell>
                             <TableCell className="text-sm text-muted-foreground">
-                              {expense.order_date ? new Date(expense.order_date).toLocaleDateString("pt-BR") : new Date(expense.created_at).toLocaleDateString("pt-BR")}
+                              {dueDate ? dueDate.toLocaleDateString("pt-BR") : new Date(expense.created_at).toLocaleDateString("pt-BR")}
+                              {isOverdue && <span className="block text-xs text-destructive font-medium">Vencida</span>}
                             </TableCell>
                             <TableCell>
-                              <Button variant="ghost" size="sm" onClick={() => handleDeleteExpense(expense.id)}>
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
+                              {isInstallment ? (
+                                <Badge variant={isPaid ? "default" : "destructive"}>
+                                  {isPaid ? "Pago" : "Pendente"}
+                                </Badge>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex gap-1">
+                                {isInstallment && !isPaid && (
+                                  <Button variant="ghost" size="sm" onClick={() => handleApproveInstallment(expense.id)} title="Marcar como pago">
+                                    <Check className="h-4 w-4 text-green-500" />
+                                  </Button>
+                                )}
+                                <Button variant="ghost" size="sm" onClick={() => handleDeleteExpense(expense.id)}>
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         );
