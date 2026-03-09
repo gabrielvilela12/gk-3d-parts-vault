@@ -457,19 +457,7 @@ export default function Expenses() {
     }
   };
 
-  const calculateTotals = () => {
-    const orderExpenses = expenses.filter((e) => e.expense_type === "order");
-    const manualExpenses = expenses.filter((e) => e.expense_type !== "order");
-
-    const totalReceived = orderExpenses.reduce((sum, e) => sum + (e.order_value || 0), 0);
-    const totalProductionCost = orderExpenses.reduce((sum, e) => sum + (e.amount || 0), 0)
-      + manualExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
-    const totalProfit = orderExpenses.reduce((sum, e) => sum + (e.estimated_profit || 0), 0);
-
-    return { totalReceived, totalProductionCost, totalProfit };
-  };
-
-  const { totalReceived, totalProductionCost, totalProfit } = calculateTotals();
+  const { totalReceived, totalProductionCost, totalProfit } = globalTotals;
 
   if (loading) {
     return (
