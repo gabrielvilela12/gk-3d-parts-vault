@@ -22,7 +22,7 @@ import Orders from "./pages/Orders";
 import Expenses from "./pages/Expenses";
 import NotFound from "./pages/NotFound";
 import ImageGenerator from "./pages/ImageGenerator";
-import { cn } from "@/lib/utils";
+import Assistant from "./pages/Assistant";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 const queryClient = new QueryClient();
