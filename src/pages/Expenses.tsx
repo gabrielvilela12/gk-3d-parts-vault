@@ -1312,8 +1312,8 @@ export default function Expenses() {
                         <Progress value={progressPercent} className="h-1.5" />
 
                         {group.nextInstallment && (
-                          <div className="rounded-md bg-primary/10 p-2 mt-2">
-                            <p className="text-xs font-medium text-primary truncate">
+                          <div className="rounded-md bg-muted p-2 mt-2">
+                            <p className="text-xs font-medium truncate">
                               {group.nextInstallment.description}
                             </p>
                             <p className="text-xs text-muted-foreground">
