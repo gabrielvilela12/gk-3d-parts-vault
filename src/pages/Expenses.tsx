@@ -441,6 +441,7 @@ export default function Expenses() {
         description: "",
         category: "",
         amount: "",
+        installments: "1",
         notes: "",
       });
       setManualDialogOpen(false);
