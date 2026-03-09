@@ -1063,8 +1063,8 @@ export default function Expenses() {
                 </>
               )}
 
-              {(filterSearch || filterDateFrom || filterDateTo || filterSubType !== "all") && (
-                <Button variant="ghost" size="sm" onClick={() => { setFilterSearch(""); setFilterDateFrom(undefined); setFilterDateTo(undefined); setFilterSubType("all"); setCurrentPage(0); }}>
+              {(filterSearch || filterDateFrom || filterDateTo || filterSubType !== "all" || filterMonthStatus !== "all") && (
+                <Button variant="ghost" size="sm" onClick={() => { setFilterSearch(""); setFilterDateFrom(undefined); setFilterDateTo(undefined); setFilterSubType("all"); setFilterMonthStatus("all"); setCurrentPage(0); }}>
                   Limpar
                 </Button>
               )}
