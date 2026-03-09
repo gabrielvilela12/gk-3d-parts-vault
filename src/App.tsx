@@ -22,6 +22,7 @@ import Orders from "./pages/Orders";
 import Expenses from "./pages/Expenses";
 import NotFound from "./pages/NotFound";
 import ImageGenerator from "./pages/ImageGenerator";
+import Assistant from "./pages/Assistant";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -122,6 +123,10 @@ function AppContent() {
           <Route
             path="/image-generator"
             element={user ? <ImageGenerator /> : <Navigate to="/auth" replace />}
+          />
+          <Route
+            path="/assistant"
+            element={user ? <Assistant /> : <Navigate to="/auth" replace />}
           />
           <Route path="*" element={<NotFound />} />
         </Routes>
