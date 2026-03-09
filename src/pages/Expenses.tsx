@@ -156,7 +156,13 @@ export default function Expenses() {
       if (activeView === "orders") {
         query = query.eq("expense_type", "order");
       } else {
-        query = query.in("expense_type", ["manual", "installment"]);
+        if (filterSubType === "manual") {
+          query = query.eq("expense_type", "manual");
+        } else if (filterSubType === "installment") {
+          query = query.eq("expense_type", "installment");
+        } else {
+          query = query.in("expense_type", ["manual", "installment"]);
+        }
       }
       if (filterSearch.trim()) {
         query = query.or(`product_name.ilike.%${filterSearch.trim()}%,description.ilike.%${filterSearch.trim()}%`);
