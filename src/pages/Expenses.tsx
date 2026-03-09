@@ -389,7 +389,7 @@ export default function Expenses() {
                       <div className="rounded-lg bg-muted p-4">
                         <p className="text-sm font-medium mb-2">Resumo da Importação</p>
                         <p className="text-sm text-muted-foreground">
-                          {importData.length} linhas encontradas no arquivo
+                          {importData.length} produtos encontrados no arquivo
                         </p>
                       </div>
 
@@ -399,21 +399,21 @@ export default function Expenses() {
                             <TableRow>
                               <TableHead>Pedido</TableHead>
                               <TableHead>Produto</TableHead>
-                              <TableHead>Qtd</TableHead>
-                              <TableHead>Valor</TableHead>
+                              <TableHead>SKU</TableHead>
+                              <TableHead>Valor Liberado</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {importData.slice(0, 10).map((row, idx) => (
                               <TableRow key={idx}>
                                 <TableCell className="font-mono text-xs">
-                                  {row["Nº de Pedido da Plataforma"]}
+                                  {row["ID do pedido"]}
                                 </TableCell>
                                 <TableCell className="max-w-[200px] truncate text-xs">
-                                  {row["Nome do Anúncio"]}
+                                  {row["Nome do produto"]}
                                 </TableCell>
-                                <TableCell>{row["Qtd. do Produto"]}</TableCell>
-                                <TableCell>R$ {parseNumericValue(row["Preço de Produto"]).toFixed(2)}</TableCell>
+                                <TableCell className="font-mono text-xs">{row["SKU"]}</TableCell>
+                                <TableCell>R$ {parseNumericValue(row["Quantia total lançada (R$)"]).toFixed(2)}</TableCell>
                               </TableRow>
                             ))}
                           </TableBody>
