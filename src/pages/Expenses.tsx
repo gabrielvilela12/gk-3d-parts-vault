@@ -505,7 +505,23 @@ export default function Expenses() {
     }
   };
 
-  const handleDeleteExpense = async (id: string) => {
+  const handleApproveInstallment = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from("expenses")
+        .update({ order_status: "pago", payment_date: new Date().toISOString() })
+        .eq("id", id);
+      if (error) throw error;
+
+      toast({ title: "Parcela aprovada!", description: "Marcada como paga." });
+      fetchExpenses();
+      fetchGlobalTotals();
+    } catch (error: any) {
+      toast({ title: "Erro ao aprovar", description: error.message, variant: "destructive" });
+    }
+  };
+
+
     try {
       const { error } = await supabase.from("expenses").delete().eq("id", id);
       if (error) throw error;
