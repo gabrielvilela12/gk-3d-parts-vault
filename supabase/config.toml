@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.optimize-queue]
 verify_jwt = false
+
+[functions.business-assistant]
+verify_jwt = false
