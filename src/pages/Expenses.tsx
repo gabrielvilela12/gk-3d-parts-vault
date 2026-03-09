@@ -138,8 +138,7 @@ export default function Expenses() {
   const [filterDateTo, setFilterDateTo] = useState<Date | undefined>();
   const [filterSubType, setFilterSubType] = useState<string>("all");
   const [filterMonthStatus, setFilterMonthStatus] = useState<string>("all");
-  const [selectMode, setSelectMode] = useState(false);
-  const [selectedMonthKeys, setSelectedMonthKeys] = useState<Set<string>>(new Set());
+  const [selectedExpenseIds, setSelectedExpenseIds] = useState<Set<string>>(new Set());
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
@@ -693,24 +692,16 @@ export default function Expenses() {
     }
   };
 
-  const handleDeleteSelectedMonths = async () => {
+  const handleDeleteSelectedExpenses = async () => {
     try {
-      const idsToDelete = allExpenses
-        .filter(e => {
-          const date = e.order_date ? new Date(e.order_date) : new Date(e.created_at);
-          const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-          return selectedMonthKeys.has(key);
-        })
-        .map(e => e.id);
-
-      if (idsToDelete.length === 0) return;
-
-      const { error } = await supabase.from("expenses").delete().in("id", idsToDelete);
+      if (selectedExpenseIds.size === 0) return;
+      const ids = Array.from(selectedExpenseIds);
+      const { error } = await supabase.from("expenses").delete().in("id", ids);
       if (error) throw error;
 
-      toast({ title: "Meses excluídos!", description: `${idsToDelete.length} despesa(s) removida(s).` });
-      setSelectedMonthKeys(new Set());
-      setSelectMode(false);
+      toast({ title: "Itens excluídos!", description: `${ids.length} despesa(s) removida(s).` });
+      setSelectedExpenseIds(new Set());
+      setSelectedMonth(null);
       fetchExpenses();
       fetchAllExpenses();
       fetchGlobalTotals();
@@ -718,6 +709,7 @@ export default function Expenses() {
       toast({ title: "Erro ao excluir", description: error.message, variant: "destructive" });
     }
   };
+
   const handleDeleteExpense = async (id: string) => {
     try {
       const { error } = await supabase.from("expenses").delete().eq("id", id);
@@ -1253,43 +1245,6 @@ export default function Expenses() {
         ) : (
           /* Monthly Cards View */
           <div className="space-y-4">
-            {monthGroups.length > 0 && (
-              <div className="flex items-center justify-between">
-                <Button
-                  variant={selectMode ? "default" : "outline"}
-                  size="sm"
-                  className="gap-2"
-                  onClick={() => {
-                    setSelectMode(!selectMode);
-                    setSelectedMonthKeys(new Set());
-                  }}
-                >
-                  {selectMode ? "Cancelar seleção" : "Selecionar meses"}
-                </Button>
-                {selectMode && selectedMonthKeys.size > 0 && (
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="destructive" size="sm" className="gap-2">
-                        <Trash2 className="h-4 w-4" />
-                        Excluir {selectedMonthKeys.size} mês(es)
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Excluir meses selecionados?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Todas as despesas dos {selectedMonthKeys.size} mês(es) selecionado(s) serão removidas permanentemente.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleDeleteSelectedMonths}>Confirmar</AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                )}
-              </div>
-            )}
             {monthGroups.length === 0 ? (
               <Card className="card-gradient border-border/50">
                 <CardContent className="py-12">
@@ -1318,34 +1273,12 @@ export default function Expenses() {
                         "card-gradient border-border/50 cursor-pointer transition-all hover:shadow-lg hover:scale-[1.02]",
                         group.hasNextInstallment && "border-primary/60 ring-1 ring-primary/30",
                         group.isCurrentMonth && !group.hasNextInstallment && "border-accent/60",
-                        selectMode && selectedMonthKeys.has(group.key) && "ring-2 ring-destructive border-destructive/60",
                       )}
-                      onClick={() => {
-                        if (selectMode) {
-                          setSelectedMonthKeys(prev => {
-                            const next = new Set(prev);
-                            if (next.has(group.key)) next.delete(group.key);
-                            else next.add(group.key);
-                            return next;
-                          });
-                        } else {
-                          setSelectedMonth(group);
-                        }
-                      }}
+                      onClick={() => { setSelectedMonth(group); setSelectedExpenseIds(new Set()); }}
                     >
                       <CardHeader className="pb-3">
                         <div className="flex items-center justify-between">
                           <CardTitle className="text-lg flex items-center gap-2">
-                            {selectMode && (
-                              <div className={cn(
-                                "h-5 w-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
-                                selectedMonthKeys.has(group.key)
-                                  ? "bg-destructive border-destructive text-destructive-foreground"
-                                  : "border-muted-foreground"
-                              )}>
-                                {selectedMonthKeys.has(group.key) && <Check className="h-3 w-3" />}
-                              </div>
-                            )}
                             <CalendarIconLucide className="h-5 w-5 text-muted-foreground" />
                             {group.label}
                           </CardTitle>
@@ -1447,20 +1380,44 @@ export default function Expenses() {
 
               return (
                 <div className="space-y-3">
-                  {unpaidCount > 0 && (() => {
-                    const now = new Date();
-                    const monthArrived = selectedMonth.year < now.getFullYear() || (selectedMonth.year === now.getFullYear() && selectedMonth.month <= now.getMonth());
-                    return monthArrived ? (
-                      <Button
-                        className="w-full gap-2"
-                        size="lg"
-                        onClick={() => handleApproveMonth(selectedMonth)}
-                      >
-                        <Check className="h-5 w-5" />
-                        Pagar tudo do mês ({unpaidCount} pendente{unpaidCount > 1 ? "s" : ""}) · R$ {selectedMonth.expenses.filter(e => e.order_status !== "pago").reduce((sum, e) => sum + (e.amount || 0), 0).toFixed(2)}
-                      </Button>
-                    ) : null;
-                  })()}
+                  {/* Action buttons */}
+                  <div className="flex gap-2">
+                    {unpaidCount > 0 && (() => {
+                      const now = new Date();
+                      const monthArrived = selectedMonth.year < now.getFullYear() || (selectedMonth.year === now.getFullYear() && selectedMonth.month <= now.getMonth());
+                      return monthArrived ? (
+                        <Button
+                          className="flex-1 gap-2"
+                          onClick={() => handleApproveMonth(selectedMonth)}
+                        >
+                          <Check className="h-4 w-4" />
+                          Pagar mês ({unpaidCount})
+                        </Button>
+                      ) : null;
+                    })()}
+                    {selectedExpenseIds.size > 0 && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="destructive" className="gap-2">
+                            <Trash2 className="h-4 w-4" />
+                            Excluir {selectedExpenseIds.size} selecionado(s)
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Excluir itens selecionados?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              {selectedExpenseIds.size} despesa(s) serão removidas permanentemente.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleDeleteSelectedExpenses}>Confirmar</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                  </div>
                   {selectedMonth.expenses.map((expense) => {
                     const isPaid = expense.order_status === "pago";
                     const isInstallment = expense.expense_type === "installment";
@@ -1469,18 +1426,37 @@ export default function Expenses() {
                     const isOverdue = dueDate && !isPaid && !isNext && dueDate <= new Date();
                     const daysUntil = dueDate ? differenceInDays(dueDate, new Date()) : null;
 
+                    const isSelected = selectedExpenseIds.has(expense.id);
                     return (
                       <Card
                         key={expense.id}
                         className={cn(
-                          "border-border/50",
+                          "border-border/50 cursor-pointer transition-all",
                           isNext && "border-primary ring-1 ring-primary/30 bg-primary/5",
                           isOverdue && "border-destructive/50 bg-destructive/5",
                           isPaid && "opacity-70",
+                          isSelected && "ring-2 ring-destructive border-destructive/60",
                         )}
+                        onClick={() => {
+                          setSelectedExpenseIds(prev => {
+                            const next = new Set(prev);
+                            if (next.has(expense.id)) next.delete(expense.id);
+                            else next.add(expense.id);
+                            return next;
+                          });
+                        }}
                       >
                         <CardContent className="p-4">
                           <div className="flex items-center justify-between gap-4">
+                            {/* Checkbox */}
+                            <div className={cn(
+                              "h-5 w-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
+                              isSelected
+                                ? "bg-destructive border-destructive text-destructive-foreground"
+                                : "border-muted-foreground"
+                            )}>
+                              {isSelected && <Check className="h-3 w-3" />}
+                            </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
                                 <Badge variant={isInstallment ? "secondary" : "outline"} className="text-xs shrink-0">
