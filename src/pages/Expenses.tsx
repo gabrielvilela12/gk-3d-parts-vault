@@ -1278,12 +1278,12 @@ export default function Expenses() {
                             {group.label}
                           </CardTitle>
                           {group.hasNextInstallment && (
-                            <Badge variant="secondary" className="text-xs">
+                            <Badge variant="outline" className="text-xs text-primary border-primary/50">
                               Próxima
                             </Badge>
                           )}
                           {allPaid && group.expenses.length > 0 && !group.hasNextInstallment && (
-                            <Badge variant="outline" className="text-xs">
+                            <Badge variant="outline" className="text-xs text-success border-success/50">
                               ✓ Pago
                             </Badge>
                           )}
@@ -1458,12 +1458,12 @@ export default function Expenses() {
                                   {isInstallment ? "Parcela" : "Manual"}
                                 </Badge>
                                 {isNext && (
-                                  <Badge variant="secondary" className="text-xs shrink-0">
+                                  <Badge variant="outline" className="text-xs shrink-0 text-primary border-primary/50">
                                     Próxima
                                   </Badge>
                                 )}
                                 {isPaid && (
-                                  <Badge variant="outline" className="text-xs shrink-0">
+                                  <Badge variant="outline" className="text-xs shrink-0 text-success border-success/50">
                                     ✓ Pago
                                   </Badge>
                                 )}
