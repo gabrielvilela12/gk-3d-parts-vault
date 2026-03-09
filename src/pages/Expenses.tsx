@@ -193,6 +193,7 @@ export default function Expenses() {
       toast({ title: "Todas as despesas foram apagadas!" });
       setCurrentPage(0);
       fetchExpenses();
+      fetchGlobalTotals();
     } catch (error: any) {
       toast({
         title: "Erro ao apagar despesas",
