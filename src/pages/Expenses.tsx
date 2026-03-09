@@ -1293,6 +1293,7 @@ export default function Expenses() {
               </DialogDescription>
             </DialogHeader>
             {selectedMonth && (() => {
+              const unpaidCount = selectedMonth.expenses.filter(e => e.order_status !== "pago").length;
               const nextInstallmentId = selectedMonth.expenses
                 .filter(e => e.expense_type === "installment" && e.order_status !== "pago")
                 .sort((a, b) => {
@@ -1303,6 +1304,16 @@ export default function Expenses() {
 
               return (
                 <div className="space-y-3">
+                  {unpaidCount > 0 && (
+                    <Button
+                      className="w-full gap-2"
+                      size="lg"
+                      onClick={() => handleApproveMonth(selectedMonth)}
+                    >
+                      <Check className="h-5 w-5" />
+                      Pagar tudo do mês ({unpaidCount} pendente{unpaidCount > 1 ? "s" : ""}) · R$ {selectedMonth.expenses.filter(e => e.order_status !== "pago").reduce((sum, e) => sum + (e.amount || 0), 0).toFixed(2)}
+                    </Button>
+                  )}
                   {selectedMonth.expenses.map((expense) => {
                     const isPaid = expense.order_status === "pago";
                     const isInstallment = expense.expense_type === "installment";
