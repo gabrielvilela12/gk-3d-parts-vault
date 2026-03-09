@@ -43,28 +43,51 @@ interface Expense {
   created_at: string;
 }
 
+// Shopee Income Report Format
 interface ExcelRow {
-  "Nº de Pedido da Plataforma": string;
-  "Nº de Pedido": string;
-  "Plataformas": string;
-  "Nome da Loja no UpSeller": string;
-  "Estado do Pedido": string;
-  "Hora do Pedido": string;
-  "Hora do Pagamento": string;
-  "Prazo de Envio": string;
-  "Valor do Pedido": number;
-  "Valor Total de Produtos": number;
-  "Descontos e Cupons": number;
-  "Comissão Total": number;
-  "Frete do Comprador": number;
-  "Total de Frete": number;
-  "Lucro Estimado": number;
-  "Nome do Anúncio": string;
+  "Número da sequência": number;
+  "Ver": string;
+  "ID do pedido": string;
+  "ID do reembolso": string;
   "SKU": string;
-  "Variação": string;
-  "Link da Imagem": string;
-  "Preço de Produto": number;
-  "Qtd. do Produto": number;
+  "Nome do produto": string;
+  "Data de criação do pedido": string;
+  "Data de conclusão do pagamento": string;
+  "Canal de liberação": string;
+  "Tipo de pedido": string;
+  "Hot Listing": string;
+  "Quantia total lançada (R$)": number;
+  "Preço do produto": number;
+  "Valor do Reembolso": number;
+  "Ajuste por pagamento via PIX": number;
+  "Taxa de frete paga pelo comprador": number;
+  "Frete cobrado pelo parceiro logístico": number;
+  "Desconto de frete pela Shopee": number;
+  "Taxa de envio reverso": number;
+  "Taxa de devolução do vendedor": number;
+  "Incentivo Shopee para ação comercial": number;
+  "Voucher subsidiado pelo Seller": number;
+  "Voucher compartilhado subsidiado pelo Seller": number;
+  "Coin Cashback subsidiado pelo Seller": number;
+  "Coin Cashback compartilhado subsidiado pelo Seller": number;
+  "Taxa de comissão líquida": number;
+  "Taxa de serviço líquida": number;
+  "Taxa de transação": number;
+  "Taxa de comissão Afiliados do Vendedor": number;
+  "Nome de usuário (Comprador)": string;
+  "Quantia paga pelo comprador": number;
+  "Método de Pagamento do Comprador": string;
+  "Parcelamento (se aplicável)": string;
+  "Promoção de Desconto no Frete": number;
+  "Transportadora": string;
+  "Nome da Transportadora": string;
+  "Tipo de Estoque": string;
+  "Taxa de comissão bruta": number;
+  "Taxa de serviço bruta": number;
+  "Código do Cupom": string;
+  "Ajuste por participação em ação comercial": number;
+  "Compensação perdida": number;
+  "Valor Reembolsado ao Comprador": number;
 }
 
 export default function Expenses() {
