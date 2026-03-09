@@ -219,6 +219,39 @@ export default function Expenses() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não autenticado");
 
+      // Fetch all pieces to match by name/SKU and get production costs
+      const { data: piecesData } = await supabase
+        .from("pieces")
+        .select("id, name, cost, custo_material, custo_energia, custo_acessorios")
+        .eq("user_id", user.id);
+
+      const pieces = piecesData || [];
+
+      // Build a lookup: normalize piece name -> piece cost
+      const normalizeName = (v: string) =>
+        v.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+      const pieceCostMap = new Map<string, number>();
+      for (const p of pieces) {
+        const totalCost = (p.custo_material || 0) + (p.custo_energia || 0) + (p.custo_acessorios || 0);
+        const costToUse = totalCost > 0 ? totalCost : (p.cost || 0);
+        if (costToUse > 0) {
+          pieceCostMap.set(normalizeName(p.name), costToUse);
+        }
+      }
+
+      // Try to find the production cost for a given product name
+      const findPieceCost = (productName: string): number => {
+        const normalized = normalizeName(productName);
+        // Exact match
+        if (pieceCostMap.has(normalized)) return pieceCostMap.get(normalized)!;
+        // Partial match: piece name contained in product name or vice versa
+        for (const [name, cost] of pieceCostMap) {
+          if (normalized.includes(name) || name.includes(normalized)) return cost;
+        }
+        return 0;
+      };
+
       // Check for duplicates by platform_order_id + SKU
       const existingExpenses = expenses.filter((e) => e.expense_type === "order");
       const existingKeys = new Set(
@@ -245,6 +278,13 @@ export default function Expenses() {
           
           const totalFees = commission + serviceFee + transactionFee;
           const netShippingCost = partnerShippingCost - shopeeShippingDiscount - buyerShipping;
+
+          // Get production cost from pieces catalog
+          const productName = String(row["Nome do produto"] || "");
+          const productionCost = findPieceCost(productName);
+          
+          // Lucro = valor liberado - custo de produção da peça
+          const estimatedProfit = totalReleased - productionCost;
           
           return {
             user_id: user.id,
@@ -260,8 +300,8 @@ export default function Expenses() {
             commission: totalFees,
             buyer_shipping: buyerShipping,
             total_shipping: netShippingCost,
-            estimated_profit: totalReleased,
-            product_name: String(row["Nome do produto"] || ""),
+            estimated_profit: estimatedProfit,
+            product_name: productName,
             sku: String(row["SKU"] || ""),
             product_price: productPrice,
             quantity: 1,
