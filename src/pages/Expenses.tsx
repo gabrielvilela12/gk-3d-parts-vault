@@ -377,7 +377,7 @@ export default function Expenses() {
                                   {row["Nome do Anúncio"]}
                                 </TableCell>
                                 <TableCell>{row["Qtd. do Produto"]}</TableCell>
-                                <TableCell>R$ {row["Preço de Produto"]?.toFixed(2)}</TableCell>
+                                <TableCell>R$ {parseNumericValue(row["Preço de Produto"]).toFixed(2)}</TableCell>
                               </TableRow>
                             ))}
                           </TableBody>
