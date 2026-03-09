@@ -137,7 +137,9 @@ export default function Expenses() {
   const [filterDateFrom, setFilterDateFrom] = useState<Date | undefined>();
   const [filterDateTo, setFilterDateTo] = useState<Date | undefined>();
   const [filterSubType, setFilterSubType] = useState<string>("all");
-  const [filterMonthStatus, setFilterMonthStatus] = useState<string>("all"); // all, paid, pending
+  const [filterMonthStatus, setFilterMonthStatus] = useState<string>("all");
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedMonthKeys, setSelectedMonthKeys] = useState<Set<string>>(new Set());
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
@@ -691,6 +693,31 @@ export default function Expenses() {
     }
   };
 
+  const handleDeleteSelectedMonths = async () => {
+    try {
+      const idsToDelete = allExpenses
+        .filter(e => {
+          const date = e.order_date ? new Date(e.order_date) : new Date(e.created_at);
+          const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+          return selectedMonthKeys.has(key);
+        })
+        .map(e => e.id);
+
+      if (idsToDelete.length === 0) return;
+
+      const { error } = await supabase.from("expenses").delete().in("id", idsToDelete);
+      if (error) throw error;
+
+      toast({ title: "Meses excluídos!", description: `${idsToDelete.length} despesa(s) removida(s).` });
+      setSelectedMonthKeys(new Set());
+      setSelectMode(false);
+      fetchExpenses();
+      fetchAllExpenses();
+      fetchGlobalTotals();
+    } catch (error: any) {
+      toast({ title: "Erro ao excluir", description: error.message, variant: "destructive" });
+    }
+  };
   const handleDeleteExpense = async (id: string) => {
     try {
       const { error } = await supabase.from("expenses").delete().eq("id", id);
@@ -700,7 +727,6 @@ export default function Expenses() {
       fetchExpenses();
       fetchAllExpenses();
       fetchGlobalTotals();
-      // Update selected month if open
       if (selectedMonth) {
         setSelectedMonth(prev => prev ? {
           ...prev,
@@ -1227,6 +1253,43 @@ export default function Expenses() {
         ) : (
           /* Monthly Cards View */
           <div className="space-y-4">
+            {monthGroups.length > 0 && (
+              <div className="flex items-center justify-between">
+                <Button
+                  variant={selectMode ? "default" : "outline"}
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => {
+                    setSelectMode(!selectMode);
+                    setSelectedMonthKeys(new Set());
+                  }}
+                >
+                  {selectMode ? "Cancelar seleção" : "Selecionar meses"}
+                </Button>
+                {selectMode && selectedMonthKeys.size > 0 && (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="destructive" size="sm" className="gap-2">
+                        <Trash2 className="h-4 w-4" />
+                        Excluir {selectedMonthKeys.size} mês(es)
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Excluir meses selecionados?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Todas as despesas dos {selectedMonthKeys.size} mês(es) selecionado(s) serão removidas permanentemente.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDeleteSelectedMonths}>Confirmar</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
+              </div>
+            )}
             {monthGroups.length === 0 ? (
               <Card className="card-gradient border-border/50">
                 <CardContent className="py-12">
@@ -1255,12 +1318,34 @@ export default function Expenses() {
                         "card-gradient border-border/50 cursor-pointer transition-all hover:shadow-lg hover:scale-[1.02]",
                         group.hasNextInstallment && "border-primary/60 ring-1 ring-primary/30",
                         group.isCurrentMonth && !group.hasNextInstallment && "border-accent/60",
+                        selectMode && selectedMonthKeys.has(group.key) && "ring-2 ring-destructive border-destructive/60",
                       )}
-                      onClick={() => setSelectedMonth(group)}
+                      onClick={() => {
+                        if (selectMode) {
+                          setSelectedMonthKeys(prev => {
+                            const next = new Set(prev);
+                            if (next.has(group.key)) next.delete(group.key);
+                            else next.add(group.key);
+                            return next;
+                          });
+                        } else {
+                          setSelectedMonth(group);
+                        }
+                      }}
                     >
                       <CardHeader className="pb-3">
                         <div className="flex items-center justify-between">
                           <CardTitle className="text-lg flex items-center gap-2">
+                            {selectMode && (
+                              <div className={cn(
+                                "h-5 w-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
+                                selectedMonthKeys.has(group.key)
+                                  ? "bg-destructive border-destructive text-destructive-foreground"
+                                  : "border-muted-foreground"
+                              )}>
+                                {selectedMonthKeys.has(group.key) && <Check className="h-3 w-3" />}
+                              </div>
+                            )}
                             <CalendarIconLucide className="h-5 w-5 text-muted-foreground" />
                             {group.label}
                           </CardTitle>
