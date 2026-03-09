@@ -9,9 +9,15 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Upload, DollarSign, TrendingUp, TrendingDown, FileSpreadsheet, Plus, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { Upload, DollarSign, TrendingUp, TrendingDown, FileSpreadsheet, Plus, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search, CalendarIcon, Filter } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { format, addMonths } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { cn } from "@/lib/utils";
 import * as XLSX from "xlsx";
 
 const PAGE_SIZE = 25;
@@ -105,6 +111,12 @@ export default function Expenses() {
   const [deletingAll, setDeletingAll] = useState(false);
   const { toast } = useToast();
 
+  // Filters
+  const [filterType, setFilterType] = useState<string>("all");
+  const [filterSearch, setFilterSearch] = useState("");
+  const [filterDateFrom, setFilterDateFrom] = useState<Date | undefined>();
+  const [filterDateTo, setFilterDateTo] = useState<Date | undefined>();
+
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   const [manualForm, setManualForm] = useState({
@@ -112,12 +124,13 @@ export default function Expenses() {
     description: "",
     category: "",
     amount: "",
+    installments: "1",
     notes: "",
   });
 
   useEffect(() => {
     fetchExpenses();
-  }, [currentPage]);
+  }, [currentPage, filterType, filterSearch, filterDateFrom, filterDateTo]);
 
   useEffect(() => {
     fetchGlobalTotals();
@@ -131,10 +144,28 @@ export default function Expenses() {
       const from = currentPage * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
-      const { data, error, count } = await supabase
+      let query = supabase
         .from("expenses")
         .select("*", { count: "exact" })
-        .eq("user_id", user.id)
+        .eq("user_id", user.id);
+
+      // Apply filters
+      if (filterType !== "all") {
+        query = query.eq("expense_type", filterType);
+      }
+      if (filterSearch.trim()) {
+        query = query.or(`product_name.ilike.%${filterSearch.trim()}%,description.ilike.%${filterSearch.trim()}%`);
+      }
+      if (filterDateFrom) {
+        query = query.gte("created_at", filterDateFrom.toISOString());
+      }
+      if (filterDateTo) {
+        const endOfDay = new Date(filterDateTo);
+        endOfDay.setHours(23, 59, 59, 999);
+        query = query.lte("created_at", endOfDay.toISOString());
+      }
+
+      const { data, error, count } = await query
         .order("created_at", { ascending: false })
         .range(from, to);
 
@@ -407,20 +438,34 @@ export default function Expenses() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não autenticado");
 
-      const { error } = await supabase.from("expenses").insert({
-        user_id: user.id,
-        expense_type: manualForm.expense_type,
-        description: manualForm.description,
-        category: manualForm.category,
-        amount: parseFloat(manualForm.amount),
-        notes: manualForm.notes,
-      });
+      const totalAmount = parseFloat(manualForm.amount);
+      const numInstallments = Math.max(1, parseInt(manualForm.installments) || 1);
+      const installmentAmount = Math.round((totalAmount / numInstallments) * 100) / 100;
 
+      const entries = [];
+      for (let i = 0; i < numInstallments; i++) {
+        const dueDate = addMonths(new Date(), i);
+        entries.push({
+          user_id: user.id,
+          expense_type: numInstallments > 1 ? "installment" as const : manualForm.expense_type,
+          description: numInstallments > 1
+            ? `${manualForm.description} (${i + 1}/${numInstallments})`
+            : manualForm.description,
+          category: manualForm.category,
+          amount: installmentAmount,
+          notes: manualForm.notes,
+          order_date: dueDate.toISOString(),
+        });
+      }
+
+      const { error } = await supabase.from("expenses").insert(entries);
       if (error) throw error;
 
       toast({
         title: "Despesa registrada!",
-        description: "Despesa manual adicionada com sucesso.",
+        description: numInstallments > 1
+          ? `${numInstallments} parcelas de R$ ${installmentAmount.toFixed(2)} criadas.`
+          : "Despesa manual adicionada com sucesso.",
       });
 
       setManualForm({
@@ -428,6 +473,7 @@ export default function Expenses() {
         description: "",
         category: "",
         amount: "",
+        installments: "1",
         notes: "",
       });
       setManualDialogOpen(false);
@@ -608,7 +654,7 @@ export default function Expenses() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="amount">Valor (R$) *</Label>
+                      <Label htmlFor="amount">Valor Total (R$) *</Label>
                       <Input
                         id="amount"
                         type="number"
@@ -620,6 +666,27 @@ export default function Expenses() {
                       />
                     </div>
 
+                    <div className="space-y-2">
+                      <Label htmlFor="installments">Parcelas</Label>
+                      <Input
+                        id="installments"
+                        type="number"
+                        min="1"
+                        max="48"
+                        value={manualForm.installments}
+                        onChange={(e) => setManualForm({ ...manualForm, installments: e.target.value })}
+                        placeholder="1"
+                      />
+                    </div>
+                  </div>
+
+                  {parseInt(manualForm.installments) > 1 && manualForm.amount && (
+                    <div className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">
+                      {parseInt(manualForm.installments)}x de R$ {(parseFloat(manualForm.amount) / parseInt(manualForm.installments)).toFixed(2)}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="category">Categoria</Label>
                       <Input
@@ -661,6 +728,77 @@ export default function Expenses() {
             </Dialog>
           </div>
         </div>
+
+        {/* Filters */}
+        <Card className="card-gradient border-border/50">
+          <CardContent className="pt-4">
+            <div className="flex flex-wrap gap-3 items-end">
+              <div className="flex-1 min-w-[200px]">
+                <Label className="text-xs text-muted-foreground mb-1 block">Buscar</Label>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Produto ou descrição..."
+                    value={filterSearch}
+                    onChange={(e) => { setFilterSearch(e.target.value); setCurrentPage(0); }}
+                    className="pl-9"
+                  />
+                </div>
+              </div>
+
+              <div className="w-[150px]">
+                <Label className="text-xs text-muted-foreground mb-1 block">Tipo</Label>
+                <Select value={filterType} onValueChange={(v) => { setFilterType(v); setCurrentPage(0); }}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="order">Pedidos</SelectItem>
+                    <SelectItem value="manual">Manual</SelectItem>
+                    <SelectItem value="installment">Parcelas</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="w-auto">
+                <Label className="text-xs text-muted-foreground mb-1 block">De</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className={cn("w-[140px] justify-start text-left font-normal", !filterDateFrom && "text-muted-foreground")}>
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {filterDateFrom ? format(filterDateFrom, "dd/MM/yy") : "Início"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar mode="single" selected={filterDateFrom} onSelect={(d) => { setFilterDateFrom(d); setCurrentPage(0); }} className={cn("p-3 pointer-events-auto")} locale={ptBR} />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              <div className="w-auto">
+                <Label className="text-xs text-muted-foreground mb-1 block">Até</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className={cn("w-[140px] justify-start text-left font-normal", !filterDateTo && "text-muted-foreground")}>
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {filterDateTo ? format(filterDateTo, "dd/MM/yy") : "Fim"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar mode="single" selected={filterDateTo} onSelect={(d) => { setFilterDateTo(d); setCurrentPage(0); }} className={cn("p-3 pointer-events-auto")} locale={ptBR} />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {(filterType !== "all" || filterSearch || filterDateFrom || filterDateTo) && (
+                <Button variant="ghost" size="sm" onClick={() => { setFilterType("all"); setFilterSearch(""); setFilterDateFrom(undefined); setFilterDateTo(undefined); setCurrentPage(0); }}>
+                  Limpar
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Summary Cards */}
         <div className="grid md:grid-cols-3 gap-6">
