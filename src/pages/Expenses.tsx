@@ -432,6 +432,7 @@ export default function Expenses() {
       });
       setManualDialogOpen(false);
       fetchExpenses();
+      fetchGlobalTotals();
     } catch (error: any) {
       toast({
         title: "Erro ao registrar despesa",
