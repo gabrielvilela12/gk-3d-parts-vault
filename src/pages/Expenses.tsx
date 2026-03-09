@@ -368,9 +368,9 @@ export default function Expenses() {
               </DialogTrigger>
               <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>Importar Pedidos do Excel</DialogTitle>
+                  <DialogTitle>Importar Relatório de Rendimento Shopee</DialogTitle>
                   <DialogDescription>
-                    Carregue o arquivo de exportação de pedidos. Duplicatas serão automaticamente ignoradas.
+                    Carregue o arquivo Excel exportado da Shopee (Income Report). Duplicatas serão ignoradas automaticamente.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
