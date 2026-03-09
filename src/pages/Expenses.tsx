@@ -630,34 +630,24 @@ export default function Expenses() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid md:grid-cols-4 gap-6">
+        <div className="grid md:grid-cols-3 gap-6">
           <Card className="card-gradient border-border/50">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Receita Total</CardTitle>
+              <CardTitle className="text-sm font-medium">Valor Recebido</CardTitle>
               <TrendingUp className="h-4 w-4 text-green-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-green-500">R$ {totalRevenue.toFixed(2)}</div>
+              <div className="text-3xl font-bold text-green-500">R$ {totalReceived.toFixed(2)}</div>
             </CardContent>
           </Card>
 
           <Card className="card-gradient border-border/50">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Custos Totais</CardTitle>
+              <CardTitle className="text-sm font-medium">Custo de Produção</CardTitle>
               <TrendingDown className="h-4 w-4 text-red-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-red-500">R$ {totalCosts.toFixed(2)}</div>
-            </CardContent>
-          </Card>
-
-          <Card className="card-gradient border-border/50">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Lucro Estimado</CardTitle>
-              <DollarSign className="h-4 w-4 text-primary" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-primary">R$ {totalProfit.toFixed(2)}</div>
+              <div className="text-3xl font-bold text-red-500">R$ {totalProductionCost.toFixed(2)}</div>
             </CardContent>
           </Card>
 
@@ -669,10 +659,10 @@ export default function Expenses() {
             <CardContent>
               <div
                 className={`text-3xl font-bold ${
-                  netProfit >= 0 ? "text-primary" : "text-red-500"
+                  totalProfit >= 0 ? "text-green-500" : "text-red-500"
                 }`}
               >
-                R$ {netProfit.toFixed(2)}
+                R$ {totalProfit.toFixed(2)}
               </div>
             </CardContent>
           </Card>
