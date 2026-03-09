@@ -1283,7 +1283,7 @@ export default function Expenses() {
                             </Badge>
                           )}
                           {allPaid && group.expenses.length > 0 && !group.hasNextInstallment && (
-                            <Badge variant="outline" className="text-xs">
+                            <Badge variant="outline" className="text-xs text-success border-success/50">
                               ✓ Pago
                             </Badge>
                           )}
