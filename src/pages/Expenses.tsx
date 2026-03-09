@@ -9,9 +9,12 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Upload, DollarSign, TrendingUp, TrendingDown, FileSpreadsheet, Plus, Trash2 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Upload, DollarSign, TrendingUp, TrendingDown, FileSpreadsheet, Plus, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import * as XLSX from "xlsx";
+
+const PAGE_SIZE = 25;
 
 interface Expense {
   id: string;
@@ -93,10 +96,15 @@ interface ExcelRow {
 export default function Expenses() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [manualDialogOpen, setManualDialogOpen] = useState(false);
   const [importData, setImportData] = useState<ExcelRow[]>([]);
+  const [deletingAll, setDeletingAll] = useState(false);
   const { toast } = useToast();
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   const [manualForm, setManualForm] = useState({
     expense_type: "manual" as "manual" | "installment",
@@ -108,21 +116,26 @@ export default function Expenses() {
 
   useEffect(() => {
     fetchExpenses();
-  }, []);
+  }, [currentPage]);
 
   const fetchExpenses = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não autenticado");
 
-      const { data, error } = await supabase
+      const from = currentPage * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
+      const { data, error, count } = await supabase
         .from("expenses")
-        .select("*")
+        .select("*", { count: "exact" })
         .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .range(from, to);
 
       if (error) throw error;
       setExpenses((data || []) as Expense[]);
+      setTotalCount(count || 0);
     } catch (error: any) {
       toast({
         title: "Erro ao carregar despesas",
@@ -131,6 +144,29 @@ export default function Expenses() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    try {
+      setDeletingAll(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuário não autenticado");
+
+      const { error } = await supabase.from("expenses").delete().eq("user_id", user.id);
+      if (error) throw error;
+
+      toast({ title: "Todas as despesas foram apagadas!" });
+      setCurrentPage(0);
+      fetchExpenses();
+    } catch (error: any) {
+      toast({
+        title: "Erro ao apagar despesas",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingAll(false);
     }
   };
 
@@ -433,6 +469,27 @@ export default function Expenses() {
           </div>
 
           <div className="flex gap-2">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" className="gap-2" disabled={totalCount === 0 || deletingAll}>
+                  <Trash2 className="h-4 w-4" />
+                  Apagar Todos
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Apagar todas as despesas?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Essa ação é irreversível. Todos os {totalCount} registros serão removidos permanentemente.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDeleteAll}>Confirmar</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
             <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="gap-2" variant="outline">
@@ -644,7 +701,7 @@ export default function Expenses() {
           <CardHeader>
             <CardTitle>Histórico de Despesas e Pedidos</CardTitle>
             <CardDescription>
-              Todas as despesas, pedidos importados e lucros detalhados
+              {totalCount} registros no total — Página {currentPage + 1} de {totalPages}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -743,6 +800,47 @@ export default function Expenses() {
                     ))}
                   </TableBody>
                 </Table>
+              </div>
+            )}
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-2 mt-4 pt-4 border-t border-border">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setCurrentPage(0)}
+                  disabled={currentPage === 0}
+                >
+                  <ChevronsLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+                  disabled={currentPage === 0}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm text-muted-foreground px-3">
+                  {currentPage + 1} / {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
+                  disabled={currentPage >= totalPages - 1}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setCurrentPage(totalPages - 1)}
+                  disabled={currentPage >= totalPages - 1}
+                >
+                  <ChevronsRight className="h-4 w-4" />
+                </Button>
               </div>
             )}
           </CardContent>
