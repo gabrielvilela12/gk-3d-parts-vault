@@ -111,6 +111,12 @@ export default function Expenses() {
     }
   };
 
+  const parseNumericValue = (value: any): number => {
+    if (value === undefined || value === null || value === "") return 0;
+    const num = Number(value);
+    return isNaN(num) ? 0 : num;
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -119,7 +125,7 @@ export default function Expenses() {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet) as ExcelRow[];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" }) as ExcelRow[];
 
       setImportData(jsonData);
       toast({
