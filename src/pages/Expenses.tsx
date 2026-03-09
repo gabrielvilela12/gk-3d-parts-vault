@@ -1426,18 +1426,37 @@ export default function Expenses() {
                     const isOverdue = dueDate && !isPaid && !isNext && dueDate <= new Date();
                     const daysUntil = dueDate ? differenceInDays(dueDate, new Date()) : null;
 
+                    const isSelected = selectedExpenseIds.has(expense.id);
                     return (
                       <Card
                         key={expense.id}
                         className={cn(
-                          "border-border/50",
+                          "border-border/50 cursor-pointer transition-all",
                           isNext && "border-primary ring-1 ring-primary/30 bg-primary/5",
                           isOverdue && "border-destructive/50 bg-destructive/5",
                           isPaid && "opacity-70",
+                          isSelected && "ring-2 ring-destructive border-destructive/60",
                         )}
+                        onClick={() => {
+                          setSelectedExpenseIds(prev => {
+                            const next = new Set(prev);
+                            if (next.has(expense.id)) next.delete(expense.id);
+                            else next.add(expense.id);
+                            return next;
+                          });
+                        }}
                       >
                         <CardContent className="p-4">
                           <div className="flex items-center justify-between gap-4">
+                            {/* Checkbox */}
+                            <div className={cn(
+                              "h-5 w-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
+                              isSelected
+                                ? "bg-destructive border-destructive text-destructive-foreground"
+                                : "border-muted-foreground"
+                            )}>
+                              {isSelected && <Check className="h-3 w-3" />}
+                            </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
                                 <Badge variant={isInstallment ? "secondary" : "outline"} className="text-xs shrink-0">
