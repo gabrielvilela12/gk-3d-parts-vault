@@ -41,10 +41,10 @@ serve(async (req) => {
     // ── Fetch user's business data ──────────────────────────────────────────
 
     const [piecesRes, expensesRes, ordersRes, filamentsRes] = await Promise.all([
-      supabaseAdmin.from("pieces").select("name, material, cost, preco_venda, is_selling, peso_g, tempo_impressao_min, category, custo_material, custo_energia, custo_acessorios, created_at").eq("user_id", user.id),
-      supabaseAdmin.from("expenses").select("expense_type, order_value, amount, estimated_profit, product_name, platform, order_status, order_date, payment_date, quantity, description, category").eq("user_id", user.id),
-      supabaseAdmin.from("orders").select("quantity, is_printed, created_at, printed_at, color").eq("user_id", user.id),
-      supabaseAdmin.from("filaments").select("name, color, custo_kg").eq("user_id", user.id),
+      supabaseAdmin.from("pieces").select("name, material, cost, preco_venda, is_selling, peso_g, tempo_impressao_min, category, custo_material, custo_energia, custo_acessorios, created_at").eq("user_id", userId),
+      supabaseAdmin.from("expenses").select("expense_type, order_value, amount, estimated_profit, product_name, platform, order_status, order_date, payment_date, quantity, description, category").eq("user_id", userId),
+      supabaseAdmin.from("orders").select("quantity, is_printed, created_at, printed_at, color").eq("user_id", userId),
+      supabaseAdmin.from("filaments").select("name, color, custo_kg").eq("user_id", userId),
     ]);
 
     const pieces = piecesRes.data || [];
