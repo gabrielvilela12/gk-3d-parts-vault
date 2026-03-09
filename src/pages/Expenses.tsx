@@ -258,7 +258,7 @@ export default function Expenses() {
       // Fetch all pieces to match by name/SKU and get production costs
       const { data: piecesData } = await supabase
         .from("pieces")
-        .select("id, name, cost, custo_material, custo_energia, custo_acessorios")
+        .select("id, name, cost, custo_material, custo_energia, custo_acessorios, preco_venda")
         .eq("user_id", user.id);
 
       const pieces = piecesData || [];
