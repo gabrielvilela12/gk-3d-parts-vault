@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Upload, DollarSign, TrendingUp, TrendingDown, FileSpreadsheet, Plus, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search, CalendarIcon, Filter, Check } from "lucide-react";
+import { Upload, DollarSign, TrendingUp, TrendingDown, FileSpreadsheet, Plus, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search, CalendarIcon, Filter, Check, Eye, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format, addMonths, setDate, isBefore, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -109,6 +109,7 @@ export default function Expenses() {
   const [manualDialogOpen, setManualDialogOpen] = useState(false);
   const [importData, setImportData] = useState<ExcelRow[]>([]);
   const [deletingAll, setDeletingAll] = useState(false);
+  const [detailExpense, setDetailExpense] = useState<Expense | null>(null);
   const { toast } = useToast();
 
   // View mode: pedidos vs despesas
@@ -978,7 +979,17 @@ export default function Expenses() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {expenses.map((expense) => {
+                    {(() => {
+                      // Find the next unpaid installment (earliest due date)
+                      const nextInstallmentId = expenses
+                        .filter(e => e.expense_type === "installment" && e.order_status !== "pago")
+                        .sort((a, b) => {
+                          const da = a.order_date ? new Date(a.order_date).getTime() : 0;
+                          const db = b.order_date ? new Date(b.order_date).getTime() : 0;
+                          return da - db;
+                        })[0]?.id;
+
+                      return expenses.map((expense) => {
                       if (activeView === "orders") {
                         const received = expense.order_value || 0;
                         const productionCost = expense.amount || 0;
@@ -1017,9 +1028,16 @@ export default function Expenses() {
                         const isPaid = expense.order_status === "pago";
                         const isInstallment = expense.expense_type === "installment";
                         const dueDate = expense.order_date ? new Date(expense.order_date) : null;
-                        const isOverdue = dueDate && !isPaid && dueDate <= new Date();
+                        const isNext = expense.id === nextInstallmentId;
+                        const isOverdue = dueDate && !isPaid && !isNext && dueDate <= new Date();
                         return (
-                          <TableRow key={expense.id} className={isOverdue ? "bg-destructive/10" : ""}>
+                          <TableRow
+                            key={expense.id}
+                            className={cn(
+                              isNext && "bg-primary/10 border-l-2 border-l-primary",
+                              isOverdue && "bg-destructive/10",
+                            )}
+                          >
                             <TableCell>
                               <Badge variant={isInstallment ? "secondary" : "outline"}>
                                 {isInstallment ? "Parcela" : "Manual"}
@@ -1041,8 +1059,11 @@ export default function Expenses() {
                             </TableCell>
                             <TableCell>
                               {isInstallment ? (
-                                <Badge variant={isPaid ? "default" : "destructive"}>
-                                  {isPaid ? "Pago" : "Pendente"}
+                                <Badge
+                                  variant={isPaid ? "default" : "destructive"}
+                                  className={cn(isNext && "bg-primary text-primary-foreground animate-pulse")}
+                                >
+                                  {isPaid ? "Pago" : isNext ? "⏳ Próxima" : "Pendente"}
                                 </Badge>
                               ) : (
                                 <span className="text-xs text-muted-foreground">—</span>
@@ -1050,6 +1071,11 @@ export default function Expenses() {
                             </TableCell>
                             <TableCell>
                               <div className="flex gap-1">
+                                {isInstallment && isNext && (
+                                  <Button variant="ghost" size="sm" onClick={() => setDetailExpense(expense)} title="Ver detalhes">
+                                    <Eye className="h-4 w-4 text-primary" />
+                                  </Button>
+                                )}
                                 {isInstallment && !isPaid && (
                                   <Button variant="ghost" size="sm" onClick={() => handleApproveInstallment(expense.id)} title="Marcar como pago">
                                     <Check className="h-4 w-4 text-green-500" />
@@ -1063,7 +1089,8 @@ export default function Expenses() {
                           </TableRow>
                         );
                       }
-                    })}
+                    });
+                    })()}
                   </TableBody>
                 </Table>
               </div>
@@ -1111,6 +1138,94 @@ export default function Expenses() {
             )}
           </CardContent>
         </Card>
+
+        {/* Detail Dialog for next installment */}
+        <Dialog open={!!detailExpense} onOpenChange={(open) => !open && setDetailExpense(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-primary" />
+                Próxima Parcela
+              </DialogTitle>
+              <DialogDescription>Detalhes da parcela a ser paga</DialogDescription>
+            </DialogHeader>
+            {detailExpense && (() => {
+              const dueDate = detailExpense.order_date ? new Date(detailExpense.order_date) : null;
+              const today = new Date();
+              const daysUntil = dueDate ? Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)) : null;
+
+              // Find all installments with same base description to show progress
+              const baseName = detailExpense.description?.replace(/\s*\(\d+\/\d+\)$/, "") || "";
+              const allRelated = expenses.filter(e =>
+                e.expense_type === "installment" && e.description?.startsWith(baseName)
+              );
+              const paidCount = allRelated.filter(e => e.order_status === "pago").length;
+              const totalInstallments = allRelated.length;
+
+              return (
+                <div className="space-y-4">
+                  <div className="rounded-lg border border-border p-4 space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Descrição</span>
+                      <span className="font-medium text-sm">{detailExpense.description}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Valor</span>
+                      <span className="font-bold text-lg text-destructive">R$ {(detailExpense.amount || 0).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Vencimento</span>
+                      <span className="font-medium">{dueDate?.toLocaleDateString("pt-BR")}</span>
+                    </div>
+                    {daysUntil !== null && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">Tempo restante</span>
+                        <Badge variant={daysUntil <= 0 ? "destructive" : daysUntil <= 3 ? "secondary" : "outline"}>
+                          {daysUntil <= 0 ? "Vencida!" : daysUntil === 1 ? "Amanhã" : `${daysUntil} dias`}
+                        </Badge>
+                      </div>
+                    )}
+                    {detailExpense.category && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">Categoria</span>
+                        <Badge variant="outline">{detailExpense.category}</Badge>
+                      </div>
+                    )}
+                  </div>
+
+                  {totalInstallments > 0 && (
+                    <div className="rounded-lg bg-muted p-4 space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Progresso</span>
+                        <span className="font-medium">{paidCount}/{totalInstallments} pagas</span>
+                      </div>
+                      <div className="w-full bg-background rounded-full h-2.5">
+                        <div
+                          className="bg-primary h-2.5 rounded-full transition-all"
+                          style={{ width: `${(paidCount / totalInstallments) * 100}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Restam {totalInstallments - paidCount} parcela(s) · Total restante: R$ {((totalInstallments - paidCount) * (detailExpense.amount || 0)).toFixed(2)}
+                      </p>
+                    </div>
+                  )}
+
+                  <Button
+                    className="w-full"
+                    onClick={() => {
+                      handleApproveInstallment(detailExpense.id);
+                      setDetailExpense(null);
+                    }}
+                  >
+                    <Check className="h-4 w-4 mr-2" />
+                    Marcar como Pago
+                  </Button>
+                </div>
+              );
+            })()}
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
