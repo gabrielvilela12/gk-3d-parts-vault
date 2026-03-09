@@ -144,10 +144,28 @@ export default function Expenses() {
       const from = currentPage * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
-      const { data, error, count } = await supabase
+      let query = supabase
         .from("expenses")
         .select("*", { count: "exact" })
-        .eq("user_id", user.id)
+        .eq("user_id", user.id);
+
+      // Apply filters
+      if (filterType !== "all") {
+        query = query.eq("expense_type", filterType);
+      }
+      if (filterSearch.trim()) {
+        query = query.or(`product_name.ilike.%${filterSearch.trim()}%,description.ilike.%${filterSearch.trim()}%`);
+      }
+      if (filterDateFrom) {
+        query = query.gte("created_at", filterDateFrom.toISOString());
+      }
+      if (filterDateTo) {
+        const endOfDay = new Date(filterDateTo);
+        endOfDay.setHours(23, 59, 59, 999);
+        query = query.lte("created_at", endOfDay.toISOString());
+      }
+
+      const { data, error, count } = await query
         .order("created_at", { ascending: false })
         .range(from, to);
 
