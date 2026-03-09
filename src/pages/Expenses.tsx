@@ -1458,7 +1458,7 @@ export default function Expenses() {
                                   {isInstallment ? "Parcela" : "Manual"}
                                 </Badge>
                                 {isNext && (
-                                  <Badge variant="secondary" className="text-xs shrink-0">
+                                  <Badge variant="outline" className="text-xs shrink-0 text-primary border-primary/50">
                                     Próxima
                                   </Badge>
                                 )}
