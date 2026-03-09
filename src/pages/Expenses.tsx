@@ -654,7 +654,7 @@ export default function Expenses() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="amount">Valor (R$) *</Label>
+                      <Label htmlFor="amount">Valor Total (R$) *</Label>
                       <Input
                         id="amount"
                         type="number"
@@ -666,6 +666,27 @@ export default function Expenses() {
                       />
                     </div>
 
+                    <div className="space-y-2">
+                      <Label htmlFor="installments">Parcelas</Label>
+                      <Input
+                        id="installments"
+                        type="number"
+                        min="1"
+                        max="48"
+                        value={manualForm.installments}
+                        onChange={(e) => setManualForm({ ...manualForm, installments: e.target.value })}
+                        placeholder="1"
+                      />
+                    </div>
+                  </div>
+
+                  {parseInt(manualForm.installments) > 1 && manualForm.amount && (
+                    <div className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">
+                      {parseInt(manualForm.installments)}x de R$ {(parseFloat(manualForm.amount) / parseInt(manualForm.installments)).toFixed(2)}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="category">Categoria</Label>
                       <Input
