@@ -1114,34 +1114,30 @@ export default function Expenses() {
           <Card className="card-gradient border-border/50">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Valor Recebido</CardTitle>
-              <TrendingUp className="h-4 w-4 text-green-500" />
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-green-500">R$ {totalReceived.toFixed(2)}</div>
+              <div className="text-3xl font-bold">R$ {totalReceived.toFixed(2)}</div>
             </CardContent>
           </Card>
 
           <Card className="card-gradient border-border/50">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Custo de Produção</CardTitle>
-              <TrendingDown className="h-4 w-4 text-red-500" />
+              <TrendingDown className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-red-500">R$ {totalProductionCost.toFixed(2)}</div>
+              <div className="text-3xl font-bold text-muted-foreground">R$ {totalProductionCost.toFixed(2)}</div>
             </CardContent>
           </Card>
 
-          <Card className="card-gradient border-border/50 glow-primary">
+          <Card className="card-gradient border-border/50">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Lucro Líquido</CardTitle>
-              <DollarSign className="h-4 w-4 text-primary" />
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div
-                className={`text-3xl font-bold ${
-                  totalProfit >= 0 ? "text-green-500" : "text-red-500"
-                }`}
-              >
+              <div className="text-3xl font-bold">
                 R$ {totalProfit.toFixed(2)}
               </div>
             </CardContent>
@@ -1195,13 +1191,13 @@ export default function Expenses() {
                               {expense.platform_order_id || "-"}
                             </TableCell>
                             <TableCell>{expense.quantity || "-"}</TableCell>
-                            <TableCell className="font-medium text-green-500">
+                            <TableCell className="font-medium">
                               R$ {received.toFixed(2)}
                             </TableCell>
-                            <TableCell className="font-medium text-red-500">
+                            <TableCell className="font-medium text-muted-foreground">
                               {productionCost > 0 ? `R$ ${productionCost.toFixed(2)}` : "-"}
                             </TableCell>
-                            <TableCell className={`font-bold ${profit >= 0 ? "text-green-500" : "text-red-500"}`}>
+                            <TableCell className="font-bold">
                               R$ {profit.toFixed(2)}
                             </TableCell>
                             <TableCell className="text-sm text-muted-foreground">
@@ -1270,9 +1266,8 @@ export default function Expenses() {
                     <Card
                       key={group.key}
                       className={cn(
-                        "card-gradient border-border/50 cursor-pointer transition-all hover:shadow-lg hover:scale-[1.02]",
-                        group.hasNextInstallment && "border-primary/60 ring-1 ring-primary/30",
-                        group.isCurrentMonth && !group.hasNextInstallment && "border-accent/60",
+                        "card-gradient border-border/50 cursor-pointer transition-all hover:border-border",
+                        group.hasNextInstallment && "border-border",
                       )}
                       onClick={() => { setSelectedMonth(group); setSelectedExpenseIds(new Set()); }}
                     >
@@ -1283,12 +1278,12 @@ export default function Expenses() {
                             {group.label}
                           </CardTitle>
                           {group.hasNextInstallment && (
-                            <Badge className="bg-primary text-primary-foreground animate-pulse text-xs">
-                              ⏳ Próxima
+                            <Badge variant="secondary" className="text-xs">
+                              Próxima
                             </Badge>
                           )}
                           {allPaid && group.expenses.length > 0 && !group.hasNextInstallment && (
-                            <Badge variant="outline" className="text-green-500 border-green-500/50 text-xs">
+                            <Badge variant="outline" className="text-xs">
                               ✓ Pago
                             </Badge>
                           )}
@@ -1297,7 +1292,7 @@ export default function Expenses() {
                       <CardContent className="space-y-3">
                         <div className="flex justify-between items-baseline">
                           <span className="text-sm text-muted-foreground">Total do mês</span>
-                          <span className="text-2xl font-bold text-destructive">
+                          <span className="text-2xl font-bold">
                             R$ {group.totalAmount.toFixed(2)}
                           </span>
                         </div>
@@ -1305,11 +1300,11 @@ export default function Expenses() {
                         <div className="flex gap-3 text-xs text-muted-foreground">
                           <span>{group.expenses.length} item(s)</span>
                           <span>•</span>
-                          <span className="text-green-500">{group.paidCount} pago(s)</span>
+                          <span>{group.paidCount} pago(s)</span>
                           {group.pendingCount > 0 && (
                             <>
                               <span>•</span>
-                              <span className="text-amber-500">{group.pendingCount} pendente(s)</span>
+                              <span>{group.pendingCount} pendente(s)</span>
                             </>
                           )}
                         </div>
@@ -1317,8 +1312,8 @@ export default function Expenses() {
                         <Progress value={progressPercent} className="h-1.5" />
 
                         {group.nextInstallment && (
-                          <div className="rounded-md bg-primary/10 p-2 mt-2">
-                            <p className="text-xs font-medium text-primary truncate">
+                          <div className="rounded-md bg-muted p-2 mt-2">
+                            <p className="text-xs font-medium truncate">
                               {group.nextInstallment.description}
                             </p>
                             <p className="text-xs text-muted-foreground">
@@ -1432,8 +1427,8 @@ export default function Expenses() {
                         key={expense.id}
                         className={cn(
                           "border-border/50 cursor-pointer transition-all",
-                          isNext && "border-primary ring-1 ring-primary/30 bg-primary/5",
-                          isOverdue && "border-destructive/50 bg-destructive/5",
+                          isNext && "border-border",
+                          isOverdue && "border-muted-foreground/30",
                           isPaid && "opacity-70",
                           isSelected && "ring-2 ring-destructive border-destructive/60",
                         )}
@@ -1463,17 +1458,17 @@ export default function Expenses() {
                                   {isInstallment ? "Parcela" : "Manual"}
                                 </Badge>
                                 {isNext && (
-                                  <Badge className="bg-primary text-primary-foreground animate-pulse text-xs shrink-0">
-                                    ⏳ Próxima
+                                  <Badge variant="secondary" className="text-xs shrink-0">
+                                    Próxima
                                   </Badge>
                                 )}
                                 {isPaid && (
-                                  <Badge variant="outline" className="text-green-500 border-green-500/50 text-xs shrink-0">
+                                  <Badge variant="outline" className="text-xs shrink-0">
                                     ✓ Pago
                                   </Badge>
                                 )}
                                 {isOverdue && (
-                                  <Badge variant="destructive" className="text-xs shrink-0">
+                                  <Badge variant="outline" className="text-xs shrink-0">
                                     Vencida
                                   </Badge>
                                 )}
@@ -1488,9 +1483,7 @@ export default function Expenses() {
                                   Vence: {dueDate ? dueDate.toLocaleDateString("pt-BR") : "—"}
                                 </span>
                                 {daysUntil !== null && !isPaid && (
-                                  <span className={cn(
-                                    daysUntil <= 0 ? "text-destructive" : daysUntil <= 3 ? "text-amber-500" : "text-muted-foreground"
-                                  )}>
+                                   <span className="text-muted-foreground">
                                     {daysUntil <= 0 ? "Vencida!" : daysUntil === 1 ? "Amanhã" : `em ${daysUntil} dias`}
                                   </span>
                                 )}
@@ -1498,7 +1491,7 @@ export default function Expenses() {
                             </div>
 
                             <div className="flex items-center gap-2 shrink-0">
-                              <span className="font-bold text-lg text-destructive">
+                              <span className="font-bold text-lg">
                                 R$ {(expense.amount || 0).toFixed(2)}
                               </span>
                               <div className="flex gap-1">
@@ -1569,7 +1562,7 @@ export default function Expenses() {
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Valor</span>
-                      <span className="font-bold text-lg text-destructive">R$ {(detailExpense.amount || 0).toFixed(2)}</span>
+                      <span className="font-bold text-lg">R$ {(detailExpense.amount || 0).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Vencimento</span>
