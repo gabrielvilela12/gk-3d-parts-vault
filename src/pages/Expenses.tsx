@@ -1272,19 +1272,23 @@ export default function Expenses() {
                           </div>
                         )}
 
-                        {group.pendingCount > 0 && (
-                          <Button
-                            size="sm"
-                            className="w-full gap-1 mt-1"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleApproveMonth(group);
-                            }}
-                          >
-                            <Check className="h-3.5 w-3.5" />
-                            Pagar mês
-                          </Button>
-                        )}
+                        {group.pendingCount > 0 && (() => {
+                          const now = new Date();
+                          const monthArrived = group.year < now.getFullYear() || (group.year === now.getFullYear() && group.month <= now.getMonth());
+                          return monthArrived ? (
+                            <Button
+                              size="sm"
+                              className="w-full gap-1 mt-1"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleApproveMonth(group);
+                              }}
+                            >
+                              <Check className="h-3.5 w-3.5" />
+                              Pagar mês
+                            </Button>
+                          ) : null;
+                        })()}
                       </CardContent>
                     </Card>
                   );
@@ -1318,16 +1322,20 @@ export default function Expenses() {
 
               return (
                 <div className="space-y-3">
-                  {unpaidCount > 0 && (
-                    <Button
-                      className="w-full gap-2"
-                      size="lg"
-                      onClick={() => handleApproveMonth(selectedMonth)}
-                    >
-                      <Check className="h-5 w-5" />
-                      Pagar tudo do mês ({unpaidCount} pendente{unpaidCount > 1 ? "s" : ""}) · R$ {selectedMonth.expenses.filter(e => e.order_status !== "pago").reduce((sum, e) => sum + (e.amount || 0), 0).toFixed(2)}
-                    </Button>
-                  )}
+                  {unpaidCount > 0 && (() => {
+                    const now = new Date();
+                    const monthArrived = selectedMonth.year < now.getFullYear() || (selectedMonth.year === now.getFullYear() && selectedMonth.month <= now.getMonth());
+                    return monthArrived ? (
+                      <Button
+                        className="w-full gap-2"
+                        size="lg"
+                        onClick={() => handleApproveMonth(selectedMonth)}
+                      >
+                        <Check className="h-5 w-5" />
+                        Pagar tudo do mês ({unpaidCount} pendente{unpaidCount > 1 ? "s" : ""}) · R$ {selectedMonth.expenses.filter(e => e.order_status !== "pago").reduce((sum, e) => sum + (e.amount || 0), 0).toFixed(2)}
+                      </Button>
+                    ) : null;
+                  })()}
                   {selectedMonth.expenses.map((expense) => {
                     const isPaid = expense.order_status === "pago";
                     const isInstallment = expense.expense_type === "installment";
