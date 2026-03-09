@@ -132,7 +132,7 @@ export default function Expenses() {
 
   useEffect(() => {
     fetchExpenses();
-  }, [currentPage, filterType, filterSearch, filterDateFrom, filterDateTo]);
+  }, [currentPage, activeView, filterSearch, filterDateFrom, filterDateTo]);
 
   useEffect(() => {
     fetchGlobalTotals();
@@ -151,9 +151,11 @@ export default function Expenses() {
         .select("*", { count: "exact" })
         .eq("user_id", user.id);
 
-      // Apply filters
-      if (filterType !== "all") {
-        query = query.eq("expense_type", filterType);
+      // Apply view filter
+      if (activeView === "orders") {
+        query = query.eq("expense_type", "order");
+      } else {
+        query = query.in("expense_type", ["manual", "installment"]);
       }
       if (filterSearch.trim()) {
         query = query.or(`product_name.ilike.%${filterSearch.trim()}%,description.ilike.%${filterSearch.trim()}%`);
