@@ -123,14 +123,19 @@ export default function Expenses() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não autenticado");
 
-      const { data, error } = await supabase
+      const from = currentPage * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
+      const { data, error, count } = await supabase
         .from("expenses")
-        .select("*")
+        .select("*", { count: "exact" })
         .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .range(from, to);
 
       if (error) throw error;
       setExpenses((data || []) as Expense[]);
+      setTotalCount(count || 0);
     } catch (error: any) {
       toast({
         title: "Erro ao carregar despesas",
@@ -139,6 +144,29 @@ export default function Expenses() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    try {
+      setDeletingAll(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuário não autenticado");
+
+      const { error } = await supabase.from("expenses").delete().eq("user_id", user.id);
+      if (error) throw error;
+
+      toast({ title: "Todas as despesas foram apagadas!" });
+      setCurrentPage(0);
+      fetchExpenses();
+    } catch (error: any) {
+      toast({
+        title: "Erro ao apagar despesas",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingAll(false);
     }
   };
 
