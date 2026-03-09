@@ -462,32 +462,49 @@ export default function Expenses() {
       const installmentAmount = Math.round((totalAmount / numInstallments) * 100) / 100;
 
       const today = startOfDay(new Date());
-      const dueDay = Math.min(28, Math.max(1, parseInt(manualForm.dueDay) || 10));
+      const dueDay = 10;
       
-      // Determine start month
-      let startMonth: Date;
-      if (manualForm.startDate) {
-        startMonth = new Date(manualForm.startDate + "T00:00:00");
-      } else {
-        startMonth = new Date();
-      }
+      if (numInstallments > 1) {
+        // Installments mode
+        const dueDayCustom = Math.min(28, Math.max(1, parseInt(manualForm.dueDay) || 10));
+        let startMonth: Date;
+        if (manualForm.startDate) {
+          startMonth = new Date(manualForm.startDate + "T00:00:00");
+        } else {
+          startMonth = new Date();
+        }
 
-      const entries = [];
-      for (let i = 0; i < numInstallments; i++) {
-        const dueDate = setDate(addMonths(startMonth, i), dueDay);
-        const isPast = isBefore(dueDate, today);
+        for (let i = 0; i < numInstallments; i++) {
+          const dueDate = setDate(addMonths(startMonth, i), dueDayCustom);
+          const isPast = isBefore(dueDate, today);
+          entries.push({
+            user_id: user.id,
+            expense_type: "installment" as const,
+            description: `${manualForm.description} (${i + 1}/${numInstallments})`,
+            category: manualForm.category,
+            amount: installmentAmount,
+            notes: manualForm.notes,
+            order_date: dueDate.toISOString(),
+            order_status: isPast ? "pago" : "pendente",
+            payment_date: isPast ? dueDate.toISOString() : null,
+          });
+        }
+      } else {
+        // Single manual expense — due on the 10th of next month
+        const now = new Date();
+        const nextDue = now.getDate() >= dueDay
+          ? setDate(addMonths(now, 1), dueDay)
+          : setDate(now, dueDay);
         entries.push({
           user_id: user.id,
-          expense_type: numInstallments > 1 ? "installment" as const : manualForm.expense_type,
-          description: numInstallments > 1
-            ? `${manualForm.description} (${i + 1}/${numInstallments})`
-            : manualForm.description,
+          expense_type: "manual" as const,
+          description: manualForm.description,
           category: manualForm.category,
           amount: installmentAmount,
           notes: manualForm.notes,
-          order_date: dueDate.toISOString(),
-          order_status: numInstallments > 1 ? (isPast ? "pago" : "pendente") : null,
-          payment_date: isPast ? dueDate.toISOString() : null,
+          order_date: nextDue.toISOString(),
+          order_status: "pendente",
+          payment_date: null,
         });
       }
 
