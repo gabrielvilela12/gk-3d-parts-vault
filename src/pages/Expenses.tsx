@@ -420,17 +420,15 @@ export default function Expenses() {
     const orderExpenses = expenses.filter((e) => e.expense_type === "order");
     const manualExpenses = expenses.filter((e) => e.expense_type !== "order");
 
-    const totalRevenue = orderExpenses.reduce((sum, e) => sum + (e.order_value || 0), 0);
-    const totalCosts = orderExpenses.reduce(
-      (sum, e) => sum + (e.commission || 0) + (e.total_shipping || 0),
-      0
-    ) + manualExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+    const totalReceived = orderExpenses.reduce((sum, e) => sum + (e.order_value || 0), 0);
+    const totalProductionCost = orderExpenses.reduce((sum, e) => sum + (e.amount || 0), 0)
+      + manualExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
     const totalProfit = orderExpenses.reduce((sum, e) => sum + (e.estimated_profit || 0), 0);
 
-    return { totalRevenue, totalCosts, totalProfit, netProfit: totalProfit - totalCosts };
+    return { totalReceived, totalProductionCost, totalProfit };
   };
 
-  const { totalRevenue, totalCosts, totalProfit, netProfit } = calculateTotals();
+  const { totalReceived, totalProductionCost, totalProfit } = calculateTotals();
 
   if (loading) {
     return (
