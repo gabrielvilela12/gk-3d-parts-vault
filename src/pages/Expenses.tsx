@@ -390,6 +390,7 @@ export default function Expenses() {
       setImportData([]);
       setUploadDialogOpen(false);
       fetchExpenses();
+      fetchGlobalTotals();
     } catch (error: any) {
       toast({
         title: "Erro ao importar",
