@@ -13,20 +13,26 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
 
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY não configurado");
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) throw new Error("Não autenticado");
 
-    // Validate user from JWT
-    const supabaseUser = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
-    const anonClient = createClient(SUPABASE_URL!, authHeader.replace("Bearer ", ""), {
-      auth: { persistSession: false },
+    // Create client with anon key to validate user JWT
+    const supabaseAuth = createClient(SUPABASE_URL!, SUPABASE_ANON_KEY!, {
+      global: {
+        headers: { Authorization: authHeader },
+      },
     });
 
-    const { data: { user }, error: authError } = await anonClient.auth.getUser();
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
     if (authError || !user) throw new Error("Usuário não autenticado");
+
+    // Create admin client to fetch data
+    const supabaseAdmin = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
+    if (!messages || !Array.isArray(messages)) throw new Error("Mensagens inválidas");
 
     const { messages } = await req.json();
     if (!messages || !Array.isArray(messages)) throw new Error("Mensagens inválidas");
@@ -34,10 +40,10 @@ serve(async (req) => {
     // ── Fetch user's business data ──────────────────────────────────────────
 
     const [piecesRes, expensesRes, ordersRes, filamentsRes] = await Promise.all([
-      supabaseUser.from("pieces").select("name, material, cost, preco_venda, is_selling, peso_g, tempo_impressao_min, category, custo_material, custo_energia, custo_acessorios, created_at").eq("user_id", user.id),
-      supabaseUser.from("expenses").select("expense_type, order_value, amount, estimated_profit, product_name, platform, order_status, order_date, payment_date, quantity, description, category").eq("user_id", user.id),
-      supabaseUser.from("orders").select("quantity, is_printed, created_at, printed_at, color").eq("user_id", user.id),
-      supabaseUser.from("filaments").select("name, color, custo_kg").eq("user_id", user.id),
+      supabaseAdmin.from("pieces").select("name, material, cost, preco_venda, is_selling, peso_g, tempo_impressao_min, category, custo_material, custo_energia, custo_acessorios, created_at").eq("user_id", user.id),
+      supabaseAdmin.from("expenses").select("expense_type, order_value, amount, estimated_profit, product_name, platform, order_status, order_date, payment_date, quantity, description, category").eq("user_id", user.id),
+      supabaseAdmin.from("orders").select("quantity, is_printed, created_at, printed_at, color").eq("user_id", user.id),
+      supabaseAdmin.from("filaments").select("name, color, custo_kg").eq("user_id", user.id),
     ]);
 
     const pieces = piecesRes.data || [];
