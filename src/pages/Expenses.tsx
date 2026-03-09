@@ -1458,17 +1458,17 @@ export default function Expenses() {
                                   {isInstallment ? "Parcela" : "Manual"}
                                 </Badge>
                                 {isNext && (
-                                  <Badge className="bg-primary text-primary-foreground animate-pulse text-xs shrink-0">
-                                    ⏳ Próxima
+                                  <Badge variant="secondary" className="text-xs shrink-0">
+                                    Próxima
                                   </Badge>
                                 )}
                                 {isPaid && (
-                                  <Badge variant="outline" className="text-green-500 border-green-500/50 text-xs shrink-0">
+                                  <Badge variant="outline" className="text-xs shrink-0">
                                     ✓ Pago
                                   </Badge>
                                 )}
                                 {isOverdue && (
-                                  <Badge variant="destructive" className="text-xs shrink-0">
+                                  <Badge variant="outline" className="text-xs shrink-0">
                                     Vencida
                                   </Badge>
                                 )}
