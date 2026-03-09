@@ -137,6 +137,7 @@ export default function Expenses() {
   const [filterDateFrom, setFilterDateFrom] = useState<Date | undefined>();
   const [filterDateTo, setFilterDateTo] = useState<Date | undefined>();
   const [filterSubType, setFilterSubType] = useState<string>("all");
+  const [filterMonthStatus, setFilterMonthStatus] = useState<string>("all"); // all, paid, pending
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
@@ -1012,6 +1013,22 @@ export default function Expenses() {
                 </div>
               )}
 
+              {activeView === "expenses" && (
+                <div className="w-[150px]">
+                  <Label className="text-xs text-muted-foreground mb-1 block">Status</Label>
+                  <Select value={filterMonthStatus} onValueChange={(v) => setFilterMonthStatus(v)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="paid">Pagos</SelectItem>
+                      <SelectItem value="pending">Pendentes</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               {activeView === "orders" && (
                 <>
                   <div className="w-auto">
@@ -1046,8 +1063,8 @@ export default function Expenses() {
                 </>
               )}
 
-              {(filterSearch || filterDateFrom || filterDateTo || filterSubType !== "all") && (
-                <Button variant="ghost" size="sm" onClick={() => { setFilterSearch(""); setFilterDateFrom(undefined); setFilterDateTo(undefined); setFilterSubType("all"); setCurrentPage(0); }}>
+              {(filterSearch || filterDateFrom || filterDateTo || filterSubType !== "all" || filterMonthStatus !== "all") && (
+                <Button variant="ghost" size="sm" onClick={() => { setFilterSearch(""); setFilterDateFrom(undefined); setFilterDateTo(undefined); setFilterSubType("all"); setFilterMonthStatus("all"); setCurrentPage(0); }}>
                   Limpar
                 </Button>
               )}
@@ -1202,7 +1219,11 @@ export default function Expenses() {
               </Card>
             ) : (
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {monthGroups.map((group) => {
+                {monthGroups.filter((group) => {
+                  if (filterMonthStatus === "paid") return group.pendingCount === 0;
+                  if (filterMonthStatus === "pending") return group.pendingCount > 0;
+                  return true;
+                }).map((group) => {
                   const allPaid = group.pendingCount === 0;
                   const progressPercent = group.expenses.length > 0
                     ? (group.paidCount / group.expenses.length) * 100
