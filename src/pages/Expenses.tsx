@@ -147,15 +147,49 @@ export default function Expenses() {
     try {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
-      
-      // Shopee report has data starting from Page 4 (sheet index 3)
-      const sheetName = workbook.SheetNames[3] || workbook.SheetNames[0];
+
+      const normalize = (v: any) =>
+        String(v ?? "")
+          .trim()
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "");
+
+      // Prefer the sheet named "Renda" (as in Shopee PT-BR export)
+      const preferredSheetName = workbook.SheetNames.find((name) => {
+        const n = normalize(name);
+        return n === "renda" || n.includes("renda");
+      });
+
+      const sheetName = preferredSheetName || workbook.SheetNames[3] || workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" }) as ExcelRow[];
+
+      // Shopee "Renda" sheet usually has 2 grouping rows before the real header.
+      // Detect the header row by searching for required columns.
+      const rows = XLSX.utils.sheet_to_json(worksheet, {
+        header: 1,
+        defval: "",
+        blankrows: false,
+      }) as any[][];
+
+      const requiredHeaders = ["numero da sequencia", "ver", "id do pedido", "sku", "nome do produto"];
+      const headerRowIndex = rows.findIndex((r) => {
+        const cells = (r || []).map((c) => normalize(c));
+        return requiredHeaders.every((h) => cells.includes(h));
+      });
+
+      if (headerRowIndex === -1) {
+        throw new Error(`Não encontrei o cabeçalho da aba \"${sheetName}\" (esperava colunas como: Ver, ID do pedido, SKU, Nome do produto).`);
+      }
+
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, {
+        defval: "",
+        range: headerRowIndex,
+      }) as ExcelRow[];
 
       // Filter only "Sku" rows (each order has 2 rows: Order + Sku)
-      const skuRows = jsonData.filter(row => row["Ver"] === "Sku");
-      
+      const skuRows = jsonData.filter((row) => normalize(row["Ver"]) === "sku");
+
       setImportData(skuRows);
       toast({
         title: "Arquivo carregado!",
