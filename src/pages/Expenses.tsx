@@ -521,7 +521,7 @@ export default function Expenses() {
     }
   };
 
-
+  const handleDeleteExpense = async (id: string) => {
     try {
       const { error } = await supabase.from("expenses").delete().eq("id", id);
       if (error) throw error;
