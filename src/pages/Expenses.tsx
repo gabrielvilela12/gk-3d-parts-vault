@@ -979,7 +979,17 @@ export default function Expenses() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {expenses.map((expense) => {
+                    {(() => {
+                      // Find the next unpaid installment (earliest due date)
+                      const nextInstallmentId = expenses
+                        .filter(e => e.expense_type === "installment" && e.order_status !== "pago")
+                        .sort((a, b) => {
+                          const da = a.order_date ? new Date(a.order_date).getTime() : 0;
+                          const db = b.order_date ? new Date(b.order_date).getTime() : 0;
+                          return da - db;
+                        })[0]?.id;
+
+                      return expenses.map((expense) => {
                       if (activeView === "orders") {
                         const received = expense.order_value || 0;
                         const productionCost = expense.amount || 0;
@@ -1018,9 +1028,16 @@ export default function Expenses() {
                         const isPaid = expense.order_status === "pago";
                         const isInstallment = expense.expense_type === "installment";
                         const dueDate = expense.order_date ? new Date(expense.order_date) : null;
-                        const isOverdue = dueDate && !isPaid && dueDate <= new Date();
+                        const isNext = expense.id === nextInstallmentId;
+                        const isOverdue = dueDate && !isPaid && !isNext && dueDate <= new Date();
                         return (
-                          <TableRow key={expense.id} className={isOverdue ? "bg-destructive/10" : ""}>
+                          <TableRow
+                            key={expense.id}
+                            className={cn(
+                              isNext && "bg-primary/10 border-l-2 border-l-primary",
+                              isOverdue && "bg-destructive/10",
+                            )}
+                          >
                             <TableCell>
                               <Badge variant={isInstallment ? "secondary" : "outline"}>
                                 {isInstallment ? "Parcela" : "Manual"}
@@ -1042,8 +1059,11 @@ export default function Expenses() {
                             </TableCell>
                             <TableCell>
                               {isInstallment ? (
-                                <Badge variant={isPaid ? "default" : "destructive"}>
-                                  {isPaid ? "Pago" : "Pendente"}
+                                <Badge
+                                  variant={isPaid ? "default" : "destructive"}
+                                  className={cn(isNext && "bg-primary text-primary-foreground animate-pulse")}
+                                >
+                                  {isPaid ? "Pago" : isNext ? "⏳ Próxima" : "Pendente"}
                                 </Badge>
                               ) : (
                                 <span className="text-xs text-muted-foreground">—</span>
@@ -1051,6 +1071,11 @@ export default function Expenses() {
                             </TableCell>
                             <TableCell>
                               <div className="flex gap-1">
+                                {isInstallment && isNext && (
+                                  <Button variant="ghost" size="sm" onClick={() => setDetailExpense(expense)} title="Ver detalhes">
+                                    <Eye className="h-4 w-4 text-primary" />
+                                  </Button>
+                                )}
                                 {isInstallment && !isPaid && (
                                   <Button variant="ghost" size="sm" onClick={() => handleApproveInstallment(expense.id)} title="Marcar como pago">
                                     <Check className="h-4 w-4 text-green-500" />
@@ -1064,7 +1089,8 @@ export default function Expenses() {
                           </TableRow>
                         );
                       }
-                    })}
+                    });
+                    })()}
                   </TableBody>
                 </Table>
               </div>
