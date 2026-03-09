@@ -1271,6 +1271,20 @@ export default function Expenses() {
                             </p>
                           </div>
                         )}
+
+                        {group.pendingCount > 0 && (
+                          <Button
+                            size="sm"
+                            className="w-full gap-1 mt-1"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleApproveMonth(group);
+                            }}
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                            Pagar mês
+                          </Button>
+                        )}
                       </CardContent>
                     </Card>
                   );
