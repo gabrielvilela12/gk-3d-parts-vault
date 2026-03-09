@@ -133,7 +133,7 @@ export default function Expenses() {
 
   useEffect(() => {
     fetchExpenses();
-  }, [currentPage, activeView, filterSearch, filterDateFrom, filterDateTo]);
+  }, [currentPage, activeView, filterSearch, filterDateFrom, filterDateTo, filterSubType]);
 
   useEffect(() => {
     fetchGlobalTotals();
