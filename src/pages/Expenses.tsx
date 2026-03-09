@@ -1463,7 +1463,7 @@ export default function Expenses() {
                                   </Badge>
                                 )}
                                 {isPaid && (
-                                  <Badge variant="outline" className="text-xs shrink-0">
+                                  <Badge variant="outline" className="text-xs shrink-0 text-success border-success/50">
                                     ✓ Pago
                                   </Badge>
                                 )}
