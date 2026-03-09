@@ -914,14 +914,15 @@ export default function Expenses() {
                           <TableHead>Ações</TableHead>
                         </>
                       ) : (
-                        <>
-                          <TableHead>Tipo</TableHead>
-                          <TableHead>Descrição</TableHead>
-                          <TableHead>Categoria</TableHead>
-                          <TableHead>Valor</TableHead>
-                          <TableHead>Data</TableHead>
-                          <TableHead>Ações</TableHead>
-                        </>
+                         <>
+                           <TableHead>Tipo</TableHead>
+                           <TableHead>Descrição</TableHead>
+                           <TableHead>Categoria</TableHead>
+                           <TableHead>Valor</TableHead>
+                           <TableHead>Vencimento</TableHead>
+                           <TableHead>Status</TableHead>
+                           <TableHead>Ações</TableHead>
+                         </>
                       )}
                     </TableRow>
                   </TableHeader>
