@@ -1318,12 +1318,34 @@ export default function Expenses() {
                         "card-gradient border-border/50 cursor-pointer transition-all hover:shadow-lg hover:scale-[1.02]",
                         group.hasNextInstallment && "border-primary/60 ring-1 ring-primary/30",
                         group.isCurrentMonth && !group.hasNextInstallment && "border-accent/60",
+                        selectMode && selectedMonthKeys.has(group.key) && "ring-2 ring-destructive border-destructive/60",
                       )}
-                      onClick={() => setSelectedMonth(group)}
+                      onClick={() => {
+                        if (selectMode) {
+                          setSelectedMonthKeys(prev => {
+                            const next = new Set(prev);
+                            if (next.has(group.key)) next.delete(group.key);
+                            else next.add(group.key);
+                            return next;
+                          });
+                        } else {
+                          setSelectedMonth(group);
+                        }
+                      }}
                     >
                       <CardHeader className="pb-3">
                         <div className="flex items-center justify-between">
                           <CardTitle className="text-lg flex items-center gap-2">
+                            {selectMode && (
+                              <div className={cn(
+                                "h-5 w-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
+                                selectedMonthKeys.has(group.key)
+                                  ? "bg-destructive border-destructive text-destructive-foreground"
+                                  : "border-muted-foreground"
+                              )}>
+                                {selectedMonthKeys.has(group.key) && <Check className="h-3 w-3" />}
+                              </div>
+                            )}
                             <CalendarIconLucide className="h-5 w-5 text-muted-foreground" />
                             {group.label}
                           </CardTitle>
