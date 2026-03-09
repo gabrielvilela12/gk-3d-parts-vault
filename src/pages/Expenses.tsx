@@ -1117,7 +1117,7 @@ export default function Expenses() {
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">R$ {totalReceived.toFixed(2)}</div>
+              <div className="text-3xl font-bold text-success">R$ {totalReceived.toFixed(2)}</div>
             </CardContent>
           </Card>
 
@@ -1127,7 +1127,7 @@ export default function Expenses() {
               <TrendingDown className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-muted-foreground">R$ {totalProductionCost.toFixed(2)}</div>
+              <div className="text-3xl font-bold text-destructive">R$ {totalProductionCost.toFixed(2)}</div>
             </CardContent>
           </Card>
 
@@ -1137,7 +1137,7 @@ export default function Expenses() {
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">
+              <div className={`text-3xl font-bold ${totalProfit >= 0 ? "text-success" : "text-destructive"}`}>
                 R$ {totalProfit.toFixed(2)}
               </div>
             </CardContent>
