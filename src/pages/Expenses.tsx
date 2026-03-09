@@ -118,6 +118,7 @@ export default function Expenses() {
   const [filterSearch, setFilterSearch] = useState("");
   const [filterDateFrom, setFilterDateFrom] = useState<Date | undefined>();
   const [filterDateTo, setFilterDateTo] = useState<Date | undefined>();
+  const [filterSubType, setFilterSubType] = useState<string>("all"); // for expenses tab: all, manual, installment
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
