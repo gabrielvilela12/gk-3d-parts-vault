@@ -111,8 +111,10 @@ export default function Expenses() {
   const [deletingAll, setDeletingAll] = useState(false);
   const { toast } = useToast();
 
+  // View mode: pedidos vs despesas
+  const [activeView, setActiveView] = useState<"orders" | "expenses">("orders");
+
   // Filters
-  const [filterType, setFilterType] = useState<string>("all");
   const [filterSearch, setFilterSearch] = useState("");
   const [filterDateFrom, setFilterDateFrom] = useState<Date | undefined>();
   const [filterDateTo, setFilterDateTo] = useState<Date | undefined>();
@@ -130,7 +132,7 @@ export default function Expenses() {
 
   useEffect(() => {
     fetchExpenses();
-  }, [currentPage, filterType, filterSearch, filterDateFrom, filterDateTo]);
+  }, [currentPage, activeView, filterSearch, filterDateFrom, filterDateTo]);
 
   useEffect(() => {
     fetchGlobalTotals();
@@ -149,9 +151,11 @@ export default function Expenses() {
         .select("*", { count: "exact" })
         .eq("user_id", user.id);
 
-      // Apply filters
-      if (filterType !== "all") {
-        query = query.eq("expense_type", filterType);
+      // Apply view filter
+      if (activeView === "orders") {
+        query = query.eq("expense_type", "order");
+      } else {
+        query = query.in("expense_type", ["manual", "installment"]);
       }
       if (filterSearch.trim()) {
         query = query.or(`product_name.ilike.%${filterSearch.trim()}%,description.ilike.%${filterSearch.trim()}%`);
@@ -734,6 +738,14 @@ export default function Expenses() {
           </div>
         </div>
 
+        {/* View Tabs */}
+        <Tabs value={activeView} onValueChange={(v) => { setActiveView(v as "orders" | "expenses"); setCurrentPage(0); }}>
+          <TabsList className="grid w-full grid-cols-2 max-w-md">
+            <TabsTrigger value="orders">Pedidos</TabsTrigger>
+            <TabsTrigger value="expenses">Despesas / Parcelas</TabsTrigger>
+          </TabsList>
+        </Tabs>
+
         {/* Filters */}
         <Card className="card-gradient border-border/50">
           <CardContent className="pt-4">
@@ -749,21 +761,6 @@ export default function Expenses() {
                     className="pl-9"
                   />
                 </div>
-              </div>
-
-              <div className="w-[150px]">
-                <Label className="text-xs text-muted-foreground mb-1 block">Tipo</Label>
-                <Select value={filterType} onValueChange={(v) => { setFilterType(v); setCurrentPage(0); }}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    <SelectItem value="order">Pedidos</SelectItem>
-                    <SelectItem value="manual">Manual</SelectItem>
-                    <SelectItem value="installment">Parcelas</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
 
               <div className="w-auto">
@@ -796,8 +793,8 @@ export default function Expenses() {
                 </Popover>
               </div>
 
-              {(filterType !== "all" || filterSearch || filterDateFrom || filterDateTo) && (
-                <Button variant="ghost" size="sm" onClick={() => { setFilterType("all"); setFilterSearch(""); setFilterDateFrom(undefined); setFilterDateTo(undefined); setCurrentPage(0); }}>
+              {(filterSearch || filterDateFrom || filterDateTo) && (
+                <Button variant="ghost" size="sm" onClick={() => { setFilterSearch(""); setFilterDateFrom(undefined); setFilterDateTo(undefined); setCurrentPage(0); }}>
                   Limpar
                 </Button>
               )}
@@ -844,93 +841,115 @@ export default function Expenses() {
           </Card>
         </div>
 
-        {/* Expenses Table */}
+        {/* Table */}
         <Card className="card-gradient border-border/50">
           <CardHeader>
-            <CardTitle>Histórico de Despesas e Pedidos</CardTitle>
+            <CardTitle>{activeView === "orders" ? "Pedidos Importados" : "Despesas e Parcelas"}</CardTitle>
             <CardDescription>
-              {totalCount} registros no total — Página {currentPage + 1} de {totalPages}
+              {totalCount} registros — Página {currentPage + 1} de {totalPages}
             </CardDescription>
           </CardHeader>
           <CardContent>
             {expenses.length === 0 ? (
               <div className="text-center py-8">
                 <FileSpreadsheet className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">Nenhuma despesa registrada</p>
+                <p className="text-muted-foreground">
+                  {activeView === "orders" ? "Nenhum pedido importado" : "Nenhuma despesa registrada"}
+                </p>
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Tipo</TableHead>
-                      <TableHead>Produto</TableHead>
-                      <TableHead>Pedido</TableHead>
-                      <TableHead>Qtd</TableHead>
-                      <TableHead>Valor Recebido</TableHead>
-                      <TableHead>Custo Produção</TableHead>
-                      <TableHead>Lucro Líquido</TableHead>
-                      <TableHead>Data</TableHead>
-                      <TableHead>Ações</TableHead>
+                      {activeView === "orders" ? (
+                        <>
+                          <TableHead>Produto</TableHead>
+                          <TableHead>Pedido</TableHead>
+                          <TableHead>Qtd</TableHead>
+                          <TableHead>Valor Recebido</TableHead>
+                          <TableHead>Custo Produção</TableHead>
+                          <TableHead>Lucro Líquido</TableHead>
+                          <TableHead>Data</TableHead>
+                          <TableHead>Ações</TableHead>
+                        </>
+                      ) : (
+                        <>
+                          <TableHead>Tipo</TableHead>
+                          <TableHead>Descrição</TableHead>
+                          <TableHead>Categoria</TableHead>
+                          <TableHead>Valor</TableHead>
+                          <TableHead>Data</TableHead>
+                          <TableHead>Ações</TableHead>
+                        </>
+                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {expenses.map((expense) => {
-                      const received = expense.order_value || 0;
-                      const productionCost = expense.amount || 0;
-                      const profit = expense.estimated_profit ?? (received - productionCost);
-                      
-                      return (
-                        <TableRow key={expense.id}>
-                          <TableCell>
-                            <Badge
-                              variant={
-                                expense.expense_type === "order"
-                                  ? "default"
-                                  : expense.expense_type === "installment"
-                                  ? "secondary"
-                                  : "outline"
-                              }
-                            >
-                              {expense.expense_type === "order"
-                                ? "Pedido"
-                                : expense.expense_type === "installment"
-                                ? "Parcela"
-                                : "Manual"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="max-w-[250px]">
-                            <p className="font-medium text-sm truncate">
-                              {expense.product_name || expense.description}
-                            </p>
-                          </TableCell>
-                          <TableCell className="font-mono text-xs">
-                            {expense.platform_order_id || "-"}
-                          </TableCell>
-                          <TableCell>{expense.quantity || "-"}</TableCell>
-                          <TableCell className="font-medium text-green-500">
-                            R$ {received.toFixed(2)}
-                          </TableCell>
-                          <TableCell className="font-medium text-red-500">
-                            {productionCost > 0 ? `R$ ${productionCost.toFixed(2)}` : "-"}
-                          </TableCell>
-                          <TableCell className={`font-bold ${profit >= 0 ? "text-green-500" : "text-red-500"}`}>
-                            R$ {profit.toFixed(2)}
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
-                            {new Date(expense.created_at).toLocaleDateString("pt-BR")}
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteExpense(expense.id)}
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      );
+                      if (activeView === "orders") {
+                        const received = expense.order_value || 0;
+                        const productionCost = expense.amount || 0;
+                        const profit = expense.estimated_profit ?? (received - productionCost);
+                        return (
+                          <TableRow key={expense.id}>
+                            <TableCell className="max-w-[250px]">
+                              <p className="font-medium text-sm truncate">
+                                {expense.product_name || expense.description}
+                              </p>
+                            </TableCell>
+                            <TableCell className="font-mono text-xs">
+                              {expense.platform_order_id || "-"}
+                            </TableCell>
+                            <TableCell>{expense.quantity || "-"}</TableCell>
+                            <TableCell className="font-medium text-green-500">
+                              R$ {received.toFixed(2)}
+                            </TableCell>
+                            <TableCell className="font-medium text-red-500">
+                              {productionCost > 0 ? `R$ ${productionCost.toFixed(2)}` : "-"}
+                            </TableCell>
+                            <TableCell className={`font-bold ${profit >= 0 ? "text-green-500" : "text-red-500"}`}>
+                              R$ {profit.toFixed(2)}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {expense.order_date ? new Date(expense.order_date).toLocaleDateString("pt-BR") : new Date(expense.created_at).toLocaleDateString("pt-BR")}
+                            </TableCell>
+                            <TableCell>
+                              <Button variant="ghost" size="sm" onClick={() => handleDeleteExpense(expense.id)}>
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      } else {
+                        return (
+                          <TableRow key={expense.id}>
+                            <TableCell>
+                              <Badge variant={expense.expense_type === "installment" ? "secondary" : "outline"}>
+                                {expense.expense_type === "installment" ? "Parcela" : "Manual"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="max-w-[300px]">
+                              <p className="font-medium text-sm truncate">{expense.description || "-"}</p>
+                              {expense.notes && <p className="text-xs text-muted-foreground truncate">{expense.notes}</p>}
+                            </TableCell>
+                            <TableCell>
+                              {expense.category && <Badge variant="outline" className="text-xs">{expense.category}</Badge>}
+                            </TableCell>
+                            <TableCell className="font-medium text-red-500">
+                              R$ {(expense.amount || 0).toFixed(2)}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {expense.order_date ? new Date(expense.order_date).toLocaleDateString("pt-BR") : new Date(expense.created_at).toLocaleDateString("pt-BR")}
+                            </TableCell>
+                            <TableCell>
+                              <Button variant="ghost" size="sm" onClick={() => handleDeleteExpense(expense.id)}>
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      }
                     })}
                   </TableBody>
                 </Table>
