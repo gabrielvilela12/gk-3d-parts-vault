@@ -111,8 +111,10 @@ export default function Expenses() {
   const [deletingAll, setDeletingAll] = useState(false);
   const { toast } = useToast();
 
+  // View mode: pedidos vs despesas
+  const [activeView, setActiveView] = useState<"orders" | "expenses">("orders");
+
   // Filters
-  const [filterType, setFilterType] = useState<string>("all");
   const [filterSearch, setFilterSearch] = useState("");
   const [filterDateFrom, setFilterDateFrom] = useState<Date | undefined>();
   const [filterDateTo, setFilterDateTo] = useState<Date | undefined>();
