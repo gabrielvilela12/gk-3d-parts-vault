@@ -1422,19 +1422,6 @@ export default function Expenses() {
                                 R$ {(expense.amount || 0).toFixed(2)}
                               </span>
                               <div className="flex gap-1">
-                                {isInstallment && !isPaid && (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleApproveInstallment(expense.id);
-                                    }}
-                                    title="Marcar como pago"
-                                  >
-                                    <Check className="h-4 w-4 text-green-500" />
-                                  </Button>
-                                )}
                                 {isNext && (
                                   <Button
                                     variant="ghost"
