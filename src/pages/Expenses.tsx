@@ -1191,13 +1191,13 @@ export default function Expenses() {
                               {expense.platform_order_id || "-"}
                             </TableCell>
                             <TableCell>{expense.quantity || "-"}</TableCell>
-                            <TableCell className="font-medium text-green-500">
+                            <TableCell className="font-medium">
                               R$ {received.toFixed(2)}
                             </TableCell>
-                            <TableCell className="font-medium text-red-500">
+                            <TableCell className="font-medium text-muted-foreground">
                               {productionCost > 0 ? `R$ ${productionCost.toFixed(2)}` : "-"}
                             </TableCell>
-                            <TableCell className={`font-bold ${profit >= 0 ? "text-green-500" : "text-red-500"}`}>
+                            <TableCell className="font-bold">
                               R$ {profit.toFixed(2)}
                             </TableCell>
                             <TableCell className="text-sm text-muted-foreground">
