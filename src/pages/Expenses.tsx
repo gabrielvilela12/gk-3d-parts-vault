@@ -1562,7 +1562,7 @@ export default function Expenses() {
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Valor</span>
-                      <span className="font-bold text-lg text-destructive">R$ {(detailExpense.amount || 0).toFixed(2)}</span>
+                      <span className="font-bold text-lg">R$ {(detailExpense.amount || 0).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Vencimento</span>
