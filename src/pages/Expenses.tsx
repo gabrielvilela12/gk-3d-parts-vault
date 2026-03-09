@@ -688,88 +688,74 @@ export default function Expenses() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Tipo</TableHead>
-                      <TableHead>Descrição/Produto</TableHead>
+                      <TableHead>Produto</TableHead>
                       <TableHead>Pedido</TableHead>
                       <TableHead>Qtd</TableHead>
-                      <TableHead>Valor</TableHead>
-                      <TableHead>Comissão</TableHead>
-                      <TableHead>Frete</TableHead>
-                      <TableHead>Lucro</TableHead>
+                      <TableHead>Valor Recebido</TableHead>
+                      <TableHead>Custo Produção</TableHead>
+                      <TableHead>Lucro Líquido</TableHead>
                       <TableHead>Data</TableHead>
                       <TableHead>Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {expenses.map((expense) => (
-                      <TableRow key={expense.id}>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              expense.expense_type === "order"
-                                ? "default"
+                    {expenses.map((expense) => {
+                      const received = expense.order_value || 0;
+                      const productionCost = expense.amount || 0;
+                      const profit = expense.estimated_profit ?? (received - productionCost);
+                      
+                      return (
+                        <TableRow key={expense.id}>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                expense.expense_type === "order"
+                                  ? "default"
+                                  : expense.expense_type === "installment"
+                                  ? "secondary"
+                                  : "outline"
+                              }
+                            >
+                              {expense.expense_type === "order"
+                                ? "Pedido"
                                 : expense.expense_type === "installment"
-                                ? "secondary"
-                                : "outline"
-                            }
-                          >
-                            {expense.expense_type === "order"
-                              ? "Pedido"
-                              : expense.expense_type === "installment"
-                              ? "Parcela"
-                              : "Manual"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="max-w-[250px]">
-                          <div className="space-y-1">
+                                ? "Parcela"
+                                : "Manual"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="max-w-[250px]">
                             <p className="font-medium text-sm truncate">
                               {expense.product_name || expense.description}
                             </p>
-                            {expense.variation && (
-                              <p className="text-xs text-muted-foreground">{expense.variation}</p>
-                            )}
-                            {expense.category && (
-                              <Badge variant="outline" className="text-xs">
-                                {expense.category}
-                              </Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-mono text-xs">
-                          {expense.platform_order_id || "-"}
-                        </TableCell>
-                        <TableCell>{expense.quantity || "-"}</TableCell>
-                        <TableCell className="font-medium">
-                          R$ {(expense.order_value || expense.amount || 0).toFixed(2)}
-                        </TableCell>
-                        <TableCell className="text-red-500">
-                          {expense.commission
-                            ? `R$ ${expense.commission.toFixed(2)}`
-                            : "-"}
-                        </TableCell>
-                        <TableCell className="text-red-500">
-                          {expense.total_shipping
-                            ? `R$ ${expense.total_shipping.toFixed(2)}`
-                            : "-"}
-                        </TableCell>
-                        <TableCell className="font-bold text-green-500">
-                          {expense.estimated_profit
-                            ? `R$ ${expense.estimated_profit.toFixed(2)}`
-                            : "-"}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {new Date(expense.created_at).toLocaleDateString("pt-BR")}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteExpense(expense.id)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {expense.platform_order_id || "-"}
+                          </TableCell>
+                          <TableCell>{expense.quantity || "-"}</TableCell>
+                          <TableCell className="font-medium text-green-500">
+                            R$ {received.toFixed(2)}
+                          </TableCell>
+                          <TableCell className="font-medium text-red-500">
+                            {productionCost > 0 ? `R$ ${productionCost.toFixed(2)}` : "-"}
+                          </TableCell>
+                          <TableCell className={`font-bold ${profit >= 0 ? "text-green-500" : "text-red-500"}`}>
+                            R$ {profit.toFixed(2)}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {new Date(expense.created_at).toLocaleDateString("pt-BR")}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteExpense(expense.id)}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
