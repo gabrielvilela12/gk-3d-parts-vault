@@ -1191,10 +1191,10 @@ export default function Expenses() {
                               {expense.platform_order_id || "-"}
                             </TableCell>
                             <TableCell>{expense.quantity || "-"}</TableCell>
-                            <TableCell className="font-medium">
+                            <TableCell className="font-medium text-success">
                               R$ {received.toFixed(2)}
                             </TableCell>
-                            <TableCell className="font-medium text-muted-foreground">
+                            <TableCell className="font-medium text-destructive">
                               {productionCost > 0 ? `R$ ${productionCost.toFixed(2)}` : "-"}
                             </TableCell>
                             <TableCell className={cn("font-bold", profit >= 0 ? "text-success" : "text-destructive")}>
