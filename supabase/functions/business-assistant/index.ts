@@ -13,22 +13,25 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
 
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY não configurado");
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) throw new Error("Não autenticado");
 
-    // Validate user from JWT
-    const supabaseUser = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
-    const anonClient = createClient(SUPABASE_URL!, authHeader.replace("Bearer ", ""), {
-      auth: { persistSession: false },
+    // Create client with anon key to validate user JWT
+    const supabaseAuth = createClient(SUPABASE_URL!, SUPABASE_ANON_KEY!, {
+      global: {
+        headers: { Authorization: authHeader },
+      },
     });
 
-    const { data: { user }, error: authError } = await anonClient.auth.getUser();
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
     if (authError || !user) throw new Error("Usuário não autenticado");
 
-    const { messages } = await req.json();
+    // Create admin client to fetch data
+    const supabaseAdmin = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
     if (!messages || !Array.isArray(messages)) throw new Error("Mensagens inválidas");
 
     // ── Fetch user's business data ──────────────────────────────────────────
