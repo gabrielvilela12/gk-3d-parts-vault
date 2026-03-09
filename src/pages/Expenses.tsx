@@ -658,6 +658,38 @@ export default function Expenses() {
     }
   };
 
+  const handleApproveMonth = async (group: MonthGroup) => {
+    try {
+      const unpaidIds = group.expenses
+        .filter(e => e.order_status !== "pago")
+        .map(e => e.id);
+
+      if (unpaidIds.length === 0) {
+        toast({ title: "Tudo já está pago neste mês!" });
+        return;
+      }
+
+      const now = new Date().toISOString();
+      const { error } = await supabase
+        .from("expenses")
+        .update({ order_status: "pago", payment_date: now })
+        .in("id", unpaidIds);
+
+      if (error) throw error;
+
+      toast({
+        title: "Mês pago! ✓",
+        description: `${unpaidIds.length} item(s) marcado(s) como pago.`,
+      });
+      setSelectedMonth(null);
+      fetchExpenses();
+      fetchAllExpenses();
+      fetchGlobalTotals();
+    } catch (error: any) {
+      toast({ title: "Erro ao pagar mês", description: error.message, variant: "destructive" });
+    }
+  };
+
   const handleDeleteExpense = async (id: string) => {
     try {
       const { error } = await supabase.from("expenses").delete().eq("id", id);
