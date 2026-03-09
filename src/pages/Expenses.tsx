@@ -47,7 +47,7 @@ interface Expense {
 }
 
 // Shopee Income Report Format
-interface ExcelRow {
+interface ExcelRow extends Record<string, any> {
   "Número da sequência": number;
   "Ver": string;
   "ID do pedido": string;
