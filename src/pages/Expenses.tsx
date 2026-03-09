@@ -718,7 +718,7 @@ export default function Expenses() {
       toast({ title: "Erro ao excluir", description: error.message, variant: "destructive" });
     }
   };
-
+  const handleDeleteExpense = async (id: string) => {
     try {
       const { error } = await supabase.from("expenses").delete().eq("id", id);
       if (error) throw error;
@@ -727,7 +727,6 @@ export default function Expenses() {
       fetchExpenses();
       fetchAllExpenses();
       fetchGlobalTotals();
-      // Update selected month if open
       if (selectedMonth) {
         setSelectedMonth(prev => prev ? {
           ...prev,
