@@ -193,34 +193,46 @@ export default function Expenses() {
 
       const newExpenses = importData
         .filter((row) => {
-          const key = `${row["Nº de Pedido da Plataforma"]}-${row["SKU"]}`;
+          const orderId = String(row["ID do pedido"] || "");
+          const sku = String(row["SKU"] || "");
+          const key = `${orderId}-${sku}`;
           return !existingKeys.has(key);
         })
-        .map((row) => ({
-          user_id: user.id,
-          expense_type: "order" as const,
-          platform_order_id: String(row["Nº de Pedido da Plataforma"] || ""),
-          internal_order_id: String(row["Nº de Pedido"] || ""),
-          platform: String(row["Plataformas"] || ""),
-          store_name: String(row["Nome da Loja no UpSeller"] || ""),
-          order_status: String(row["Estado do Pedido"] || ""),
-          order_date: parseExcelDate(String(row["Hora do Pedido"] || "")),
-          payment_date: parseExcelDate(String(row["Hora do Pagamento"] || "")),
-          shipping_deadline: parseExcelDate(String(row["Prazo de Envio"] || "")),
-          order_value: parseNumericValue(row["Valor do Pedido"]),
-          product_value: parseNumericValue(row["Valor Total de Produtos"]),
-          discounts: parseNumericValue(row["Descontos e Cupons"]),
-          commission: parseNumericValue(row["Comissão Total"]),
-          buyer_shipping: parseNumericValue(row["Frete do Comprador"]),
-          total_shipping: parseNumericValue(row["Total de Frete"]),
-          estimated_profit: parseNumericValue(row["Lucro Estimado"]),
-          product_name: String(row["Nome do Anúncio"] || ""),
-          sku: String(row["SKU"] || ""),
-          variation: String(row["Variação"] || ""),
-          image_url: String(row["Link da Imagem"] || "").replace(/\\/g, ""),
-          product_price: parseNumericValue(row["Preço de Produto"]),
-          quantity: parseNumericValue(row["Qtd. do Produto"]) || 1,
-        }));
+        .map((row) => {
+          // Calculate totals
+          const totalReleased = parseNumericValue(row["Quantia total lançada (R$)"]);
+          const productPrice = parseNumericValue(row["Preço do produto"]);
+          const commission = Math.abs(parseNumericValue(row["Taxa de comissão líquida"]));
+          const serviceFee = Math.abs(parseNumericValue(row["Taxa de serviço líquida"]));
+          const transactionFee = Math.abs(parseNumericValue(row["Taxa de transação"]));
+          const buyerShipping = parseNumericValue(row["Taxa de frete paga pelo comprador"]);
+          const shopeeShippingDiscount = parseNumericValue(row["Desconto de frete pela Shopee"]);
+          const partnerShippingCost = Math.abs(parseNumericValue(row["Frete cobrado pelo parceiro logístico"]));
+          
+          const totalFees = commission + serviceFee + transactionFee;
+          const netShippingCost = partnerShippingCost - shopeeShippingDiscount - buyerShipping;
+          
+          return {
+            user_id: user.id,
+            expense_type: "order" as const,
+            platform_order_id: String(row["ID do pedido"] || ""),
+            platform: "Shopee",
+            order_status: "Concluído",
+            order_date: parseExcelDate(String(row["Data de criação do pedido"] || "")),
+            payment_date: parseExcelDate(String(row["Data de conclusão do pagamento"] || "")),
+            order_value: totalReleased,
+            product_value: productPrice,
+            discounts: Math.abs(parseNumericValue(row["Voucher subsidiado pelo Seller"])),
+            commission: totalFees,
+            buyer_shipping: buyerShipping,
+            total_shipping: netShippingCost,
+            estimated_profit: totalReleased,
+            product_name: String(row["Nome do produto"] || ""),
+            sku: String(row["SKU"] || ""),
+            product_price: productPrice,
+            quantity: 1,
+          };
+        });
 
       if (newExpenses.length === 0) {
         toast({
@@ -236,7 +248,7 @@ export default function Expenses() {
 
       toast({
         title: "Importação concluída!",
-        description: `${newExpenses.length} pedidos importados. ${importData.length - newExpenses.length} duplicados ignorados.`,
+        description: `${newExpenses.length} produtos importados. ${importData.length - newExpenses.length} duplicados ignorados.`,
       });
 
       setImportData([]);
