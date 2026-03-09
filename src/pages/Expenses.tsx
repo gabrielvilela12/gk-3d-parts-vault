@@ -701,7 +701,7 @@ export default function Expenses() {
           <CardHeader>
             <CardTitle>Histórico de Despesas e Pedidos</CardTitle>
             <CardDescription>
-              Todas as despesas, pedidos importados e lucros detalhados
+              {totalCount} registros no total — Página {currentPage + 1} de {totalPages}
             </CardDescription>
           </CardHeader>
           <CardContent>
