@@ -152,6 +152,35 @@ export default function Expenses() {
     }
   };
 
+  const fetchGlobalTotals = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Fetch all expenses but only needed columns for totals
+      const { data } = await supabase
+        .from("expenses")
+        .select("expense_type, order_value, amount, estimated_profit")
+        .eq("user_id", user.id);
+
+      if (!data) return;
+
+      let totalReceived = 0;
+      let totalProductionCost = 0;
+      let totalProfit = 0;
+
+      for (const e of data) {
+        totalReceived += e.order_value || 0;
+        totalProductionCost += e.amount || 0;
+        totalProfit += e.estimated_profit || 0;
+      }
+
+      setGlobalTotals({ totalReceived, totalProductionCost, totalProfit });
+    } catch {
+      // silent
+    }
+  
+
   const handleDeleteAll = async () => {
     try {
       setDeletingAll(true);
