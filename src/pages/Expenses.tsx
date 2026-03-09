@@ -302,24 +302,13 @@ export default function Expenses() {
           return !existingKeys.has(key);
         })
         .map((row) => {
-          // Calculate totals
           const totalReleased = parseNumericValue(row["Quantia total lançada (R$)"]);
-          const productPrice = parseNumericValue(row["Preço do produto"]);
-          const commission = Math.abs(parseNumericValue(row["Taxa de comissão líquida"]));
-          const serviceFee = Math.abs(parseNumericValue(row["Taxa de serviço líquida"]));
-          const transactionFee = Math.abs(parseNumericValue(row["Taxa de transação"]));
-          const buyerShipping = parseNumericValue(row["Taxa de frete paga pelo comprador"]);
-          const shopeeShippingDiscount = parseNumericValue(row["Desconto de frete pela Shopee"]);
-          const partnerShippingCost = Math.abs(parseNumericValue(row["Frete cobrado pelo parceiro logístico"]));
-          
-          const totalFees = commission + serviceFee + transactionFee;
-          const netShippingCost = partnerShippingCost - shopeeShippingDiscount - buyerShipping;
 
           // Get production cost from pieces catalog
           const productName = String(row["Nome do produto"] || "");
           const productionCost = findPieceCost(productName);
           
-          // Lucro = valor liberado - custo de produção da peça
+          // Lucro líquido = valor liberado na conta - custo de produção
           const estimatedProfit = totalReleased - productionCost;
           
           return {
@@ -331,15 +320,10 @@ export default function Expenses() {
             order_date: parseExcelDate(String(row["Data de criação do pedido"] || "")),
             payment_date: parseExcelDate(String(row["Data de conclusão do pagamento"] || "")),
             order_value: totalReleased,
-            product_value: productPrice,
-            discounts: Math.abs(parseNumericValue(row["Voucher subsidiado pelo Seller"])),
-            commission: totalFees,
-            buyer_shipping: buyerShipping,
-            total_shipping: netShippingCost,
+            amount: productionCost, // custo de produção
             estimated_profit: estimatedProfit,
             product_name: productName,
             sku: String(row["SKU"] || ""),
-            product_price: productPrice,
             quantity: 1,
           };
         });
