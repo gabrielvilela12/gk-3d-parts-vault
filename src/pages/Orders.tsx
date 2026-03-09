@@ -302,10 +302,24 @@ export default function Orders() {
       // Check existing orders to avoid duplicates
       const existingNotes = orders.map(o => o.notes || "");
 
-      const newRows = matchedRows.filter(r => {
+      // First, consolidate duplicate rows within the same batch (same platformOrderId + same piece)
+      const consolidatedMap = new Map<string, ImportRow>();
+      for (const r of matchedRows) {
+        const key = `${r.platformOrderId}::${r.matchedPieceId}::${r.color}`;
+        const existing = consolidatedMap.get(key);
+        if (existing) {
+          existing.quantity += r.quantity;
+          // Keep buyer notes from first occurrence
+        } else {
+          consolidatedMap.set(key, { ...r });
+        }
+      }
+      const consolidatedRows = Array.from(consolidatedMap.values());
+
+      // Then filter out rows that already exist in the database
+      const newRows = consolidatedRows.filter(r => {
         const noteKey = r.platformOrderId || "";
-        if (!noteKey) return true; // No platform ID, always insert
-        // Check if an order with same platform order ID + same piece already exists
+        if (!noteKey) return true;
         const isDuplicate = orders.some(o => {
           const orderNote = o.notes || "";
           return orderNote.includes(noteKey) && o.piece_id === r.matchedPieceId;
@@ -320,7 +334,7 @@ export default function Orders() {
         return;
       }
 
-      const skipped = matchedRows.length - newRows.length;
+      const skipped = consolidatedRows.length - newRows.length;
 
       const inserts = newRows.map(r => ({
         user_id: user.id,
