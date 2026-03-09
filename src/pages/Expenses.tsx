@@ -461,6 +461,7 @@ export default function Expenses() {
       const numInstallments = Math.max(1, parseInt(manualForm.installments) || 1);
       const installmentAmount = Math.round((totalAmount / numInstallments) * 100) / 100;
 
+      const entries: any[] = [];
       const today = startOfDay(new Date());
       const dueDay = 10;
       
