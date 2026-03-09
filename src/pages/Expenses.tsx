@@ -147,13 +147,19 @@ export default function Expenses() {
     try {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
-      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      
+      // Shopee report has data starting from Page 4 (sheet index 3)
+      const sheetName = workbook.SheetNames[3] || workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" }) as ExcelRow[];
 
-      setImportData(jsonData);
+      // Filter only "Sku" rows (each order has 2 rows: Order + Sku)
+      const skuRows = jsonData.filter(row => row["Ver"] === "Sku");
+      
+      setImportData(skuRows);
       toast({
         title: "Arquivo carregado!",
-        description: `${jsonData.length} linhas encontradas. Revise antes de importar.`,
+        description: `${skuRows.length} produtos encontrados. Revise antes de importar.`,
       });
     } catch (error: any) {
       toast({
