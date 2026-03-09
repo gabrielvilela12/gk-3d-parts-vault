@@ -692,24 +692,16 @@ export default function Expenses() {
     }
   };
 
-  const handleDeleteSelectedMonths = async () => {
+  const handleDeleteSelectedExpenses = async () => {
     try {
-      const idsToDelete = allExpenses
-        .filter(e => {
-          const date = e.order_date ? new Date(e.order_date) : new Date(e.created_at);
-          const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-          return selectedMonthKeys.has(key);
-        })
-        .map(e => e.id);
-
-      if (idsToDelete.length === 0) return;
-
-      const { error } = await supabase.from("expenses").delete().in("id", idsToDelete);
+      if (selectedExpenseIds.size === 0) return;
+      const ids = Array.from(selectedExpenseIds);
+      const { error } = await supabase.from("expenses").delete().in("id", ids);
       if (error) throw error;
 
-      toast({ title: "Meses excluídos!", description: `${idsToDelete.length} despesa(s) removida(s).` });
-      setSelectedMonthKeys(new Set());
-      setSelectMode(false);
+      toast({ title: "Itens excluídos!", description: `${ids.length} despesa(s) removida(s).` });
+      setSelectedExpenseIds(new Set());
+      setSelectedMonth(null);
       fetchExpenses();
       fetchAllExpenses();
       fetchGlobalTotals();
@@ -717,6 +709,7 @@ export default function Expenses() {
       toast({ title: "Erro ao excluir", description: error.message, variant: "destructive" });
     }
   };
+
   const handleDeleteExpense = async (id: string) => {
     try {
       const { error } = await supabase.from("expenses").delete().eq("id", id);
