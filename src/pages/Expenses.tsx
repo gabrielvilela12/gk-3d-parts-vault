@@ -138,8 +138,7 @@ export default function Expenses() {
   const [filterDateTo, setFilterDateTo] = useState<Date | undefined>();
   const [filterSubType, setFilterSubType] = useState<string>("all");
   const [filterMonthStatus, setFilterMonthStatus] = useState<string>("all");
-  const [selectMode, setSelectMode] = useState(false);
-  const [selectedMonthKeys, setSelectedMonthKeys] = useState<Set<string>>(new Set());
+  const [selectedExpenseIds, setSelectedExpenseIds] = useState<Set<string>>(new Set());
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
