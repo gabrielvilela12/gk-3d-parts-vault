@@ -1491,7 +1491,7 @@ export default function Expenses() {
                             </div>
 
                             <div className="flex items-center gap-2 shrink-0">
-                              <span className="font-bold text-lg text-destructive">
+                              <span className="font-bold text-lg">
                                 R$ {(expense.amount || 0).toFixed(2)}
                               </span>
                               <div className="flex gap-1">
