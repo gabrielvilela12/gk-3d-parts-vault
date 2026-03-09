@@ -171,14 +171,9 @@ export default function Expenses() {
   };
 
   const parseExcelDate = (dateStr: string): string | undefined => {
-    if (!dateStr) return undefined;
+    if (!dateStr || dateStr === "-") return undefined;
     try {
-      // Format: "07/03/2026 09:02" or "2026-03-07 09:03:21"
-      if (dateStr.includes("/")) {
-        const [date, time] = dateStr.split(" ");
-        const [day, month, year] = date.split("/");
-        return `${year}-${month}-${day}${time ? " " + time : ""}`;
-      }
+      // Shopee format: "2026-03-04"
       return dateStr;
     } catch {
       return undefined;
