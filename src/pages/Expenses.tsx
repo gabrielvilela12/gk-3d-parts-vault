@@ -658,6 +658,38 @@ export default function Expenses() {
     }
   };
 
+  const handleApproveMonth = async (group: MonthGroup) => {
+    try {
+      const unpaidIds = group.expenses
+        .filter(e => e.order_status !== "pago")
+        .map(e => e.id);
+
+      if (unpaidIds.length === 0) {
+        toast({ title: "Tudo já está pago neste mês!" });
+        return;
+      }
+
+      const now = new Date().toISOString();
+      const { error } = await supabase
+        .from("expenses")
+        .update({ order_status: "pago", payment_date: now })
+        .in("id", unpaidIds);
+
+      if (error) throw error;
+
+      toast({
+        title: "Mês pago! ✓",
+        description: `${unpaidIds.length} item(s) marcado(s) como pago.`,
+      });
+      setSelectedMonth(null);
+      fetchExpenses();
+      fetchAllExpenses();
+      fetchGlobalTotals();
+    } catch (error: any) {
+      toast({ title: "Erro ao pagar mês", description: error.message, variant: "destructive" });
+    }
+  };
+
   const handleDeleteExpense = async (id: string) => {
     try {
       const { error } = await supabase.from("expenses").delete().eq("id", id);
@@ -1239,6 +1271,20 @@ export default function Expenses() {
                             </p>
                           </div>
                         )}
+
+                        {group.pendingCount > 0 && (
+                          <Button
+                            size="sm"
+                            className="w-full gap-1 mt-1"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleApproveMonth(group);
+                            }}
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                            Pagar mês
+                          </Button>
+                        )}
                       </CardContent>
                     </Card>
                   );
@@ -1261,6 +1307,7 @@ export default function Expenses() {
               </DialogDescription>
             </DialogHeader>
             {selectedMonth && (() => {
+              const unpaidCount = selectedMonth.expenses.filter(e => e.order_status !== "pago").length;
               const nextInstallmentId = selectedMonth.expenses
                 .filter(e => e.expense_type === "installment" && e.order_status !== "pago")
                 .sort((a, b) => {
@@ -1271,6 +1318,16 @@ export default function Expenses() {
 
               return (
                 <div className="space-y-3">
+                  {unpaidCount > 0 && (
+                    <Button
+                      className="w-full gap-2"
+                      size="lg"
+                      onClick={() => handleApproveMonth(selectedMonth)}
+                    >
+                      <Check className="h-5 w-5" />
+                      Pagar tudo do mês ({unpaidCount} pendente{unpaidCount > 1 ? "s" : ""}) · R$ {selectedMonth.expenses.filter(e => e.order_status !== "pago").reduce((sum, e) => sum + (e.amount || 0), 0).toFixed(2)}
+                    </Button>
+                  )}
                   {selectedMonth.expenses.map((expense) => {
                     const isPaid = expense.order_status === "pago";
                     const isInstallment = expense.expense_type === "installment";
