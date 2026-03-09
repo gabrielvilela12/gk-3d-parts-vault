@@ -129,6 +129,8 @@ export default function Expenses() {
     amount: "",
     installments: "1",
     notes: "",
+    startDate: "",
+    dueDay: "10",
   });
 
   useEffect(() => {
