@@ -1278,7 +1278,7 @@ export default function Expenses() {
                             {group.label}
                           </CardTitle>
                           {group.hasNextInstallment && (
-                            <Badge variant="secondary" className="text-xs">
+                            <Badge variant="outline" className="text-xs text-primary border-primary/50">
                               Próxima
                             </Badge>
                           )}
