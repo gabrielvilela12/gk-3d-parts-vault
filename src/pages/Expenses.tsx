@@ -1197,7 +1197,7 @@ export default function Expenses() {
                             <TableCell className="font-medium text-muted-foreground">
                               {productionCost > 0 ? `R$ ${productionCost.toFixed(2)}` : "-"}
                             </TableCell>
-                            <TableCell className="font-bold">
+                            <TableCell className={cn("font-bold", profit >= 0 ? "text-success" : "text-destructive")}>
                               R$ {profit.toFixed(2)}
                             </TableCell>
                             <TableCell className="text-sm text-muted-foreground">
