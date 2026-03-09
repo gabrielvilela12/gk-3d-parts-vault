@@ -1253,6 +1253,43 @@ export default function Expenses() {
         ) : (
           /* Monthly Cards View */
           <div className="space-y-4">
+            {monthGroups.length > 0 && (
+              <div className="flex items-center justify-between">
+                <Button
+                  variant={selectMode ? "default" : "outline"}
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => {
+                    setSelectMode(!selectMode);
+                    setSelectedMonthKeys(new Set());
+                  }}
+                >
+                  {selectMode ? "Cancelar seleção" : "Selecionar meses"}
+                </Button>
+                {selectMode && selectedMonthKeys.size > 0 && (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="destructive" size="sm" className="gap-2">
+                        <Trash2 className="h-4 w-4" />
+                        Excluir {selectedMonthKeys.size} mês(es)
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Excluir meses selecionados?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Todas as despesas dos {selectedMonthKeys.size} mês(es) selecionado(s) serão removidas permanentemente.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDeleteSelectedMonths}>Confirmar</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
+              </div>
+            )}
             {monthGroups.length === 0 ? (
               <Card className="card-gradient border-border/50">
                 <CardContent className="py-12">
