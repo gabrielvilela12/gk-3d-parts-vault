@@ -1427,8 +1427,8 @@ export default function Expenses() {
                         key={expense.id}
                         className={cn(
                           "border-border/50 cursor-pointer transition-all",
-                          isNext && "border-primary ring-1 ring-primary/30 bg-primary/5",
-                          isOverdue && "border-destructive/50 bg-destructive/5",
+                          isNext && "border-border",
+                          isOverdue && "border-muted-foreground/30",
                           isPaid && "opacity-70",
                           isSelected && "ring-2 ring-destructive border-destructive/60",
                         )}
