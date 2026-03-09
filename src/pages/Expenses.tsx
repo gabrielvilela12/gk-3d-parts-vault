@@ -1272,19 +1272,23 @@ export default function Expenses() {
                           </div>
                         )}
 
-                        {group.pendingCount > 0 && (
-                          <Button
-                            size="sm"
-                            className="w-full gap-1 mt-1"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleApproveMonth(group);
-                            }}
-                          >
-                            <Check className="h-3.5 w-3.5" />
-                            Pagar mês
-                          </Button>
-                        )}
+                        {group.pendingCount > 0 && (() => {
+                          const now = new Date();
+                          const monthArrived = group.year < now.getFullYear() || (group.year === now.getFullYear() && group.month <= now.getMonth());
+                          return monthArrived ? (
+                            <Button
+                              size="sm"
+                              className="w-full gap-1 mt-1"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleApproveMonth(group);
+                              }}
+                            >
+                              <Check className="h-3.5 w-3.5" />
+                              Pagar mês
+                            </Button>
+                          ) : null;
+                        })()}
                       </CardContent>
                     </Card>
                   );
