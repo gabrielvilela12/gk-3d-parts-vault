@@ -124,6 +124,10 @@ function AppContent() {
             path="/image-generator"
             element={user ? <ImageGenerator /> : <Navigate to="/auth" replace />}
           />
+          <Route
+            path="/assistant"
+            element={user ? <Assistant /> : <Navigate to="/auth" replace />}
+          />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
