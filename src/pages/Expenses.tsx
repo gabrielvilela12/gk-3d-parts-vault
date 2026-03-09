@@ -1138,6 +1138,94 @@ export default function Expenses() {
             )}
           </CardContent>
         </Card>
+
+        {/* Detail Dialog for next installment */}
+        <Dialog open={!!detailExpense} onOpenChange={(open) => !open && setDetailExpense(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-primary" />
+                Próxima Parcela
+              </DialogTitle>
+              <DialogDescription>Detalhes da parcela a ser paga</DialogDescription>
+            </DialogHeader>
+            {detailExpense && (() => {
+              const dueDate = detailExpense.order_date ? new Date(detailExpense.order_date) : null;
+              const today = new Date();
+              const daysUntil = dueDate ? Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)) : null;
+
+              // Find all installments with same base description to show progress
+              const baseName = detailExpense.description?.replace(/\s*\(\d+\/\d+\)$/, "") || "";
+              const allRelated = expenses.filter(e =>
+                e.expense_type === "installment" && e.description?.startsWith(baseName)
+              );
+              const paidCount = allRelated.filter(e => e.order_status === "pago").length;
+              const totalInstallments = allRelated.length;
+
+              return (
+                <div className="space-y-4">
+                  <div className="rounded-lg border border-border p-4 space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Descrição</span>
+                      <span className="font-medium text-sm">{detailExpense.description}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Valor</span>
+                      <span className="font-bold text-lg text-destructive">R$ {(detailExpense.amount || 0).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Vencimento</span>
+                      <span className="font-medium">{dueDate?.toLocaleDateString("pt-BR")}</span>
+                    </div>
+                    {daysUntil !== null && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">Tempo restante</span>
+                        <Badge variant={daysUntil <= 0 ? "destructive" : daysUntil <= 3 ? "secondary" : "outline"}>
+                          {daysUntil <= 0 ? "Vencida!" : daysUntil === 1 ? "Amanhã" : `${daysUntil} dias`}
+                        </Badge>
+                      </div>
+                    )}
+                    {detailExpense.category && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">Categoria</span>
+                        <Badge variant="outline">{detailExpense.category}</Badge>
+                      </div>
+                    )}
+                  </div>
+
+                  {totalInstallments > 0 && (
+                    <div className="rounded-lg bg-muted p-4 space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Progresso</span>
+                        <span className="font-medium">{paidCount}/{totalInstallments} pagas</span>
+                      </div>
+                      <div className="w-full bg-background rounded-full h-2.5">
+                        <div
+                          className="bg-primary h-2.5 rounded-full transition-all"
+                          style={{ width: `${(paidCount / totalInstallments) * 100}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Restam {totalInstallments - paidCount} parcela(s) · Total restante: R$ {((totalInstallments - paidCount) * (detailExpense.amount || 0)).toFixed(2)}
+                      </p>
+                    </div>
+                  )}
+
+                  <Button
+                    className="w-full"
+                    onClick={() => {
+                      handleApproveInstallment(detailExpense.id);
+                      setDetailExpense(null);
+                    }}
+                  >
+                    <Check className="h-4 w-4 mr-2" />
+                    Marcar como Pago
+                  </Button>
+                </div>
+              );
+            })()}
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
