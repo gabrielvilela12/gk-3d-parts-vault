@@ -893,13 +893,32 @@ export default function Expenses() {
                     <>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label htmlFor="startDate">Início da 1ª parcela</Label>
-                          <Input
-                            id="startDate"
-                            type="date"
-                            value={manualForm.startDate}
-                            onChange={(e) => setManualForm({ ...manualForm, startDate: e.target.value })}
-                          />
+                          <Label>Início da 1ª parcela</Label>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className={cn(
+                                  "w-full justify-start text-left font-normal",
+                                  !manualForm.startDate && "text-muted-foreground"
+                                )}
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {manualForm.startDate
+                                  ? format(new Date(manualForm.startDate + "T12:00:00"), "dd/MM/yyyy")
+                                  : "Selecionar data"}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <Calendar
+                                mode="single"
+                                selected={manualForm.startDate ? new Date(manualForm.startDate + "T12:00:00") : undefined}
+                                onSelect={(d) => setManualForm({ ...manualForm, startDate: d ? format(d, "yyyy-MM-dd") : "" })}
+                                className={cn("p-3 pointer-events-auto")}
+                                locale={ptBR}
+                              />
+                            </PopoverContent>
+                          </Popover>
                           <p className="text-xs text-muted-foreground">Mês da primeira parcela</p>
                         </div>
 
