@@ -15,7 +15,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Upload, DollarSign, TrendingUp, TrendingDown, FileSpreadsheet, Plus, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search, CalendarIcon, Filter, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { format, addMonths } from "date-fns";
+import { format, addMonths, setDate, isBefore, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import * as XLSX from "xlsx";
@@ -129,6 +129,8 @@ export default function Expenses() {
     amount: "",
     installments: "1",
     notes: "",
+    startDate: "",
+    dueDay: "10",
   });
 
   useEffect(() => {
@@ -458,9 +460,21 @@ export default function Expenses() {
       const numInstallments = Math.max(1, parseInt(manualForm.installments) || 1);
       const installmentAmount = Math.round((totalAmount / numInstallments) * 100) / 100;
 
+      const today = startOfDay(new Date());
+      const dueDay = Math.min(28, Math.max(1, parseInt(manualForm.dueDay) || 10));
+      
+      // Determine start month
+      let startMonth: Date;
+      if (manualForm.startDate) {
+        startMonth = new Date(manualForm.startDate + "T00:00:00");
+      } else {
+        startMonth = new Date();
+      }
+
       const entries = [];
       for (let i = 0; i < numInstallments; i++) {
-        const dueDate = addMonths(new Date(), i);
+        const dueDate = setDate(addMonths(startMonth, i), dueDay);
+        const isPast = isBefore(dueDate, today);
         entries.push({
           user_id: user.id,
           expense_type: numInstallments > 1 ? "installment" as const : manualForm.expense_type,
@@ -471,7 +485,8 @@ export default function Expenses() {
           amount: installmentAmount,
           notes: manualForm.notes,
           order_date: dueDate.toISOString(),
-          order_status: numInstallments > 1 ? "pendente" : null,
+          order_status: numInstallments > 1 ? (isPast ? "pago" : "pendente") : null,
+          payment_date: isPast ? dueDate.toISOString() : null,
         });
       }
 
@@ -492,6 +507,8 @@ export default function Expenses() {
         amount: "",
         installments: "1",
         notes: "",
+        startDate: "",
+        dueDay: "10",
       });
       setManualDialogOpen(false);
       fetchExpenses();
@@ -713,10 +730,44 @@ export default function Expenses() {
                     </div>
                   </div>
 
-                  {parseInt(manualForm.installments) > 1 && manualForm.amount && (
-                    <div className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">
-                      {parseInt(manualForm.installments)}x de R$ {(parseFloat(manualForm.amount) / parseInt(manualForm.installments)).toFixed(2)}
-                    </div>
+                  {parseInt(manualForm.installments) > 1 && (
+                    <>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="startDate">Início da 1ª parcela</Label>
+                          <Input
+                            id="startDate"
+                            type="date"
+                            value={manualForm.startDate}
+                            onChange={(e) => setManualForm({ ...manualForm, startDate: e.target.value })}
+                          />
+                          <p className="text-xs text-muted-foreground">Mês da primeira parcela</p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="dueDay">Dia de vencimento</Label>
+                          <Input
+                            id="dueDay"
+                            type="number"
+                            min="1"
+                            max="28"
+                            value={manualForm.dueDay}
+                            onChange={(e) => setManualForm({ ...manualForm, dueDay: e.target.value })}
+                            placeholder="10"
+                          />
+                          <p className="text-xs text-muted-foreground">Todo dia {manualForm.dueDay || "10"} do mês</p>
+                        </div>
+                      </div>
+
+                      {manualForm.amount && (
+                        <div className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">
+                          {parseInt(manualForm.installments)}x de R$ {(parseFloat(manualForm.amount) / parseInt(manualForm.installments)).toFixed(2)}
+                          {manualForm.startDate && (
+                            <span> — parcelas já vencidas serão marcadas como pagas automaticamente</span>
+                          )}
+                        </div>
+                      )}
+                    </>
                   )}
 
                   <div className="grid grid-cols-2 gap-4">
