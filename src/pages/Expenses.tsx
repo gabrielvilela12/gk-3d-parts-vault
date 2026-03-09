@@ -1013,6 +1013,22 @@ export default function Expenses() {
                 </div>
               )}
 
+              {activeView === "expenses" && (
+                <div className="w-[150px]">
+                  <Label className="text-xs text-muted-foreground mb-1 block">Status</Label>
+                  <Select value={filterMonthStatus} onValueChange={(v) => setFilterMonthStatus(v)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="paid">Pagos</SelectItem>
+                      <SelectItem value="pending">Pendentes</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               {activeView === "orders" && (
                 <>
                   <div className="w-auto">
