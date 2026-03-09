@@ -1117,7 +1117,7 @@ export default function Expenses() {
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">R$ {totalReceived.toFixed(2)}</div>
+              <div className="text-3xl font-bold text-success">R$ {totalReceived.toFixed(2)}</div>
             </CardContent>
           </Card>
 
