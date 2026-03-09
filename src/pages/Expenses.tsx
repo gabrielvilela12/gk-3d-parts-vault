@@ -816,8 +816,8 @@ export default function Expenses() {
                 </Popover>
               </div>
 
-              {(filterSearch || filterDateFrom || filterDateTo) && (
-                <Button variant="ghost" size="sm" onClick={() => { setFilterSearch(""); setFilterDateFrom(undefined); setFilterDateTo(undefined); setCurrentPage(0); }}>
+              {(filterSearch || filterDateFrom || filterDateTo || filterSubType !== "all") && (
+                <Button variant="ghost" size="sm" onClick={() => { setFilterSearch(""); setFilterDateFrom(undefined); setFilterDateTo(undefined); setFilterSubType("all"); setCurrentPage(0); }}>
                   Limpar
                 </Button>
               )}
