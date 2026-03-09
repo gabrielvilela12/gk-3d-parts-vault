@@ -98,6 +98,7 @@ export default function Expenses() {
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
+  const [globalTotals, setGlobalTotals] = useState({ totalReceived: 0, totalProductionCost: 0, totalProfit: 0 });
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [manualDialogOpen, setManualDialogOpen] = useState(false);
   const [importData, setImportData] = useState<ExcelRow[]>([]);
@@ -117,6 +118,10 @@ export default function Expenses() {
   useEffect(() => {
     fetchExpenses();
   }, [currentPage]);
+
+  useEffect(() => {
+    fetchGlobalTotals();
+  }, []);
 
   const fetchExpenses = async () => {
     try {
@@ -147,6 +152,35 @@ export default function Expenses() {
     }
   };
 
+  const fetchGlobalTotals = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Fetch all expenses but only needed columns for totals
+      const { data } = await supabase
+        .from("expenses")
+        .select("expense_type, order_value, amount, estimated_profit")
+        .eq("user_id", user.id);
+
+      if (!data) return;
+
+      let totalReceived = 0;
+      let totalProductionCost = 0;
+      let totalProfit = 0;
+
+      for (const e of data) {
+        totalReceived += e.order_value || 0;
+        totalProductionCost += e.amount || 0;
+        totalProfit += e.estimated_profit || 0;
+      }
+
+      setGlobalTotals({ totalReceived, totalProductionCost, totalProfit });
+    } catch {
+      // silent
+    }
+  };
+
   const handleDeleteAll = async () => {
     try {
       setDeletingAll(true);
@@ -159,6 +193,7 @@ export default function Expenses() {
       toast({ title: "Todas as despesas foram apagadas!" });
       setCurrentPage(0);
       fetchExpenses();
+      fetchGlobalTotals();
     } catch (error: any) {
       toast({
         title: "Erro ao apagar despesas",
@@ -355,6 +390,7 @@ export default function Expenses() {
       setImportData([]);
       setUploadDialogOpen(false);
       fetchExpenses();
+      fetchGlobalTotals();
     } catch (error: any) {
       toast({
         title: "Erro ao importar",
@@ -396,6 +432,7 @@ export default function Expenses() {
       });
       setManualDialogOpen(false);
       fetchExpenses();
+      fetchGlobalTotals();
     } catch (error: any) {
       toast({
         title: "Erro ao registrar despesa",
@@ -414,6 +451,7 @@ export default function Expenses() {
         title: "Despesa excluída!",
       });
       fetchExpenses();
+      fetchGlobalTotals();
     } catch (error: any) {
       toast({
         title: "Erro ao excluir",
@@ -423,19 +461,7 @@ export default function Expenses() {
     }
   };
 
-  const calculateTotals = () => {
-    const orderExpenses = expenses.filter((e) => e.expense_type === "order");
-    const manualExpenses = expenses.filter((e) => e.expense_type !== "order");
-
-    const totalReceived = orderExpenses.reduce((sum, e) => sum + (e.order_value || 0), 0);
-    const totalProductionCost = orderExpenses.reduce((sum, e) => sum + (e.amount || 0), 0)
-      + manualExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
-    const totalProfit = orderExpenses.reduce((sum, e) => sum + (e.estimated_profit || 0), 0);
-
-    return { totalReceived, totalProductionCost, totalProfit };
-  };
-
-  const { totalReceived, totalProductionCost, totalProfit } = calculateTotals();
+  const { totalReceived, totalProductionCost, totalProfit } = globalTotals;
 
   if (loading) {
     return (
