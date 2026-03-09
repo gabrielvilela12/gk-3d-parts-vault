@@ -1266,9 +1266,8 @@ export default function Expenses() {
                     <Card
                       key={group.key}
                       className={cn(
-                        "card-gradient border-border/50 cursor-pointer transition-all hover:shadow-lg hover:scale-[1.02]",
-                        group.hasNextInstallment && "border-primary/60 ring-1 ring-primary/30",
-                        group.isCurrentMonth && !group.hasNextInstallment && "border-accent/60",
+                        "card-gradient border-border/50 cursor-pointer transition-all hover:border-border",
+                        group.hasNextInstallment && "border-border",
                       )}
                       onClick={() => { setSelectedMonth(group); setSelectedExpenseIds(new Set()); }}
                     >
