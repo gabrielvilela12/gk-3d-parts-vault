@@ -770,6 +770,22 @@ export default function Expenses() {
                 </div>
               </div>
 
+              {activeView === "expenses" && (
+                <div className="w-[150px]">
+                  <Label className="text-xs text-muted-foreground mb-1 block">Tipo</Label>
+                  <Select value={filterSubType} onValueChange={(v) => { setFilterSubType(v); setCurrentPage(0); }}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas</SelectItem>
+                      <SelectItem value="manual">Despesas</SelectItem>
+                      <SelectItem value="installment">Parcelas</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               <div className="w-auto">
                 <Label className="text-xs text-muted-foreground mb-1 block">De</Label>
                 <Popover>
