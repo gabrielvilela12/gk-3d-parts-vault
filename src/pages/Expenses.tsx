@@ -109,6 +109,7 @@ export default function Expenses() {
   const [manualDialogOpen, setManualDialogOpen] = useState(false);
   const [importData, setImportData] = useState<ExcelRow[]>([]);
   const [deletingAll, setDeletingAll] = useState(false);
+  const [detailExpense, setDetailExpense] = useState<Expense | null>(null);
   const { toast } = useToast();
 
   // View mode: pedidos vs despesas
