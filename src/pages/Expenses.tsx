@@ -1278,12 +1278,12 @@ export default function Expenses() {
                             {group.label}
                           </CardTitle>
                           {group.hasNextInstallment && (
-                            <Badge className="bg-primary text-primary-foreground animate-pulse text-xs">
-                              ⏳ Próxima
+                            <Badge variant="secondary" className="text-xs">
+                              Próxima
                             </Badge>
                           )}
                           {allPaid && group.expenses.length > 0 && !group.hasNextInstallment && (
-                            <Badge variant="outline" className="text-green-500 border-green-500/50 text-xs">
+                            <Badge variant="outline" className="text-xs">
                               ✓ Pago
                             </Badge>
                           )}
