@@ -738,6 +738,14 @@ export default function Expenses() {
           </div>
         </div>
 
+        {/* View Tabs */}
+        <Tabs value={activeView} onValueChange={(v) => { setActiveView(v as "orders" | "expenses"); setCurrentPage(0); }}>
+          <TabsList className="grid w-full grid-cols-2 max-w-md">
+            <TabsTrigger value="orders">Pedidos</TabsTrigger>
+            <TabsTrigger value="expenses">Despesas / Parcelas</TabsTrigger>
+          </TabsList>
+        </Tabs>
+
         {/* Filters */}
         <Card className="card-gradient border-border/50">
           <CardContent className="pt-4">
@@ -753,21 +761,6 @@ export default function Expenses() {
                     className="pl-9"
                   />
                 </div>
-              </div>
-
-              <div className="w-[150px]">
-                <Label className="text-xs text-muted-foreground mb-1 block">Tipo</Label>
-                <Select value={filterType} onValueChange={(v) => { setFilterType(v); setCurrentPage(0); }}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    <SelectItem value="order">Pedidos</SelectItem>
-                    <SelectItem value="manual">Manual</SelectItem>
-                    <SelectItem value="installment">Parcelas</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
 
               <div className="w-auto">
@@ -800,8 +793,8 @@ export default function Expenses() {
                 </Popover>
               </div>
 
-              {(filterType !== "all" || filterSearch || filterDateFrom || filterDateTo) && (
-                <Button variant="ghost" size="sm" onClick={() => { setFilterType("all"); setFilterSearch(""); setFilterDateFrom(undefined); setFilterDateTo(undefined); setCurrentPage(0); }}>
+              {(filterSearch || filterDateFrom || filterDateTo) && (
+                <Button variant="ghost" size="sm" onClick={() => { setFilterSearch(""); setFilterDateFrom(undefined); setFilterDateTo(undefined); setCurrentPage(0); }}>
                   Limpar
                 </Button>
               )}
