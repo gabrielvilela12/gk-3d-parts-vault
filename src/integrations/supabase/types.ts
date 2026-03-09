@@ -104,6 +104,105 @@ export type Database = {
         }
         Relationships: []
       }
+      expenses: {
+        Row: {
+          amount: number | null
+          buyer_shipping: number | null
+          category: string | null
+          commission: number | null
+          created_at: string | null
+          description: string | null
+          discounts: number | null
+          estimated_profit: number | null
+          expense_type: string
+          id: string
+          image_url: string | null
+          internal_order_id: string | null
+          notes: string | null
+          order_date: string | null
+          order_status: string | null
+          order_value: number | null
+          payment_date: string | null
+          platform: string | null
+          platform_order_id: string | null
+          product_name: string | null
+          product_price: number | null
+          product_value: number | null
+          quantity: number | null
+          shipping_deadline: string | null
+          sku: string | null
+          store_name: string | null
+          total_shipping: number | null
+          updated_at: string | null
+          user_id: string
+          variation: string | null
+        }
+        Insert: {
+          amount?: number | null
+          buyer_shipping?: number | null
+          category?: string | null
+          commission?: number | null
+          created_at?: string | null
+          description?: string | null
+          discounts?: number | null
+          estimated_profit?: number | null
+          expense_type?: string
+          id?: string
+          image_url?: string | null
+          internal_order_id?: string | null
+          notes?: string | null
+          order_date?: string | null
+          order_status?: string | null
+          order_value?: number | null
+          payment_date?: string | null
+          platform?: string | null
+          platform_order_id?: string | null
+          product_name?: string | null
+          product_price?: number | null
+          product_value?: number | null
+          quantity?: number | null
+          shipping_deadline?: string | null
+          sku?: string | null
+          store_name?: string | null
+          total_shipping?: number | null
+          updated_at?: string | null
+          user_id: string
+          variation?: string | null
+        }
+        Update: {
+          amount?: number | null
+          buyer_shipping?: number | null
+          category?: string | null
+          commission?: number | null
+          created_at?: string | null
+          description?: string | null
+          discounts?: number | null
+          estimated_profit?: number | null
+          expense_type?: string
+          id?: string
+          image_url?: string | null
+          internal_order_id?: string | null
+          notes?: string | null
+          order_date?: string | null
+          order_status?: string | null
+          order_value?: number | null
+          payment_date?: string | null
+          platform?: string | null
+          platform_order_id?: string | null
+          product_name?: string | null
+          product_price?: number | null
+          product_value?: number | null
+          quantity?: number | null
+          shipping_deadline?: string | null
+          sku?: string | null
+          store_name?: string | null
+          total_shipping?: number | null
+          updated_at?: string | null
+          user_id?: string
+          variation?: string | null
+        }
+        Relationships: []
+      }
       filaments: {
         Row: {
           color: string | null

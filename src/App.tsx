@@ -19,6 +19,7 @@ import About from "./pages/About";
 import GptLinks from "./pages/GptLinks";
 import SettingsPage from "./pages/Settings";
 import Orders from "./pages/Orders";
+import Expenses from "./pages/Expenses";
 import NotFound from "./pages/NotFound";
 import ImageGenerator from "./pages/ImageGenerator";
 import { cn } from "@/lib/utils";
@@ -113,6 +114,10 @@ function AppContent() {
           <Route
             path="/orders"
             element={user ? <Orders /> : <Navigate to="/auth" replace />}
+          />
+          <Route
+            path="/expenses"
+            element={user ? <Expenses /> : <Navigate to="/auth" replace />}
           />
           <Route
             path="/image-generator"
