@@ -98,6 +98,7 @@ export default function Expenses() {
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
+  const [globalTotals, setGlobalTotals] = useState({ totalReceived: 0, totalProductionCost: 0, totalProfit: 0 });
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [manualDialogOpen, setManualDialogOpen] = useState(false);
   const [importData, setImportData] = useState<ExcelRow[]>([]);
