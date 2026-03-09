@@ -1292,7 +1292,7 @@ export default function Expenses() {
                       <CardContent className="space-y-3">
                         <div className="flex justify-between items-baseline">
                           <span className="text-sm text-muted-foreground">Total do mês</span>
-                          <span className="text-2xl font-bold text-destructive">
+                          <span className="text-2xl font-bold">
                             R$ {group.totalAmount.toFixed(2)}
                           </span>
                         </div>
