@@ -746,7 +746,7 @@ export default function Expenses() {
         </div>
 
         {/* View Tabs */}
-        <Tabs value={activeView} onValueChange={(v) => { setActiveView(v as "orders" | "expenses"); setCurrentPage(0); }}>
+        <Tabs value={activeView} onValueChange={(v) => { setActiveView(v as "orders" | "expenses"); setCurrentPage(0); setFilterSubType("all"); }}>
           <TabsList className="grid w-full grid-cols-2 max-w-md">
             <TabsTrigger value="orders">Pedidos</TabsTrigger>
             <TabsTrigger value="expenses">Despesas / Parcelas</TabsTrigger>
