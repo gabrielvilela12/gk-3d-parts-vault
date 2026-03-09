@@ -729,6 +729,77 @@ export default function Expenses() {
           </div>
         </div>
 
+        {/* Filters */}
+        <Card className="card-gradient border-border/50">
+          <CardContent className="pt-4">
+            <div className="flex flex-wrap gap-3 items-end">
+              <div className="flex-1 min-w-[200px]">
+                <Label className="text-xs text-muted-foreground mb-1 block">Buscar</Label>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Produto ou descrição..."
+                    value={filterSearch}
+                    onChange={(e) => { setFilterSearch(e.target.value); setCurrentPage(0); }}
+                    className="pl-9"
+                  />
+                </div>
+              </div>
+
+              <div className="w-[150px]">
+                <Label className="text-xs text-muted-foreground mb-1 block">Tipo</Label>
+                <Select value={filterType} onValueChange={(v) => { setFilterType(v); setCurrentPage(0); }}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="order">Pedidos</SelectItem>
+                    <SelectItem value="manual">Manual</SelectItem>
+                    <SelectItem value="installment">Parcelas</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="w-auto">
+                <Label className="text-xs text-muted-foreground mb-1 block">De</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className={cn("w-[140px] justify-start text-left font-normal", !filterDateFrom && "text-muted-foreground")}>
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {filterDateFrom ? format(filterDateFrom, "dd/MM/yy") : "Início"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar mode="single" selected={filterDateFrom} onSelect={(d) => { setFilterDateFrom(d); setCurrentPage(0); }} className={cn("p-3 pointer-events-auto")} locale={ptBR} />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              <div className="w-auto">
+                <Label className="text-xs text-muted-foreground mb-1 block">Até</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className={cn("w-[140px] justify-start text-left font-normal", !filterDateTo && "text-muted-foreground")}>
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {filterDateTo ? format(filterDateTo, "dd/MM/yy") : "Fim"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar mode="single" selected={filterDateTo} onSelect={(d) => { setFilterDateTo(d); setCurrentPage(0); }} className={cn("p-3 pointer-events-auto")} locale={ptBR} />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {(filterType !== "all" || filterSearch || filterDateFrom || filterDateTo) && (
+                <Button variant="ghost" size="sm" onClick={() => { setFilterType("all"); setFilterSearch(""); setFilterDateFrom(undefined); setFilterDateTo(undefined); setCurrentPage(0); }}>
+                  Limpar
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Summary Cards */}
         <div className="grid md:grid-cols-3 gap-6">
           <Card className="card-gradient border-border/50">
