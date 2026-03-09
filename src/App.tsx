@@ -23,6 +23,7 @@ import Expenses from "./pages/Expenses";
 import NotFound from "./pages/NotFound";
 import ImageGenerator from "./pages/ImageGenerator";
 import Assistant from "./pages/Assistant";
+import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 const queryClient = new QueryClient();
