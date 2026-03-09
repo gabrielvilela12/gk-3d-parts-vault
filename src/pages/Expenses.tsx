@@ -471,6 +471,7 @@ export default function Expenses() {
           amount: installmentAmount,
           notes: manualForm.notes,
           order_date: dueDate.toISOString(),
+          order_status: numInstallments > 1 ? "pendente" : null,
         });
       }
 
