@@ -15,7 +15,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Upload, DollarSign, TrendingUp, TrendingDown, FileSpreadsheet, Plus, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search, CalendarIcon, Filter, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { format, addMonths } from "date-fns";
+import { format, addMonths, setDate, isBefore, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import * as XLSX from "xlsx";
