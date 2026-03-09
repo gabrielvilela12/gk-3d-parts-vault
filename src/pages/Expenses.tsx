@@ -843,6 +843,9 @@ export default function Expenses() {
                 </Button>
               </div>
             )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
