@@ -118,6 +118,7 @@ export default function Expenses() {
   const [filterSearch, setFilterSearch] = useState("");
   const [filterDateFrom, setFilterDateFrom] = useState<Date | undefined>();
   const [filterDateTo, setFilterDateTo] = useState<Date | undefined>();
+  const [filterSubType, setFilterSubType] = useState<string>("all"); // for expenses tab: all, manual, installment
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
@@ -132,7 +133,7 @@ export default function Expenses() {
 
   useEffect(() => {
     fetchExpenses();
-  }, [currentPage, activeView, filterSearch, filterDateFrom, filterDateTo]);
+  }, [currentPage, activeView, filterSearch, filterDateFrom, filterDateTo, filterSubType]);
 
   useEffect(() => {
     fetchGlobalTotals();
@@ -155,7 +156,13 @@ export default function Expenses() {
       if (activeView === "orders") {
         query = query.eq("expense_type", "order");
       } else {
-        query = query.in("expense_type", ["manual", "installment"]);
+        if (filterSubType === "manual") {
+          query = query.eq("expense_type", "manual");
+        } else if (filterSubType === "installment") {
+          query = query.eq("expense_type", "installment");
+        } else {
+          query = query.in("expense_type", ["manual", "installment"]);
+        }
       }
       if (filterSearch.trim()) {
         query = query.or(`product_name.ilike.%${filterSearch.trim()}%,description.ilike.%${filterSearch.trim()}%`);
@@ -739,7 +746,7 @@ export default function Expenses() {
         </div>
 
         {/* View Tabs */}
-        <Tabs value={activeView} onValueChange={(v) => { setActiveView(v as "orders" | "expenses"); setCurrentPage(0); }}>
+        <Tabs value={activeView} onValueChange={(v) => { setActiveView(v as "orders" | "expenses"); setCurrentPage(0); setFilterSubType("all"); }}>
           <TabsList className="grid w-full grid-cols-2 max-w-md">
             <TabsTrigger value="orders">Pedidos</TabsTrigger>
             <TabsTrigger value="expenses">Despesas / Parcelas</TabsTrigger>
@@ -762,6 +769,22 @@ export default function Expenses() {
                   />
                 </div>
               </div>
+
+              {activeView === "expenses" && (
+                <div className="w-[150px]">
+                  <Label className="text-xs text-muted-foreground mb-1 block">Tipo</Label>
+                  <Select value={filterSubType} onValueChange={(v) => { setFilterSubType(v); setCurrentPage(0); }}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas</SelectItem>
+                      <SelectItem value="manual">Despesas</SelectItem>
+                      <SelectItem value="installment">Parcelas</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               <div className="w-auto">
                 <Label className="text-xs text-muted-foreground mb-1 block">De</Label>
@@ -793,8 +816,8 @@ export default function Expenses() {
                 </Popover>
               </div>
 
-              {(filterSearch || filterDateFrom || filterDateTo) && (
-                <Button variant="ghost" size="sm" onClick={() => { setFilterSearch(""); setFilterDateFrom(undefined); setFilterDateTo(undefined); setCurrentPage(0); }}>
+              {(filterSearch || filterDateFrom || filterDateTo || filterSubType !== "all") && (
+                <Button variant="ghost" size="sm" onClick={() => { setFilterSearch(""); setFilterDateFrom(undefined); setFilterDateTo(undefined); setFilterSubType("all"); setCurrentPage(0); }}>
                   Limpar
                 </Button>
               )}
