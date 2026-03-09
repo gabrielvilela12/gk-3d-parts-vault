@@ -460,9 +460,21 @@ export default function Expenses() {
       const numInstallments = Math.max(1, parseInt(manualForm.installments) || 1);
       const installmentAmount = Math.round((totalAmount / numInstallments) * 100) / 100;
 
+      const today = startOfDay(new Date());
+      const dueDay = Math.min(28, Math.max(1, parseInt(manualForm.dueDay) || 10));
+      
+      // Determine start month
+      let startMonth: Date;
+      if (manualForm.startDate) {
+        startMonth = new Date(manualForm.startDate + "T00:00:00");
+      } else {
+        startMonth = new Date();
+      }
+
       const entries = [];
       for (let i = 0; i < numInstallments; i++) {
-        const dueDate = addMonths(new Date(), i);
+        const dueDate = setDate(addMonths(startMonth, i), dueDay);
+        const isPast = isBefore(dueDate, today);
         entries.push({
           user_id: user.id,
           expense_type: numInstallments > 1 ? "installment" as const : manualForm.expense_type,
@@ -473,7 +485,8 @@ export default function Expenses() {
           amount: installmentAmount,
           notes: manualForm.notes,
           order_date: dueDate.toISOString(),
-          order_status: numInstallments > 1 ? "pendente" : null,
+          order_status: numInstallments > 1 ? (isPast ? "pago" : "pendente") : null,
+          payment_date: isPast ? dueDate.toISOString() : null,
         });
       }
 
