@@ -1380,20 +1380,44 @@ export default function Expenses() {
 
               return (
                 <div className="space-y-3">
-                  {unpaidCount > 0 && (() => {
-                    const now = new Date();
-                    const monthArrived = selectedMonth.year < now.getFullYear() || (selectedMonth.year === now.getFullYear() && selectedMonth.month <= now.getMonth());
-                    return monthArrived ? (
-                      <Button
-                        className="w-full gap-2"
-                        size="lg"
-                        onClick={() => handleApproveMonth(selectedMonth)}
-                      >
-                        <Check className="h-5 w-5" />
-                        Pagar tudo do mês ({unpaidCount} pendente{unpaidCount > 1 ? "s" : ""}) · R$ {selectedMonth.expenses.filter(e => e.order_status !== "pago").reduce((sum, e) => sum + (e.amount || 0), 0).toFixed(2)}
-                      </Button>
-                    ) : null;
-                  })()}
+                  {/* Action buttons */}
+                  <div className="flex gap-2">
+                    {unpaidCount > 0 && (() => {
+                      const now = new Date();
+                      const monthArrived = selectedMonth.year < now.getFullYear() || (selectedMonth.year === now.getFullYear() && selectedMonth.month <= now.getMonth());
+                      return monthArrived ? (
+                        <Button
+                          className="flex-1 gap-2"
+                          onClick={() => handleApproveMonth(selectedMonth)}
+                        >
+                          <Check className="h-4 w-4" />
+                          Pagar mês ({unpaidCount})
+                        </Button>
+                      ) : null;
+                    })()}
+                    {selectedExpenseIds.size > 0 && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="destructive" className="gap-2">
+                            <Trash2 className="h-4 w-4" />
+                            Excluir {selectedExpenseIds.size} selecionado(s)
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Excluir itens selecionados?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              {selectedExpenseIds.size} despesa(s) serão removidas permanentemente.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleDeleteSelectedExpenses}>Confirmar</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                  </div>
                   {selectedMonth.expenses.map((expense) => {
                     const isPaid = expense.order_status === "pago";
                     const isInstallment = expense.expense_type === "installment";
