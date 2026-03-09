@@ -1219,7 +1219,11 @@ export default function Expenses() {
               </Card>
             ) : (
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {monthGroups.map((group) => {
+                {monthGroups.filter((group) => {
+                  if (filterMonthStatus === "paid") return group.pendingCount === 0;
+                  if (filterMonthStatus === "pending") return group.pendingCount > 0;
+                  return true;
+                }).map((group) => {
                   const allPaid = group.pendingCount === 0;
                   const progressPercent = group.expenses.length > 0
                     ? (group.paidCount / group.expenses.length) * 100
