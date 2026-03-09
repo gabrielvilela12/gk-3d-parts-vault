@@ -438,20 +438,34 @@ export default function Expenses() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não autenticado");
 
-      const { error } = await supabase.from("expenses").insert({
-        user_id: user.id,
-        expense_type: manualForm.expense_type,
-        description: manualForm.description,
-        category: manualForm.category,
-        amount: parseFloat(manualForm.amount),
-        notes: manualForm.notes,
-      });
+      const totalAmount = parseFloat(manualForm.amount);
+      const numInstallments = Math.max(1, parseInt(manualForm.installments) || 1);
+      const installmentAmount = Math.round((totalAmount / numInstallments) * 100) / 100;
 
+      const entries = [];
+      for (let i = 0; i < numInstallments; i++) {
+        const dueDate = addMonths(new Date(), i);
+        entries.push({
+          user_id: user.id,
+          expense_type: numInstallments > 1 ? "installment" as const : manualForm.expense_type,
+          description: numInstallments > 1
+            ? `${manualForm.description} (${i + 1}/${numInstallments})`
+            : manualForm.description,
+          category: manualForm.category,
+          amount: installmentAmount,
+          notes: manualForm.notes,
+          order_date: dueDate.toISOString(),
+        });
+      }
+
+      const { error } = await supabase.from("expenses").insert(entries);
       if (error) throw error;
 
       toast({
         title: "Despesa registrada!",
-        description: "Despesa manual adicionada com sucesso.",
+        description: numInstallments > 1
+          ? `${numInstallments} parcelas de R$ ${installmentAmount.toFixed(2)} criadas.`
+          : "Despesa manual adicionada com sucesso.",
       });
 
       setManualForm({
