@@ -646,7 +646,7 @@ export default function Orders() {
               </div>
             </ScrollArea>
             <Button onClick={handleConfirmImport} className="w-full" disabled={isImporting || importRows.filter(r => r.matchedPieceId).length === 0}>
-              {isImporting ? "Importando..." : `Importar ${importRows.filter(r => r.matchedPieceId).length} pedido(s)`}
+              {isImporting ? "Importando..." : `Importar ${importRows.filter(r => r.matchedPieceId).length} de ${importRows.length} pedido(s)`}
             </Button>
           </div>
         </DialogContent>
