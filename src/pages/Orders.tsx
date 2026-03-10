@@ -224,20 +224,35 @@ export default function Orders() {
     let match = pieces.find(p => normalizeText(p.name) === normalized);
     if (match) return match;
     // Try if piece name is contained in product name or vice versa
-    match = pieces.find(p => {
+    // Prefer longer piece names (more specific matches)
+    const containMatches = pieces.filter(p => {
       const pNorm = normalizeText(p.name);
       return normalized.includes(pNorm) || pNorm.includes(normalized);
     });
-    if (match) return match;
-    // Try matching by significant words (3+ chars)
+    if (containMatches.length === 1) return containMatches[0];
+    if (containMatches.length > 1) {
+      // Return the one with longest name (most specific)
+      return containMatches.sort((a, b) => b.name.length - a.name.length)[0];
+    }
+    // Try matching by significant words (3+ chars), using bidirectional scoring
     const words = normalized.split(/\s+/).filter(w => w.length >= 3);
     let bestScore = 0;
     let bestPiece: Piece | null = null;
     for (const piece of pieces) {
       const pNorm = normalizeText(piece.name);
-      const matchCount = words.filter(w => pNorm.includes(w)).length;
-      const score = matchCount / Math.max(words.length, 1);
-      if (score > bestScore && score >= 0.4) {
+      const pieceWords = pNorm.split(/\s+/).filter(w => w.length >= 3);
+      // How many product words appear in piece name
+      const productInPiece = words.filter(w => pNorm.includes(w)).length;
+      // How many piece words appear in product name
+      const pieceInProduct = pieceWords.filter(w => normalized.includes(w)).length;
+      // Bidirectional score: both directions must be high
+      const scoreFwd = productInPiece / Math.max(words.length, 1);
+      const scoreRev = pieceInProduct / Math.max(pieceWords.length, 1);
+      // Use harmonic mean so both directions matter
+      const score = (scoreFwd + scoreRev) > 0
+        ? (2 * scoreFwd * scoreRev) / (scoreFwd + scoreRev)
+        : 0;
+      if (score > bestScore && score >= 0.5) {
         bestScore = score;
         bestPiece = piece;
       }
