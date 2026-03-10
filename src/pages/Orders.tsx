@@ -619,16 +619,19 @@ export default function Orders() {
                           {row.matchedPieceId ? (
                             <p className="text-sm font-medium text-primary truncate">→ {row.matchedPieceName}</p>
                           ) : (
-                            <Select onValueChange={(v) => updateImportRowMatch(idx, v)}>
-                              <SelectTrigger className="h-7 text-xs">
-                                <SelectValue placeholder="Selecionar peça manualmente..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {pieces.map(p => (
-                                  <SelectItem key={p.id} value={p.id} className="text-xs">{p.name}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            <div className="space-y-1">
+                              <p className="text-sm font-medium text-orange-500 truncate">⚠ {row.productName}</p>
+                              <Select onValueChange={(v) => updateImportRowMatch(idx, v)}>
+                                <SelectTrigger className="h-7 text-xs">
+                                  <SelectValue placeholder="Corrigir peça manualmente..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {pieces.map(p => (
+                                    <SelectItem key={p.id} value={p.id} className="text-xs">{p.name}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
                           )}
                           <div className="flex gap-2 flex-wrap">
                             {row.color && <Badge variant="outline" className="text-[10px]">{row.color}</Badge>}
@@ -643,7 +646,7 @@ export default function Orders() {
               </div>
             </ScrollArea>
             <Button onClick={handleConfirmImport} className="w-full" disabled={isImporting || importRows.filter(r => r.matchedPieceId).length === 0}>
-              {isImporting ? "Importando..." : `Importar ${importRows.filter(r => r.matchedPieceId).length} pedido(s)`}
+              {isImporting ? "Importando..." : `Importar ${importRows.filter(r => r.matchedPieceId).length} de ${importRows.length} pedido(s)`}
             </Button>
           </div>
         </DialogContent>
