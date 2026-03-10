@@ -25,6 +25,7 @@ interface ImportRow {
   matchedPieceId: string | null;
   matchedPieceName: string | null;
   imageUrl: string | null;
+  shopeeImageUrl: string | null;
 }
 
 interface Order {
@@ -269,6 +270,7 @@ export default function Orders() {
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet);
 
+      // Parse rows from Excel
       const parsed: ImportRow[] = [];
       for (const row of rows) {
         const productName = row["Nome do Anúncio"] || "";
@@ -278,8 +280,8 @@ export default function Orders() {
         const quantity = parseInt(row["Qtd. do Produto"]) || 1;
         const platformOrderId = row["Nº de Pedido da Plataforma"] || "";
         const buyerNotes = row["Notas do Comprador"] || "";
+        const shopeeImageUrl = (row["Link da Imagem"] || "").replace(/\\/g, "");
 
-        const matched = findBestMatch(productName);
         parsed.push({
           platformOrderId,
           productName,
@@ -287,10 +289,86 @@ export default function Orders() {
           color: colorPart,
           quantity,
           buyerNotes,
-          matchedPieceId: matched?.id || null,
-          matchedPieceName: matched?.name || null,
-          imageUrl: matched?.image_url || null,
+          matchedPieceId: null,
+          matchedPieceName: null,
+          imageUrl: null,
+          shopeeImageUrl: shopeeImageUrl || null,
         });
+      }
+
+      // Try AI image matching
+      if (parsed.length > 0 && pieces.length > 0) {
+        toast({ title: "Identificando produtos via IA...", description: "Analisando imagens dos produtos" });
+
+        try {
+          // Get unique products by name to avoid redundant AI calls
+          const uniqueProducts = parsed.reduce((acc, row) => {
+            if (!acc.find(r => r.productName === row.productName)) {
+              acc.push(row);
+            }
+            return acc;
+          }, [] as ImportRow[]);
+
+          const { data: matchData, error: matchError } = await supabase.functions.invoke(
+            "match-product-image",
+            {
+              body: {
+                products: uniqueProducts.map(r => ({
+                  productName: r.productName,
+                  imageUrl: r.shopeeImageUrl,
+                })),
+                pieces: pieces.map(p => ({ id: p.id, name: p.name })),
+              },
+            }
+          );
+
+          if (!matchError && matchData?.matches) {
+            // Build a map of productName -> matched piece
+            const matchMap = new Map<string, { pieceId: string; confidence: string }>();
+            for (const m of matchData.matches) {
+              if (m.pieceId && m.pieceId !== "null") {
+                const product = uniqueProducts[m.productIndex];
+                if (product) {
+                  matchMap.set(product.productName, { pieceId: m.pieceId, confidence: m.confidence });
+                }
+              }
+            }
+
+            // Apply matches to all parsed rows
+            for (const row of parsed) {
+              const match = matchMap.get(row.productName);
+              if (match) {
+                const piece = pieces.find(p => p.id === match.pieceId);
+                if (piece) {
+                  row.matchedPieceId = piece.id;
+                  row.matchedPieceName = piece.name;
+                  row.imageUrl = piece.image_url;
+                }
+              }
+            }
+          } else {
+            console.error("AI matching error:", matchError);
+            // Fallback to text matching
+            for (const row of parsed) {
+              const matched = findBestMatch(row.productName);
+              if (matched) {
+                row.matchedPieceId = matched.id;
+                row.matchedPieceName = matched.name;
+                row.imageUrl = matched.image_url;
+              }
+            }
+          }
+        } catch (aiErr) {
+          console.error("AI matching failed, using text fallback:", aiErr);
+          for (const row of parsed) {
+            const matched = findBestMatch(row.productName);
+            if (matched) {
+              row.matchedPieceId = matched.id;
+              row.matchedPieceName = matched.name;
+              row.imageUrl = matched.image_url;
+            }
+          }
+        }
       }
 
       setImportRows(parsed);
