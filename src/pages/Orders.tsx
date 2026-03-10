@@ -25,6 +25,7 @@ interface ImportRow {
   matchedPieceId: string | null;
   matchedPieceName: string | null;
   imageUrl: string | null;
+  shopeeImageUrl: string | null;
 }
 
 interface Order {
