@@ -539,6 +539,51 @@ export default function PieceDetail() {
                                 </span>
                               </div>
                             </div>
+
+                            {/* Monthly projection */}
+                            {tempoMin > 0 && fc.lucroLiquido > 0 && (
+                              <>
+                                <Separator />
+                                <div className="rounded-md bg-primary/5 border border-primary/20 p-3 space-y-2">
+                                  <p className="text-xs font-semibold text-primary flex items-center gap-1.5">
+                                    <TrendingUp className="h-3.5 w-3.5" />
+                                    Projeção de Produção Contínua
+                                  </p>
+                                  {(() => {
+                                    const unidadesPorDia = Math.floor((24 * 60) / tempoMin);
+                                    const lucroDia = unidadesPorDia * fc.lucroLiquido;
+                                    const faturamentoDia = unidadesPorDia * fc.precoComMarkup;
+                                    const lucroMes = lucroDia * 30;
+                                    const faturamentoMes = faturamentoDia * 30;
+                                    return (
+                                      <div className="space-y-1.5 text-xs">
+                                        <div className="flex justify-between">
+                                          <span className="text-muted-foreground">Unidades/dia (24h):</span>
+                                          <span className="font-medium">{unidadesPorDia} un</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                          <span className="text-muted-foreground">Faturamento/dia:</span>
+                                          <span className="font-medium">R$ {faturamentoDia.toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                          <span className="text-muted-foreground">Lucro/dia:</span>
+                                          <span className="font-medium text-green-500">R$ {lucroDia.toFixed(2)}</span>
+                                        </div>
+                                        <Separator className="my-1" />
+                                        <div className="flex justify-between">
+                                          <span className="text-muted-foreground">Faturamento/mês:</span>
+                                          <span className="font-bold">R$ {faturamentoMes.toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                          <span className="font-semibold">Lucro/mês:</span>
+                                          <span className="font-bold text-green-500">R$ {lucroMes.toFixed(2)}</span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
+                                </div>
+                              </>
+                            )}
                           </div>
                         </CollapsibleContent>
                       </div>
