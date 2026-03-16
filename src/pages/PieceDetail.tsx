@@ -456,7 +456,15 @@ export default function PieceDetail() {
                                 <span className="text-xs text-muted-foreground">{fc.filament.color}</span>
                               )}
                             </div>
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-4">
+                              {tempoMin > 0 && fc.lucroLiquido > 0 && (
+                                <div className="text-right hidden sm:block">
+                                  <span className="text-[10px] text-muted-foreground block">Lucro/mês</span>
+                                  <span className="text-xs font-bold text-green-500">
+                                    R$ {(Math.floor((24 * 60) / tempoMin) * fc.lucroLiquido * 30).toFixed(0)}
+                                  </span>
+                                </div>
+                              )}
                               <div className="text-right">
                                 <span
                                   className="font-bold text-base block"
@@ -465,7 +473,7 @@ export default function PieceDetail() {
                                   R$ {fc.precoComMarkup.toFixed(2)}
                                 </span>
                                 <span className={`text-xs font-medium ${fc.lucroLiquido >= 0 ? "text-green-500" : "text-red-500"}`}>
-                                  {fc.lucroLiquido >= 0 ? "+" : ""}R$ {fc.lucroLiquido.toFixed(2)}
+                                  {fc.lucroLiquido >= 0 ? "+" : ""}R$ {fc.lucroLiquido.toFixed(2)}/un
                                 </span>
                               </div>
                               <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 [[data-state=open]_&]:rotate-180" />
