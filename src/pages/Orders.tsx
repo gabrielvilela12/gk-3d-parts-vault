@@ -92,6 +92,8 @@ export default function Orders() {
   const [variations, setVariations] = useState<Variation[]>([]);
   const [filaments, setFilaments] = useState<Filament[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const hasSynced = useRef(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [now, setNow] = useState(new Date());
   const [newOrder, setNewOrder] = useState({
@@ -108,6 +110,7 @@ export default function Orders() {
   const [filterColor, setFilterColor] = useState<string>("all");
   const [filterSearch, setFilterSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | "queue" | "done">("all");
+  const [syncMessage, setSyncMessage] = useState("Por favor, aguarde. O robô está extraindo seus envios pendentes e sincronizando a sua base de dados...");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const { toast } = useToast();
@@ -119,10 +122,115 @@ export default function Orders() {
   }, []);
 
   useEffect(() => {
-    fetchData();
+    if (!hasSynced.current) {
+      hasSynced.current = true;
+      handleShopeeSync();
+    } else {
+      fetchData();
+    }
   }, []);
 
-  const fetchData = async () => {
+  async function handleShopeeSync() {
+      setIsSyncing(true);
+      setSyncMessage("Conectando ao terminal invisível do robô...");
+
+      const pollInterval = setInterval(async () => {
+         try {
+             const res = await fetch('http://localhost:3001/api/scrape/status');
+             const data = await res.json();
+             if (data.message) setSyncMessage(data.message);
+         } catch(e) {}
+      }, 1500);
+
+      try {
+          const { data: accountsData } = await supabase.from('accounts').select('*');
+          const shopeeAccounts = accountsData?.filter(a => {
+              const title = a.title.toLowerCase();
+              return (title.includes('shoppe') || title.includes('shopee')) && !title.includes('upsell');
+          });
+          
+          let botPayload = null;
+          if (shopeeAccounts && shopeeAccounts.length > 0) {
+              const stores = shopeeAccounts.map(a => ({
+                  id: a.title,
+                  email: a.email,
+                  password: atob(a.encrypted_password),
+                  sessionFile: `shopee-session-${a.email.replace(/[^a-zA-Z0-9]/g, '')}.json`
+              }));
+              botPayload = { stores };
+          }
+
+          try {
+              const res = await fetch('http://localhost:3001/api/scrape', {
+                  method: botPayload ? 'POST' : 'GET',
+                  headers: botPayload ? { 'Content-Type': 'application/json' } : {},
+                  body: botPayload ? JSON.stringify(botPayload) : undefined
+              });
+              const data = await res.json();
+              if (data?.pedidos?.length > 0) {
+                  const parsed: ImportRow[] = data.pedidos.map((p: any) => {
+                      const chunks = p.RawText.split(' | ');
+                      let productName = p.RawText;
+                      let variation = "";
+                      let colorPart = "";
+                      let quantity = 1;
+
+                      let idxVariacao = chunks.findIndex((c: string) => c.includes("Variação:"));
+                      if (idxVariacao >= 0) {
+                          variation = chunks[idxVariacao].replace("Variação:", "").trim();
+                          colorPart = variation.split(",")[0]?.trim() || variation;
+                          if (idxVariacao > 0) {
+                              productName = chunks[idxVariacao - 1].trim();
+                          }
+                      } else {
+                          let maxLen = 0;
+                          chunks.forEach((c: string) => {
+                              if (c.length > maxLen && !c.includes("R$") && !c.match(/^x\d+$/) && !c.match(/^[2-9][0-9A-Z]{13,15}$/)) {
+                                  maxLen = c.length;
+                                  productName = c.trim();
+                              }
+                          });
+                      }
+
+                      chunks.forEach((c: string) => {
+                         if (c.match(/^x\d+$/)) {
+                            quantity = parseInt(c.replace("x", ""));
+                         }
+                      });
+
+                      return {
+                        platformOrderId: p.ExternalOrderId,
+                        productName: productName,
+                        variation: variation,
+                        color: colorPart,
+                        quantity: quantity,
+                        buyerNotes: p.ProductSummary || "Shopee Sync",
+                        matchedPieceId: null,
+                        matchedPieceName: null,
+                        imageUrl: null,
+                        shopeeImageUrl: p.shopeeImageUrl || null,
+                      };
+                  });
+                  await processImportRows(parsed);
+                  toast({ title: "Shopee Sincronizada", description: `Encontramos ${data.pedidos.length} pedido(s) pendentes!` });
+              } else {
+                  toast({ title: "Shopee Sincronizada", description: "Não há novos pedidos na Shopee hoje." });
+              }
+          } catch (err) {
+              console.error("Bot API offline", err);
+              toast({ title: "Aviso Shopee", description: "O Bot da Shopee não está rodando na porta 3001 no momento.", variant: "destructive" });
+          } finally {
+              clearInterval(pollInterval);
+              setIsSyncing(false);
+              fetchData();
+          }
+      } catch (err) {
+          clearInterval(pollInterval);
+          console.error("Failed to query accounts", err);
+          setIsSyncing(false);
+          fetchData();
+      }
+  }  async function fetchData() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -217,39 +325,30 @@ export default function Orders() {
     }
   };
 
-  const normalizeText = (text: string) => text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9 ]/g, "").trim();
+  const normalizeText = (text: string) => text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, " ").replace(/\s+/g, " ").trim();
 
-  const findBestMatch = (productName: string): Piece | null => {
+  const findBestMatch = (productName: string, activePieces: Piece[] = pieces): Piece | null => {
     const normalized = normalizeText(productName);
-    // Try exact match first
-    let match = pieces.find(p => normalizeText(p.name) === normalized);
+    let match = activePieces.find(p => normalizeText(p.name) === normalized);
     if (match) return match;
-    // Try if piece name is contained in product name or vice versa
-    // Prefer longer piece names (more specific matches)
-    const containMatches = pieces.filter(p => {
+    const containMatches = activePieces.filter(p => {
       const pNorm = normalizeText(p.name);
       return normalized.includes(pNorm) || pNorm.includes(normalized);
     });
     if (containMatches.length === 1) return containMatches[0];
     if (containMatches.length > 1) {
-      // Return the one with longest name (most specific)
       return containMatches.sort((a, b) => b.name.length - a.name.length)[0];
     }
-    // Try matching by significant words (3+ chars), using bidirectional scoring
     const words = normalized.split(/\s+/).filter(w => w.length >= 3);
     let bestScore = 0;
     let bestPiece: Piece | null = null;
-    for (const piece of pieces) {
+    for (const piece of activePieces) {
       const pNorm = normalizeText(piece.name);
       const pieceWords = pNorm.split(/\s+/).filter(w => w.length >= 3);
-      // How many product words appear in piece name
       const productInPiece = words.filter(w => pNorm.includes(w)).length;
-      // How many piece words appear in product name
       const pieceInProduct = pieceWords.filter(w => normalized.includes(w)).length;
-      // Bidirectional score: both directions must be high
       const scoreFwd = productInPiece / Math.max(words.length, 1);
       const scoreRev = pieceInProduct / Math.max(pieceWords.length, 1);
-      // Use harmonic mean so both directions matter
       const score = (scoreFwd + scoreRev) > 0
         ? (2 * scoreFwd * scoreRev) / (scoreFwd + scoreRev)
         : 0;
@@ -260,6 +359,93 @@ export default function Orders() {
     }
     return bestPiece;
   };
+
+  async function processImportRows(parsed: ImportRow[]) {
+      if (parsed.length === 0) return;
+
+      toast({ title: "Iniciando verificação...", description: "Acessando seu Banco Oficial de Produtos..." });
+
+      // GARANTIA CONTRA "RACE CONDITION" (Stale State) no React:
+      // O Bot da Shopee é mais rápido que a internet para carregar os produtos, então o state local "pieces"
+      // pode não ter baixado do Supabase quando essa função chama a API! Então garantimos os dados diretos da fonte:
+      let activePieces = pieces;
+      try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+              const { data } = await supabase.from("pieces").select("*").eq("user_id", user.id).order("name");
+              if (data && data.length > 0) {
+                 activePieces = data;
+                 setPieces(data); // Atualiza também o visual pro resto da página não bugar
+              }
+          }
+      } catch (e) {
+          console.error(e);
+      }
+
+      // 1. Text Match Primeiro (Local, Rápido e 100% Exato contra as peças puxadas diretas do Banco)
+      for (const row of parsed) {
+          const matched = findBestMatch(row.productName, activePieces);
+          if (matched) {
+              row.matchedPieceId = matched.id;
+              row.matchedPieceName = matched.name;
+              row.imageUrl = matched.image_url;
+          }
+      }
+
+      // 2. Separa APENAS os produtos que o texto local falhou em achar
+      const unmatchedProducts = parsed.reduce((acc, row) => {
+          if (!row.matchedPieceId && !acc.find(r => r.productName === row.productName)) {
+              acc.push(row);
+          }
+          return acc;
+      }, [] as ImportRow[]);
+
+      // 3. Chama a Inteligência Artificial APENAS para os não encontrados!
+      if (unmatchedProducts.length > 0 && activePieces.length > 0) {
+        toast({ title: "I.A. Ativada...", description: `Analisando imagens e nomes de ${unmatchedProducts.length} produto(s) modificado(s)` });
+
+        try {
+          const { data: matchData, error: matchError } = await supabase.functions.invoke(
+            "match-product-image",
+            {
+              body: {
+                products: unmatchedProducts.map(r => ({ productName: r.productName, imageUrl: r.shopeeImageUrl })),
+                pieces: activePieces.map(p => ({ id: p.id, name: p.name })),
+              },
+            }
+          );
+
+          if (!matchError && matchData?.matches) {
+            const matchMap = new Map<string, { pieceId: string; confidence: string }>();
+            for (const m of matchData.matches) {
+              if (m.pieceId && m.pieceId !== "null") {
+                const product = unmatchedProducts[m.productIndex];
+                if (product) matchMap.set(product.productName, { pieceId: m.pieceId, confidence: m.confidence });
+              }
+            }
+
+            for (const row of parsed) {
+              if (!row.matchedPieceId) { 
+                const match = matchMap.get(row.productName);
+                if (match) {
+                  const piece = activePieces.find(p => p.id === match.pieceId);
+                  if (piece) {
+                    row.matchedPieceId = piece.id;
+                    row.matchedPieceName = piece.name;
+                    row.imageUrl = piece.image_url;
+                  }
+                }
+              }
+            }
+          }
+        } catch (aiErr) {
+          console.error("AI invocation exception:", aiErr);
+        }
+      }
+
+      setImportRows(parsed);
+      setIsImportDialogOpen(true);
+  }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -296,83 +482,7 @@ export default function Orders() {
         });
       }
 
-      // Try AI image matching
-      if (parsed.length > 0 && pieces.length > 0) {
-        toast({ title: "Identificando produtos via IA...", description: "Analisando imagens dos produtos" });
-
-        try {
-          // Get unique products by name to avoid redundant AI calls
-          const uniqueProducts = parsed.reduce((acc, row) => {
-            if (!acc.find(r => r.productName === row.productName)) {
-              acc.push(row);
-            }
-            return acc;
-          }, [] as ImportRow[]);
-
-          const { data: matchData, error: matchError } = await supabase.functions.invoke(
-            "match-product-image",
-            {
-              body: {
-                products: uniqueProducts.map(r => ({
-                  productName: r.productName,
-                  imageUrl: r.shopeeImageUrl,
-                })),
-                pieces: pieces.map(p => ({ id: p.id, name: p.name })),
-              },
-            }
-          );
-
-          if (!matchError && matchData?.matches) {
-            // Build a map of productName -> matched piece
-            const matchMap = new Map<string, { pieceId: string; confidence: string }>();
-            for (const m of matchData.matches) {
-              if (m.pieceId && m.pieceId !== "null") {
-                const product = uniqueProducts[m.productIndex];
-                if (product) {
-                  matchMap.set(product.productName, { pieceId: m.pieceId, confidence: m.confidence });
-                }
-              }
-            }
-
-            // Apply matches to all parsed rows
-            for (const row of parsed) {
-              const match = matchMap.get(row.productName);
-              if (match) {
-                const piece = pieces.find(p => p.id === match.pieceId);
-                if (piece) {
-                  row.matchedPieceId = piece.id;
-                  row.matchedPieceName = piece.name;
-                  row.imageUrl = piece.image_url;
-                }
-              }
-            }
-          } else {
-            console.error("AI matching error:", matchError);
-            // Fallback to text matching
-            for (const row of parsed) {
-              const matched = findBestMatch(row.productName);
-              if (matched) {
-                row.matchedPieceId = matched.id;
-                row.matchedPieceName = matched.name;
-                row.imageUrl = matched.image_url;
-              }
-            }
-          }
-        } catch (aiErr) {
-          console.error("AI matching failed, using text fallback:", aiErr);
-          for (const row of parsed) {
-            const matched = findBestMatch(row.productName);
-            if (matched) {
-              row.matchedPieceId = matched.id;
-              row.matchedPieceName = matched.name;
-              row.imageUrl = matched.image_url;
-            }
-          }
-        }
-      }
-
-      setImportRows(parsed);
-      setIsImportDialogOpen(true);
+      await processImportRows(parsed);
     } catch (err) {
       console.error("Error parsing file:", err);
       toast({ title: "Erro ao ler arquivo", variant: "destructive" });
@@ -455,13 +565,24 @@ export default function Orders() {
   };
 
   const updateImportRowMatch = (index: number, pieceId: string) => {
-    const piece = pieces.find(p => p.id === pieceId);
-    setImportRows(prev => prev.map((r, i) => i === index ? {
-      ...r,
-      matchedPieceId: piece?.id || null,
-      matchedPieceName: piece?.name || null,
-      imageUrl: piece?.image_url || null,
-    } : r));
+    setImportRows(prev => {
+      const targetRow = prev[index];
+      const piece = pieces.find(p => p.id === pieceId);
+      
+      return prev.map((r, i) => {
+        // Aplica a seleção manual à linha clicada OU a qualquer outra linha da mesma importação
+        // que tenha EXATAMENTE o mesmo nome do produto e ainda esteja "vermelha" (sem match).
+        if (i === index || (!r.matchedPieceId && r.productName === targetRow.productName)) {
+          return {
+            ...r,
+            matchedPieceId: piece?.id || null,
+            matchedPieceName: piece?.name || null,
+            imageUrl: piece?.image_url || null,
+          };
+        }
+        return r;
+      });
+    });
   };
 
   const handleDeleteOrder = async (orderId: string) => {
@@ -546,10 +667,18 @@ export default function Orders() {
 
   const availableVariations = variations.filter(v => v.piece_id === newOrder.piece_id);
 
-  if (loading) {
+  if (loading || isSyncing) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <div className={isSyncing ? "h-10 w-10 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" : "h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin"} />
+        {isSyncing && (
+           <>
+              <h3 className="text-xl font-bold">Buscando Pedidos da Shopee...</h3>
+              <p className="text-muted-foreground mt-2 max-w-[280px] text-center leading-relaxed text-sm font-medium text-blue-400 animate-pulse">
+                {syncMessage}
+              </p>
+           </>
+        )}
       </div>
     );
   }

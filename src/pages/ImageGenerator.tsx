@@ -124,6 +124,9 @@ export default function ImageGenerator() {
   const [activeTab, setActiveTab] = useState("generator");
   const [resultFilter, setResultFilter] = useState<"all" | "recolor" | "marketing">("all");
   const [rateLimitCooldown, setRateLimitCooldown] = useState(0);
+  const [isUploadingToShopee, setIsUploadingToShopee] = useState(false);
+  const [showShopeeDialog, setShowShopeeDialog] = useState(false);
+  const [shopeeStoreId, setShopeeStoreId] = useState("Loja Principal");
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const startCooldown = useCallback((seconds: number) => {
@@ -414,6 +417,46 @@ export default function ImageGenerator() {
     } catch (e) {
       console.error("Shopee text fetch error:", e);
       return null;
+    }
+  };
+
+  const sendToShopeeLocalBot = async () => {
+    setIsUploadingToShopee(true);
+    try {
+      const payloadImages = filteredImages
+        .filter(img => img.type === "marketing")
+        .map(img => img.dataUrl);
+
+      const response = await fetch("http://localhost:3002/api/upload-shopee", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storeId: shopeeStoreId,
+          title: shopeeText?.title || productName,
+          description: shopeeText?.description || productDescription,
+          images: payloadImages,
+          weight: packageWeight,
+          length: packageLength,
+          width: packageWidth,
+          height: packageHeight,
+        })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        toast({ title: "Robô Iniciado!", description: data.message });
+        setShowShopeeDialog(false);
+      } else {
+        toast({ title: "O robô reportou erro", description: data.message, variant: "destructive" });
+      }
+    } catch (e) {
+      toast({ 
+        title: "API Local Inacessível", 
+        description: "Certifique-se que o robô (node shopee-upload-api.mjs) está rodando no seu computador.", 
+        variant: "destructive" 
+      });
+    } finally {
+      setIsUploadingToShopee(false);
     }
   };
 
@@ -1291,20 +1334,30 @@ export default function ImageGenerator() {
                       <h3 className="font-semibold text-sm flex items-center gap-2">
                         <FileText className="h-4 w-4" /> Texto Shopee Gerado
                       </h3>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-1.5"
-                        onClick={() => {
-                          let full = `${shopeeText.title}\n\n${shopeeText.description}\n\nTags: ${shopeeText.keywords.join(", ")}`;
-                          if (packageWeight) full += `\n\nPeso: ${packageWeight} kg`;
-                          if (packageLength && packageWidth && packageHeight) full += `\nEmbalagem: ${packageLength} x ${packageWidth} x ${packageHeight} cm`;
-                          navigator.clipboard.writeText(full);
-                          toast({ title: "Tudo copiado!" });
-                        }}
-                      >
-                        <Copy className="h-3.5 w-3.5" /> Copiar Tudo
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="default"
+                          className="gap-1.5"
+                          onClick={() => setShowShopeeDialog(true)}
+                        >
+                          <Package2 className="h-3.5 w-3.5" /> Enviar para Shopee
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5"
+                          onClick={() => {
+                            let full = `${shopeeText.title}\n\n${shopeeText.description}\n\nTags: ${shopeeText.keywords.join(", ")}`;
+                            if (packageWeight) full += `\n\nPeso: ${packageWeight} kg`;
+                            if (packageLength && packageWidth && packageHeight) full += `\nEmbalagem: ${packageLength} x ${packageWidth} x ${packageHeight} cm`;
+                            navigator.clipboard.writeText(full);
+                            toast({ title: "Tudo copiado!" });
+                          }}
+                        >
+                          <Copy className="h-3.5 w-3.5" /> Copiar Tudo
+                        </Button>
+                      </div>
                     </div>
 
                     {/* Title */}
@@ -1452,6 +1505,52 @@ export default function ImageGenerator() {
               </Button>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Shopee Integration Dialog */}
+      <Dialog open={showShopeeDialog} onOpenChange={setShowShopeeDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-primary">
+              <Package2 className="h-5 w-5" /> Enviar Produto via Robô
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <p className="text-sm text-muted-foreground">
+              O robô <code className="bg-muted px-1.5 py-0.5 rounded text-xs text-foreground">shopee-upload-api.mjs</code> deve estar rodando no seu computador (porta 3002).
+            </p>
+            <div className="space-y-3">
+              <Label>Escolha a Conta da Shopee:</Label>
+              <div className="grid grid-cols-1 gap-2">
+                {["Loja Principal", "Loja Secundária", "Loja Terceira"].map(store => (
+                  <button
+                    key={store}
+                    onClick={() => setShopeeStoreId(store)}
+                    className={`p-3 rounded-lg border text-left transition-all ${
+                      shopeeStoreId === store
+                        ? "border-primary bg-primary/5 ring-1 ring-primary"
+                        : "border-border hover:border-primary/30 text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <p className="text-sm font-medium">{store}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <Button 
+              onClick={sendToShopeeLocalBot} 
+              disabled={isUploadingToShopee} 
+              className="w-full gap-2 mt-4" 
+              size="lg"
+            >
+              {isUploadingToShopee ? (
+                <><Loader2 className="h-4 w-4 animate-spin"/> Conectando ao robô...</>
+              ) : (
+                <><Zap className="h-4 w-4"/> Preencher na Shopee Magicamente</>
+              )}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
