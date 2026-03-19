@@ -280,6 +280,7 @@ export type Database = {
           id: string
           product_name: string
           user_id: string
+          shopee_text: Json | null
         }
         Insert: {
           background_style?: string
@@ -291,6 +292,7 @@ export type Database = {
           id?: string
           product_name: string
           user_id: string
+          shopee_text?: Json | null
         }
         Update: {
           background_style?: string
@@ -302,6 +304,7 @@ export type Database = {
           id?: string
           product_name?: string
           user_id?: string
+          shopee_text?: Json | null
         }
         Relationships: []
       }
@@ -515,6 +518,7 @@ export type Database = {
           tempo_impressao_min: number | null
           user_id: string
           width: number | null
+          stores: string[] | null
         }
         Insert: {
           category?: string | null
@@ -541,6 +545,7 @@ export type Database = {
           tempo_impressao_min?: number | null
           user_id: string
           width?: number | null
+          stores?: string[] | null
         }
         Update: {
           category?: string | null
@@ -567,6 +572,7 @@ export type Database = {
           tempo_impressao_min?: number | null
           user_id?: string
           width?: number | null
+          stores?: string[] | null
         }
         Relationships: []
       }

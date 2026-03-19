@@ -71,6 +71,7 @@ interface HistoryEntry {
   formats: string[];
   created_at: string;
   generated_images: GeneratedImage[];
+  shopee_text?: ShopeeText | null;
 }
 
 const RECOLOR_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/recolor-product`;
@@ -108,6 +109,7 @@ export default function ImageGenerator() {
   const [shopeeQuantity, setShopeeQuantity] = useState(1);
   const [productHeights, setProductHeights] = useState<string[]>([""]);
   const [packageWeight, setPackageWeight] = useState("0,15");
+  const [printTimeMin, setPrintTimeMin] = useState("60");
   const [packageLength, setPackageLength] = useState("30");
   const [packageWidth, setPackageWidth] = useState("15");
   const [packageHeight, setPackageHeight] = useState("11");
@@ -125,8 +127,9 @@ export default function ImageGenerator() {
   const [resultFilter, setResultFilter] = useState<"all" | "recolor" | "marketing">("all");
   const [rateLimitCooldown, setRateLimitCooldown] = useState(0);
   const [isUploadingToShopee, setIsUploadingToShopee] = useState(false);
-  const [showShopeeDialog, setShowShopeeDialog] = useState(false);
-  const [shopeeStoreId, setShopeeStoreId] = useState("Loja Principal");
+  const [showCatalogDialog, setShowCatalogDialog] = useState(false);
+  const [isAddingToCatalog, setIsAddingToCatalog] = useState(false);
+  const [selectedStores, setSelectedStores] = useState<string[]>([]);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const startCooldown = useCallback((seconds: number) => {
@@ -170,7 +173,21 @@ export default function ImageGenerator() {
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(20);
-    if (data) setHistory(data as unknown as HistoryEntry[]);
+    if (data) setHistory(data as any[]);
+  };
+
+  const restoreFromHistory = (entry: HistoryEntry) => {
+    setProductName(entry.product_name);
+    setBackgroundStyle(entry.background_style);
+    setSelectedFormats(entry.formats);
+    setGeneratedImages(entry.generated_images);
+    if (entry.shopee_text) {
+      setShopeeText(entry.shopee_text);
+    }
+    const colors = PRESET_COLORS.filter(c => entry.colors.includes(c.name));
+    setSelectedColors(colors);
+    setActiveTab("generator");
+    toast({ title: "Geração Restaurada!", description: "Você já pode ver as imagens e textos restaurados." });
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -420,43 +437,44 @@ export default function ImageGenerator() {
     }
   };
 
-  const sendToShopeeLocalBot = async () => {
-    setIsUploadingToShopee(true);
+  const addToCatalog = async () => {
+    setIsAddingToCatalog(true);
     try {
       const payloadImages = filteredImages
         .filter(img => img.type === "marketing")
         .map(img => img.dataUrl);
 
-      const response = await fetch("http://localhost:3002/api/upload-shopee", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          storeId: shopeeStoreId,
-          title: shopeeText?.title || productName,
-          description: shopeeText?.description || productDescription,
-          images: payloadImages,
-          weight: packageWeight,
-          length: packageLength,
-          width: packageWidth,
-          height: packageHeight,
-        })
+      if (payloadImages.length === 0) {
+        toast({ title: "Falta Imagem", description: "Gere pelo menos uma imagem de ambiente ou benefício.", variant: "destructive" });
+        setIsAddingToCatalog(false);
+        return;
+      }
+
+      const { data: userAuth } = await supabase.auth.getUser();
+
+      const { error } = await supabase.from('pieces').insert({
+        name: shopeeText?.title || productName || "Nova Peça",
+        description: shopeeText?.description || productDescription,
+        peso_g: parseFloat(packageWeight?.replace(',', '.') || '150') * 1000,
+        tempo_impressao_min: parseInt(printTimeMin || '60'),
+        image_url: payloadImages[0],
+        stores: selectedStores.length > 0 ? selectedStores : null,
+        category: "Decoração",
+        user_id: userAuth.user?.id || "",
       });
 
-      const data = await response.json();
-      if (data.success) {
-        toast({ title: "Robô Iniciado!", description: data.message });
-        setShowShopeeDialog(false);
-      } else {
-        toast({ title: "O robô reportou erro", description: data.message, variant: "destructive" });
-      }
-    } catch (e) {
+      if (error) throw error;
+
+      toast({ title: "Peça Adicionada!", description: "A peça já está disponível no seu catálogo principal." });
+      setShowCatalogDialog(false);
+    } catch (e: any) {
       toast({ 
-        title: "API Local Inacessível", 
-        description: "Certifique-se que o robô (node shopee-upload-api.mjs) está rodando no seu computador.", 
+        title: "Erro ao adicionar", 
+        description: e.message || "Verifique se você tem permissões no Supabase.", 
         variant: "destructive" 
       });
     } finally {
-      setIsUploadingToShopee(false);
+      setIsAddingToCatalog(false);
     }
   };
 
@@ -600,10 +618,12 @@ export default function ImageGenerator() {
         colors: selectedColors.map((c) => c.name),
         background_style: backgroundStyle,
         formats: selectedFormats,
+        shopee_text: shopeeText as any,
         generated_images: results.map((r) => ({
           colorName: r.colorName,
           colorHex: r.colorHex,
           format: r.format,
+          dataUrl: r.dataUrl, // We need the actual dataUrl to restore it later!
           width: r.width,
           height: r.height,
           type: r.type,
@@ -1133,6 +1153,16 @@ export default function ImageGenerator() {
                             className="h-8 text-sm"
                           />
                         </div>
+                        <div>
+                          <Label className="text-[11px] text-muted-foreground">Tempo (min)</Label>
+                          <Input
+                            type="number"
+                            placeholder="60"
+                            value={printTimeMin}
+                            onChange={(e) => setPrintTimeMin(e.target.value)}
+                            className="h-8 text-sm"
+                          />
+                        </div>
                       </div>
                       <div>
                         <Label className="text-[11px] text-muted-foreground flex items-center gap-1">
@@ -1339,9 +1369,9 @@ export default function ImageGenerator() {
                           size="sm"
                           variant="default"
                           className="gap-1.5"
-                          onClick={() => setShowShopeeDialog(true)}
+                          onClick={() => setShowCatalogDialog(true)}
                         >
-                          <Package2 className="h-3.5 w-3.5" /> Enviar para Shopee
+                          <Briefcase className="h-3.5 w-3.5" /> Adicionar ao Catálogo
                         </Button>
                         <Button
                           size="sm"
@@ -1456,21 +1486,38 @@ export default function ImageGenerator() {
             ) : (
               <div className="space-y-3">
                 {history.map((entry) => (
-                  <Card key={entry.id} className="p-4">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <div>
-                        <h3 className="font-semibold text-sm">{entry.product_name}</h3>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(entry.created_at).toLocaleDateString("pt-BR")} •{" "}
-                          {entry.colors?.length || 0} cores • {entry.formats?.length || 0} formatos •{" "}
-                          {entry.background_style}
-                        </p>
+                  <Card key={entry.id} className="p-4 hover:border-primary/50 transition-all">
+                    <div className="flex items-center justify-between flex-wrap gap-4">
+                      <div className="flex gap-4 items-center">
+                        {entry.generated_images?.[0] && (
+                          <img 
+                            src={entry.generated_images[0].dataUrl} 
+                            className="w-16 h-16 rounded object-cover border bg-muted" 
+                            alt="Preview"
+                          />
+                        )}
+                        <div>
+                          <h3 className="font-semibold text-sm">{entry.product_name}</h3>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(entry.created_at).toLocaleDateString("pt-BR")} •{" "}
+                            {entry.colors?.length || 0} cores • {entry.formats?.length || 0} formatos
+                          </p>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {entry.colors?.slice(0, 3).map((c) => (
+                              <Badge key={c} variant="outline" className="text-[10px] px-1">{c}</Badge>
+                            ))}
+                            {entry.colors?.length > 3 && <span className="text-[10px] text-muted-foreground">+{entry.colors.length - 3}</span>}
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex flex-wrap gap-1">
-                        {entry.colors?.map((c) => (
-                          <Badge key={c} variant="outline" className="text-xs">{c}</Badge>
-                        ))}
-                      </div>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="gap-2"
+                        onClick={() => restoreFromHistory(entry)}
+                      >
+                        <Zap className="h-3.5 w-3.5" /> Restaurar
+                      </Button>
                     </div>
                   </Card>
                 ))}
@@ -1508,46 +1555,53 @@ export default function ImageGenerator() {
         </DialogContent>
       </Dialog>
 
-      {/* Shopee Integration Dialog */}
-      <Dialog open={showShopeeDialog} onOpenChange={setShowShopeeDialog}>
+      {/* Catalog Integration Dialog */}
+      <Dialog open={showCatalogDialog} onOpenChange={setShowCatalogDialog}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-primary">
-              <Package2 className="h-5 w-5" /> Enviar Produto via Robô
+              <Briefcase className="h-5 w-5" /> Adicionar Peça ao Catálogo
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <p className="text-sm text-muted-foreground">
-              O robô <code className="bg-muted px-1.5 py-0.5 rounded text-xs text-foreground">shopee-upload-api.mjs</code> deve estar rodando no seu computador (porta 3002).
+              A peça será criada com o Peso ({packageWeight}kg), Tempo ({printTimeMin} min) e a foto de ambiente principal.
             </p>
             <div className="space-y-3">
-              <Label>Escolha a Conta da Shopee:</Label>
+              <Label>Marque as Lojas para Integração:</Label>
               <div className="grid grid-cols-1 gap-2">
                 {["Loja Principal", "Loja Secundária", "Loja Terceira"].map(store => (
                   <button
                     key={store}
-                    onClick={() => setShopeeStoreId(store)}
+                    onClick={() => {
+                      setSelectedStores(prev => 
+                        prev.includes(store) ? prev.filter(s => s !== store) : [...prev, store]
+                      );
+                    }}
                     className={`p-3 rounded-lg border text-left transition-all ${
-                      shopeeStoreId === store
+                      selectedStores.includes(store)
                         ? "border-primary bg-primary/5 ring-1 ring-primary"
                         : "border-border hover:border-primary/30 text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    <p className="text-sm font-medium">{store}</p>
+                    <div className="flex items-center justify-between">
+                       <p className="text-sm font-medium">{store}</p>
+                       {selectedStores.includes(store) && <CheckCircle2 className="h-4 w-4 text-primary" />}
+                    </div>
                   </button>
                 ))}
               </div>
             </div>
             <Button 
-              onClick={sendToShopeeLocalBot} 
-              disabled={isUploadingToShopee} 
+              onClick={addToCatalog} 
+              disabled={isAddingToCatalog} 
               className="w-full gap-2 mt-4" 
               size="lg"
             >
-              {isUploadingToShopee ? (
-                <><Loader2 className="h-4 w-4 animate-spin"/> Conectando ao robô...</>
+              {isAddingToCatalog ? (
+                <><Loader2 className="h-4 w-4 animate-spin"/> Salvando...</>
               ) : (
-                <><Zap className="h-4 w-4"/> Preencher na Shopee Magicamente</>
+                <><CheckCircle2 className="h-4 w-4"/> Confirmar e Adicionar</>
               )}
             </Button>
           </div>
