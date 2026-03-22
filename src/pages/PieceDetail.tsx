@@ -29,6 +29,7 @@ interface Piece {
   peso_g: number | null; tempo_impressao_min: number | null;
   custo_material: number | null; custo_energia: number | null;
   custo_acessorios: number | null; makerworld_url: string | null;
+  stores: string[] | null;
 }
 
 interface Filament {
@@ -262,6 +263,13 @@ export default function PieceDetail() {
               {piece.material && <Badge variant="secondary">{piece.material}</Badge>}
               {pesoG > 0 && <Badge variant="outline">{pesoG}g</Badge>}
               {tempoMin > 0 && <Badge variant="outline">{tempoH}h {tempoM}min</Badge>}
+              
+              {piece.stores && piece.stores.map((store, i) => (
+                <Badge key={i} variant="outline" className="bg-primary/5 text-primary border-primary/20">
+                  <Box className="h-3 w-3 mr-1" />
+                  {store}
+                </Badge>
+              ))}
             </div>
 
             {/* Makerworld link */}

@@ -21,6 +21,7 @@ interface Piece {
   is_selling: boolean | null;
   cost: number | null;
   preco_venda: number | null;
+  stores?: string[];
 }
 
 export default function Catalog() {
@@ -29,9 +30,11 @@ export default function Catalog() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
+  const [filterStore, setFilterStore] = useState("all");
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const [categories, setCategories] = useState<string[]>([]);
+  const [stores, setStores] = useState<string[]>([]);
 
   useEffect(() => {
     fetchPieces();
@@ -54,8 +57,11 @@ export default function Catalog() {
     if (filterCategory !== "all") {
       filtered = filtered.filter((piece) => piece.category === filterCategory);
     }
+    if (filterStore !== "all") {
+      filtered = filtered.filter((piece) => (piece.stores || []).includes(filterStore));
+    }
     setFilteredPieces(filtered);
-  }, [searchTerm, filterStatus, filterCategory, pieces]);
+  }, [searchTerm, filterStatus, filterCategory, filterStore, pieces]);
 
   const fetchPieces = async () => {
     try {
@@ -70,6 +76,11 @@ export default function Catalog() {
         ...new Set((data as any)?.map((p: any) => p.category).filter(Boolean)),
       ] as string[];
       setCategories(uniqueCategories);
+
+      const uniqueStores = [
+        ...new Set((data as any)?.flatMap((p: any) => p.stores || []).filter(Boolean)),
+      ] as string[];
+      setStores(uniqueStores);
     } catch (error: any) {
       toast({ title: "Erro ao carregar peças", description: error.message, variant: "destructive" });
     } finally {
@@ -144,6 +155,19 @@ export default function Catalog() {
               </div>
             </SelectItem>
             <SelectItem value="false">Fora do Ar</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={filterStore} onValueChange={setFilterStore}>
+          <SelectTrigger className="w-full sm:w-[170px] h-9 text-sm">
+            <SelectValue placeholder="Loja / Conta" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas as lojas</SelectItem>
+            {stores.map((store) => (
+              <SelectItem key={store} value={store}>
+                {store}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>

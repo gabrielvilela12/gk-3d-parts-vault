@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Save, Box, ChevronDown, Edit, Plus, Trash, Palette, Package } from "lucide-react";
 
 // Interface para os inputs do formulário
@@ -20,6 +21,7 @@ interface FormData {
   category: string;
   notes: string;
   makerworldUrl: string;
+  stores: string[];
 }
 
 // Interface para custos padrão (carregados de Configurações)
@@ -62,6 +64,11 @@ interface ExistingFiles {
 interface MiningProduct {
   id: string;
   name: string;
+}
+
+interface Account {
+  id: string;
+  title: string;
 }
 
 interface Filament {
@@ -121,6 +128,7 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
   const [originalNotes, setOriginalNotes] = useState("");
 
   const [miningProducts, setMiningProducts] = useState<MiningProduct[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [filaments, setFilaments] = useState<Filament[]>([]);
   const [priceVariations, setPriceVariations] = useState<PriceVariation[]>([]);
 
@@ -147,6 +155,7 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
     category: "",
     notes: "",
     makerworldUrl: "",
+    stores: [],
   });
 
   const [costs, setCosts] = useState<CalculatedCosts>({
@@ -160,14 +169,37 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
   // Fetch initial data
   useEffect(() => {
     const fetchAll = async () => {
-      const [miningRes, filRes, presetRes] = await Promise.all([
+      const [miningRes, filRes, presetRes, accRes] = await Promise.all([
         supabase.from("mining_products").select("id, name").order("name", { ascending: true }),
         supabase.from("filaments").select("*").order("name", { ascending: true }),
         supabase.from("calculation_presets").select("*").eq("preset_name", "default").maybeSingle(),
+        supabase.from("accounts").select("id, title").order("title", { ascending: true }),
       ]);
 
       setMiningProducts(miningRes.data || []);
       setFilaments((filRes.data as any[]) || []);
+      
+      const fetchedAccounts = accRes.data || [];
+      // Filtra as contas que contém "upsell" para não aparecerem na adição de peça
+      const filteredAccounts = fetchedAccounts.filter(acc => !acc.title.toLowerCase().includes("upsell"));
+      
+      const getRank = (title: string) => {
+        const t = title.toLowerCase();
+        if (t.includes("shoppe") && t.includes("gakko") && !t.includes("upsell")) {
+          if (t.includes("3")) return 3;
+          if (t.includes("2")) return 2;
+          return 1;
+        }
+        return 99;
+      };
+      
+      const sortedAccounts = [...filteredAccounts].sort((a, b) => {
+        const rankA = getRank(a.title);
+        const rankB = getRank(b.title);
+        if (rankA !== rankB) return rankA - rankB;
+        return a.title.localeCompare(b.title);
+      });
+      setAccounts(sortedAccounts);
 
       if (presetRes.data) {
         const d = presetRes.data;
@@ -218,6 +250,7 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
               tempoImpressaoHoras: Math.floor(totalMinutes / 60) > 0 ? Math.floor(totalMinutes / 60).toString() : "",
               tempoImpressaoMinutos: (totalMinutes % 60) > 0 ? (totalMinutes % 60).toString() : "",
               notes: data.notes || "", makerworldUrl: (data as any).makerworld_url || "",
+              stores: data.stores || [],
             }));
             setOriginalNotes(data.notes || "");
             setExistingFiles({ stl_url: data.stl_url, image_url: data.image_url });
@@ -410,6 +443,7 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
         lucro_liquido: costs.lucroLiquido || null,
         makerworld_url: formData.makerworldUrl || null,
         custo_acessorios: costs.custoAcessorios || null,
+        stores: formData.stores,
       } as any;
 
       if (isEditMode && id) {
@@ -641,6 +675,33 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
               <Label htmlFor="makerworldUrl">Link do Makerworld (Opcional)</Label>
               <Input id="makerworldUrl" type="url" value={formData.makerworldUrl} onChange={handleInputChange} placeholder="https://makerworld.com/..." />
             </div>
+            
+            <div className="space-y-4 pt-2">
+              <Label className="font-semibold text-base">Contas / Lojas Vinculadas</Label>
+              <p className="text-sm text-muted-foreground mb-2">Selecione em quais lojas este produto é vendido</p>
+              <div className="flex flex-col gap-3 p-4 bg-muted/20 border border-border/50 rounded-lg">
+                {accounts.length === 0 && <p className="text-xs text-muted-foreground">Nenhuma conta cadastrada.</p>}
+                {accounts.map(acc => (
+                  <div key={acc.id} className="flex items-center space-x-2">
+                    <Checkbox 
+                      id={`store-${acc.id}`} 
+                      checked={formData.stores.includes(acc.title)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setFormData(prev => ({ ...prev, stores: [...prev.stores, acc.title] }));
+                        } else {
+                          setFormData(prev => ({ ...prev, stores: prev.stores.filter(t => t !== acc.title) }));
+                        }
+                      }}
+                    />
+                    <label htmlFor={`store-${acc.id}`} className="text-sm font-medium leading-none cursor-pointer">
+                      {acc.title}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="notes">Observações Técnicas</Label>
               <Input id="notes" value={formData.notes} onChange={handleInputChange} placeholder="Ex: Detalhes adicionais..." />
