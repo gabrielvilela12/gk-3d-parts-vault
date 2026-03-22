@@ -594,12 +594,14 @@ export default function ImageGenerator() {
     }
 
     // PHASE 3: Shopee SEO text
+    let finalShopeeText: ShopeeText | null = null;
     if (generateShopeeText && productName) {
       setProgressLabel(`📝 Gerando título e descrição Shopee...`);
       setProgress(Math.round((done / total) * 100));
 
       const textResult = await callShopeeTextApi();
       if (textResult) {
+        finalShopeeText = textResult;
         setShopeeText(textResult);
       }
       done++;
@@ -608,28 +610,33 @@ export default function ImageGenerator() {
     setProgress(100);
     setIsGenerating(false);
 
-    // Save to history
+    // Save to history — always save when we have results OR shopee text
     const { data: { user } } = await supabase.auth.getUser();
-    if (user && results.length > 0) {
-      await supabase.from("image_generations").insert({
+    if (user && (results.length > 0 || finalShopeeText)) {
+      const { error: saveError } = await supabase.from("image_generations").insert({
         user_id: user.id,
         product_name: productName || "Sem nome",
         base_image_url: "ai-generated",
         colors: selectedColors.map((c) => c.name),
         background_style: backgroundStyle,
         formats: selectedFormats,
-        shopee_text: shopeeText as any,
+        shopee_text: finalShopeeText as any,
         generated_images: results.map((r) => ({
           colorName: r.colorName,
           colorHex: r.colorHex,
           format: r.format,
-          dataUrl: r.dataUrl, // We need the actual dataUrl to restore it later!
+          dataUrl: r.dataUrl,
           width: r.width,
           height: r.height,
           type: r.type,
           marketingType: r.marketingType,
         })),
       });
+
+      if (saveError) {
+        console.error("Erro ao salvar histórico:", saveError);
+        toast({ title: "Erro ao salvar histórico", description: saveError.message, variant: "destructive" });
+      }
     }
 
     const imageTotal = recolorTotal + marketingTotal;

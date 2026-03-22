@@ -1,0 +1,1 @@
+UPDATE pieces SET category = 'Vasos' WHERE name ILIKE '%vaso%' AND category != 'Vasos';
