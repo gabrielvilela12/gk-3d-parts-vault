@@ -66,6 +66,12 @@ export default function Catalog() {
         filtered = filtered.filter((piece) => piece.stores?.includes(filterStore));
       }
     }
+    filtered.sort((a, b) => {
+      const catA = (a.category || "zzz").toLowerCase();
+      const catB = (b.category || "zzz").toLowerCase();
+      if (catA !== catB) return catA.localeCompare(catB, "pt-BR");
+      return a.name.toLowerCase().localeCompare(b.name.toLowerCase(), "pt-BR");
+    });
     setFilteredPieces(filtered);
   }, [searchTerm, filterStatus, filterCategory, filterStore, pieces]);
 
