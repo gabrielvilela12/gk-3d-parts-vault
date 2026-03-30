@@ -18,6 +18,7 @@ import {
     ImagePlus,
     Receipt,
     MessageCircle,
+    Warehouse,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
@@ -39,6 +40,7 @@ const primaryNav = [
 
 const managementNav = [
     { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { path: "/inventory", label: "Estoque", icon: Warehouse },
     { path: "/orders", label: "Pedidos", icon: ClipboardList },
     { path: "/expenses", label: "Despesas", icon: Receipt },
     { path: "/assistant", label: "Assistente IA", icon: MessageCircle },

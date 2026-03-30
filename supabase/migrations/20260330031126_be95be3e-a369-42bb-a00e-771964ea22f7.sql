@@ -1,0 +1,3 @@
+
+ALTER TABLE filaments ADD COLUMN IF NOT EXISTS stock_kg numeric NOT NULL DEFAULT 0;
+ALTER TABLE pieces ADD COLUMN IF NOT EXISTS stock_quantity integer NOT NULL DEFAULT 0;
