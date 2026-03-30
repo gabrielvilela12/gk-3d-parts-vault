@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Package, Cylinder, Plus, Minus, Trash2, Search } from "lucide-react";
+import { Package, Cylinder, Plus, Minus, Trash2, Search, Check, ArrowLeft } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -14,13 +14,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface Filament {
   id: string;
@@ -48,7 +42,8 @@ export default function Inventory() {
   const [stockSearch, setStockSearch] = useState("");
   const [addStockOpen, setAddStockOpen] = useState(false);
   const [catalogPieces, setCatalogPieces] = useState<Piece[]>([]);
-  const [selectedPieceId, setSelectedPieceId] = useState("");
+  const [catalogSearch, setCatalogSearch] = useState("");
+  const [selectedPiece, setSelectedPiece] = useState<Piece | null>(null);
   const [addQty, setAddQty] = useState("1");
 
   async function fetchData() {
@@ -92,18 +87,23 @@ export default function Inventory() {
   }
 
   async function handleAddFromCatalog() {
-    if (!selectedPieceId) return;
+    if (!selectedPiece) return;
     const qty = parseInt(addQty) || 1;
-    const existing = catalogPieces.find(p => p.id === selectedPieceId);
-    const newQty = (existing?.stock_quantity || 0) + qty;
-    const { error } = await supabase.from("pieces").update({ stock_quantity: newQty }).eq("id", selectedPieceId);
+    const newQty = (selectedPiece.stock_quantity || 0) + qty;
+    const { error } = await supabase.from("pieces").update({ stock_quantity: newQty }).eq("id", selectedPiece.id);
     if (error) { toast({ title: "Erro", description: error.message, variant: "destructive" }); return; }
-    toast({ title: "Estoque atualizado", description: `${existing?.name}: ${newQty} unidades` });
+    toast({ title: "Estoque atualizado", description: `${selectedPiece.name}: ${newQty} unidades` });
     setAddStockOpen(false);
-    setSelectedPieceId("");
+    setSelectedPiece(null);
+    setCatalogSearch("");
     setAddQty("1");
     fetchData();
   }
+
+  const filteredCatalog = catalogPieces.filter(p =>
+    p.name.toLowerCase().includes(catalogSearch.toLowerCase()) ||
+    (p.category || "").toLowerCase().includes(catalogSearch.toLowerCase())
+  );
 
   async function setFilamentStockDirect(id: string, value: string) {
     const newVal = Math.max(0, parseFloat(value) || 0);
@@ -216,43 +216,107 @@ export default function Inventory() {
                 className="pl-9"
               />
             </div>
-            <Dialog open={addStockOpen} onOpenChange={(open) => { setAddStockOpen(open); if (open) fetchCatalogPieces(); }}>
+            <Dialog open={addStockOpen} onOpenChange={(open) => { setAddStockOpen(open); if (open) { fetchCatalogPieces(); setSelectedPiece(null); setCatalogSearch(""); setAddQty("1"); } }}>
               <DialogTrigger asChild>
                 <Button className="gap-2 shrink-0">
                   <Plus className="h-4 w-4" />
                   Adicionar do Catálogo
                 </Button>
               </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Adicionar Peça ao Estoque</DialogTitle>
+              <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-0">
+                <DialogHeader className="px-6 pt-6 pb-0">
+                  <DialogTitle>
+                    {selectedPiece ? (
+                      <button onClick={() => setSelectedPiece(null)} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+                        <ArrowLeft className="h-4 w-4" />
+                        Voltar à lista
+                      </button>
+                    ) : "Adicionar Peça ao Estoque"}
+                  </DialogTitle>
                 </DialogHeader>
-                <div className="space-y-4 pt-2">
-                  <Select value={selectedPieceId} onValueChange={setSelectedPieceId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione uma peça" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {catalogPieces.map(p => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.name} {p.category ? `(${p.category})` : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <div>
-                    <label className="text-sm font-medium">Quantidade</label>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={addQty}
-                      onChange={e => setAddQty(e.target.value)}
-                    />
+
+                {!selectedPiece ? (
+                  <div className="flex flex-col flex-1 min-h-0 px-6 pb-6">
+                    <div className="relative mt-3 mb-3">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar peça por nome ou categoria..."
+                        value={catalogSearch}
+                        onChange={e => setCatalogSearch(e.target.value)}
+                        className="pl-9"
+                        autoFocus
+                      />
+                    </div>
+                    <ScrollArea className="flex-1 max-h-[55vh]">
+                      {filteredCatalog.length === 0 ? (
+                        <p className="text-center text-muted-foreground py-8">Nenhuma peça encontrada.</p>
+                      ) : (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pr-3">
+                          {filteredCatalog.map(piece => (
+                            <button
+                              key={piece.id}
+                              onClick={() => setSelectedPiece(piece)}
+                              className="group relative flex flex-col rounded-lg border border-border bg-card hover:border-primary/50 hover:shadow-md transition-all overflow-hidden text-left"
+                            >
+                              <div className="aspect-square bg-muted relative overflow-hidden">
+                                {piece.image_url ? (
+                                  <img src={piece.image_url} alt={piece.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center">
+                                    <Package className="h-8 w-8 text-muted-foreground/40" />
+                                  </div>
+                                )}
+                                {piece.stock_quantity > 0 && (
+                                  <Badge className="absolute top-1.5 right-1.5 text-[10px]">{piece.stock_quantity} em estoque</Badge>
+                                )}
+                              </div>
+                              <div className="p-2.5">
+                                <p className="text-sm font-medium truncate">{piece.name}</p>
+                                {piece.category && <Badge variant="secondary" className="text-[10px] mt-1">{piece.category}</Badge>}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </ScrollArea>
                   </div>
-                  <Button className="w-full" onClick={handleAddFromCatalog} disabled={!selectedPieceId}>
-                    Adicionar
-                  </Button>
-                </div>
+                ) : (
+                  <div className="px-6 pb-6 space-y-4">
+                    <div className="flex gap-4 items-start mt-2">
+                      <div className="h-20 w-20 rounded-lg bg-muted overflow-hidden shrink-0">
+                        {selectedPiece.image_url ? (
+                          <img src={selectedPiece.image_url} alt={selectedPiece.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Package className="h-8 w-8 text-muted-foreground/40" />
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-semibold">{selectedPiece.name}</p>
+                        {selectedPiece.category && <Badge variant="secondary" className="mt-1">{selectedPiece.category}</Badge>}
+                        {selectedPiece.stock_quantity > 0 && (
+                          <p className="text-xs text-muted-foreground mt-1">Atualmente: {selectedPiece.stock_quantity} un. em estoque</p>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">Quantidade a adicionar</label>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={addQty}
+                        onChange={e => setAddQty(e.target.value)}
+                        className="mt-1"
+                        autoFocus
+                      />
+                    </div>
+                    <Button className="w-full gap-2" onClick={handleAddFromCatalog}>
+                      <Check className="h-4 w-4" />
+                      Confirmar ({parseInt(addQty) || 1} un.)
+                    </Button>
+                  </div>
+                )}
               </DialogContent>
             </Dialog>
           </div>
