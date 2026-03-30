@@ -24,6 +24,30 @@ interface Filament {
   stock_kg: number;
 }
 
+const COLOR_HEX_MAP: Record<string, string> = {
+  "branco": "#FFFFFF",
+  "preto": "#1a1a1a",
+  "vermelho": "#DC2626",
+  "azul": "#2563EB",
+  "rosa": "#EC4899",
+  "marrom escuro": "#5C3317",
+  "marrom claro": "#C4A35A",
+  "amarelo": "#EAB308",
+  "verde": "#16A34A",
+  "cinza": "#6B7280",
+  "laranja": "#EA580C",
+  "roxo": "#7C3AED",
+  "dourado": "#D4A017",
+  "prata": "#C0C0C0",
+  "transparente": "#E5E7EB",
+  "bege": "#D2B48C",
+};
+
+function getColorHex(colorName: string | null): string {
+  if (!colorName) return "#888";
+  return COLOR_HEX_MAP[colorName.toLowerCase()] || "#888";
+}
+
 interface Piece {
   id: string;
   name: string;
@@ -175,10 +199,10 @@ export default function Inventory() {
                     <div className="flex items-center gap-3 min-w-0">
                       <div
                         className="h-8 w-8 rounded-full border border-border shrink-0"
-                        style={{ backgroundColor: fil.color || "#888" }}
+                        style={{ backgroundColor: getColorHex(fil.color) }}
                       />
                       <div className="min-w-0">
-                        <p className="font-medium truncate">{fil.name}</p>
+                        <p className="font-medium truncate">{fil.color || "Sem cor"} <span className="text-muted-foreground font-normal">— {fil.name}</span></p>
                         <p className="text-xs text-muted-foreground">R$ {fil.custo_kg.toFixed(2)}/kg</p>
                       </div>
                     </div>
