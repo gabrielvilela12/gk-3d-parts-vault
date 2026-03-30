@@ -210,6 +210,7 @@ export type Database = {
           custo_kg: number
           id: string
           name: string
+          stock_kg: number
           updated_at: string
           user_id: string
         }
@@ -219,6 +220,7 @@ export type Database = {
           custo_kg?: number
           id?: string
           name: string
+          stock_kg?: number
           updated_at?: string
           user_id: string
         }
@@ -228,6 +230,7 @@ export type Database = {
           custo_kg?: number
           id?: string
           name?: string
+          stock_kg?: number
           updated_at?: string
           user_id?: string
         }
@@ -515,6 +518,7 @@ export type Database = {
           preco_venda: number | null
           print_status: string | null
           stl_url: string | null
+          stock_quantity: number
           stores: string[] | null
           tempo_impressao_min: number | null
           user_id: string
@@ -542,6 +546,7 @@ export type Database = {
           preco_venda?: number | null
           print_status?: string | null
           stl_url?: string | null
+          stock_quantity?: number
           stores?: string[] | null
           tempo_impressao_min?: number | null
           user_id: string
@@ -569,6 +574,7 @@ export type Database = {
           preco_venda?: number | null
           print_status?: string | null
           stl_url?: string | null
+          stock_quantity?: number
           stores?: string[] | null
           tempo_impressao_min?: number | null
           user_id?: string
