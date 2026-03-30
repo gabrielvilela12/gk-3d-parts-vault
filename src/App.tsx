@@ -24,6 +24,7 @@ import NotFound from "./pages/NotFound";
 import ImageGenerator from "./pages/ImageGenerator";
 import Assistant from "./pages/Assistant";
 import Inventory from "./pages/Inventory";
+import BulkAddStock from "./pages/BulkAddStock";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -132,6 +133,10 @@ function AppContent() {
           <Route
             path="/inventory"
             element={user ? <Inventory /> : <Navigate to="/auth" replace />}
+          />
+          <Route
+            path="/inventory/add-stock"
+            element={user ? <BulkAddStock /> : <Navigate to="/auth" replace />}
           />
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -518,6 +518,7 @@ export type Database = {
           preco_venda: number | null
           print_status: string | null
           stl_url: string | null
+          stock_by_color: Json | null
           stock_quantity: number
           stores: string[] | null
           tempo_impressao_min: number | null
@@ -546,6 +547,7 @@ export type Database = {
           preco_venda?: number | null
           print_status?: string | null
           stl_url?: string | null
+          stock_by_color?: Json | null
           stock_quantity?: number
           stores?: string[] | null
           tempo_impressao_min?: number | null
@@ -574,6 +576,7 @@ export type Database = {
           preco_venda?: number | null
           print_status?: string | null
           stl_url?: string | null
+          stock_by_color?: Json | null
           stock_quantity?: number
           stores?: string[] | null
           tempo_impressao_min?: number | null
