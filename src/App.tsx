@@ -27,6 +27,7 @@ import Inventory from "./pages/Inventory";
 import BulkAddStock from "./pages/BulkAddStock";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { MobileInstallBanner } from "@/components/MobileInstallBanner";
 
 const queryClient = new QueryClient();
 
@@ -71,7 +72,7 @@ function AppContent() {
         className={cn(
           "flex-1 min-h-screen transition-all duration-300",
           user && !isMobile ? "ml-[220px]" : "",
-          user && isMobile ? "pt-14" : ""
+          user && isMobile ? "pt-[calc(env(safe-area-inset-top)+3.5rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)]" : ""
         )}
       >
         <Routes>
@@ -141,6 +142,7 @@ function AppContent() {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
+      <MobileInstallBanner />
     </div>
   );
 }

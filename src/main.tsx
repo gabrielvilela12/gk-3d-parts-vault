@@ -10,4 +10,12 @@ if (theme === "dark" || (!theme && window.matchMedia("(prefers-color-scheme: dar
   document.documentElement.classList.remove("dark");
 }
 
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/service-worker.js").catch((error) => {
+      console.error("Service worker registration failed", error);
+    });
+  });
+}
+
 createRoot(document.getElementById("root")!).render(<App />);

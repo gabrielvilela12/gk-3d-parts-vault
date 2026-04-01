@@ -1,0 +1,24 @@
+{
+  "name": "GK - Gestao de Pecas 3D",
+  "short_name": "GK Pecas 3D",
+  "description": "Abra o GK direto da tela inicial do iPhone ou Android em uma experiencia mobile.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7fafc",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
