@@ -9,18 +9,22 @@ CREATE TABLE IF NOT EXISTS public.printers (
 
 ALTER TABLE public.printers ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view own printers" ON public.printers;
 CREATE POLICY "Users can view own printers"
   ON public.printers FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert own printers" ON public.printers;
 CREATE POLICY "Users can insert own printers"
   ON public.printers FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update own printers" ON public.printers;
 CREATE POLICY "Users can update own printers"
   ON public.printers FOR UPDATE
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete own printers" ON public.printers;
 CREATE POLICY "Users can delete own printers"
   ON public.printers FOR DELETE
   USING (auth.uid() = user_id);
@@ -28,6 +32,7 @@ CREATE POLICY "Users can delete own printers"
 CREATE INDEX IF NOT EXISTS idx_printers_user_id
   ON public.printers(user_id);
 
+DROP TRIGGER IF EXISTS update_printers_updated_at ON public.printers;
 CREATE TRIGGER update_printers_updated_at
   BEFORE UPDATE ON public.printers
   FOR EACH ROW

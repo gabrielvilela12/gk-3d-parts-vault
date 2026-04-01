@@ -1,4 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import {
+  buildImagePart,
+  buildTextPart,
+  callGeminiGenerateContent,
+  extractGeminiImageDataUrl,
+  GEMINI_IMAGE_MODEL,
+  GeminiHttpError,
+} from "../_shared/gemini.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -6,164 +14,165 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const environmentLabels: Record<string, { name: string; description: string }> = {
+  living_room: {
+    name: "Sala de Estar",
+    description: "a modern and tasteful living room with warm lighting, sofa, shelves, and decor",
+  },
+  office: {
+    name: "Escritorio",
+    description: "a modern workspace with desk, monitor, accessories, and professional lighting",
+  },
+  outdoor: {
+    name: "Area Externa",
+    description: "an outdoor setting such as garden, patio, terrace, or nature with natural daylight",
+  },
+  kitchen: {
+    name: "Cozinha",
+    description: "a bright modern kitchen or dining area with countertop and tableware",
+  },
+  bedroom: {
+    name: "Quarto",
+    description: "a cozy bedroom with soft lighting, bed, nightstand, and warm textiles",
+  },
+  bathroom: {
+    name: "Banheiro",
+    description: "a clean modern bathroom with elegant fixtures and a refined atmosphere",
+  },
+  studio: {
+    name: "Estudio",
+    description: "a premium photography studio with controlled light and a polished set",
+  },
+};
+
+function buildPrompt(params: {
+  productName?: string;
+  marketingType?: string;
+  benefitPrompt?: string;
+  benefitIndex?: number;
+  mainColor?: string;
+  mainColorHex?: string;
+}) {
+  const {
+    productName,
+    marketingType,
+    benefitPrompt,
+    benefitIndex,
+    mainColor,
+    mainColorHex,
+  } = params;
+
+  const colorInstruction = mainColor
+    ? `\n- The product must appear in the color "${mainColor}" (${mainColorHex}).`
+    : "";
+  const normalizedMarketingType = marketingType?.startsWith("environment_")
+    ? marketingType.replace("environment_", "")
+    : marketingType;
+
+  if (normalizedMarketingType === "benefit") {
+    return `Create a premium marketing image from the provided product photo.
+
+Product: "${productName || "this product"}"
+Benefit to communicate: "${benefitPrompt || "the main benefit of this product"}"
+Variation number: ${benefitIndex || 1} of 3
+
+Rules:
+- Keep the product as the hero element and preserve its core identity.
+- Visually communicate the stated benefit in a clear and aspirational way.
+- Make this variation distinct in angle, composition, or visual storytelling.
+- Use polished lighting and premium art direction.${colorInstruction}
+- Do not add labels, watermarks, banners, or any text overlay.`;
+  }
+
+  if (normalizedMarketingType && environmentLabels[normalizedMarketingType]) {
+    const environment = environmentLabels[normalizedMarketingType];
+
+    return `Transform the provided product image into a lifestyle marketing photo.
+
+Product: "${productName || "this product"}"
+Environment: ${environment.name}
+
+Rules:
+- Place the product naturally inside ${environment.description}.
+- Keep the product as the main focus while integrating it believably into the scene.
+- Make the final result feel premium, tasteful, and ready for e-commerce marketing.${colorInstruction}
+- Do not add labels, watermarks, banners, or any text overlay.`;
+  }
+
+  return `Create a premium hero image from the provided product photo.
+
+Product: "${productName || "this product"}"
+
+Rules:
+- Keep the product centered and visually dominant.
+- Use a clean premium composition with refined lighting.
+- Preserve the recognizable identity and details of the product.${colorInstruction}
+- Do not add labels, watermarks, banners, or any text overlay.`;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { imageBase64, productName, marketingType, benefitPrompt, benefitIndex, mainColor, mainColorHex } = await req.json();
-
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
-    }
+    const { imageBase64, productName, marketingType, benefitPrompt, benefitIndex, mainColor, mainColorHex } =
+      await req.json();
 
     if (!imageBase64) {
       throw new Error("imageBase64 is required");
     }
 
-    const environmentLabels: Record<string, { name: string; description: string }> = {
-      living_room: { name: "Sala de Estar", description: "modern, well-decorated living room with warm lighting, cozy sofa, shelves, plants" },
-      office: { name: "Escritório", description: "modern office or workspace with clean desk, monitor, stationery, professional lighting" },
-      outdoor: { name: "Área Externa", description: "outdoor setting like garden, patio, terrace, or nature with natural sunlight and vibrant colors" },
-      kitchen: { name: "Cozinha", description: "modern kitchen or dining area with warm appetizing lighting, countertop, tableware" },
-      bedroom: { name: "Quarto", description: "cozy bedroom with soft lighting, bed, nightstand, warm textiles" },
-      bathroom: { name: "Banheiro", description: "clean modern bathroom with tiles, mirror, elegant fixtures" },
-      studio: { name: "Estúdio", description: "professional photography studio with controlled lighting, clean backdrop" },
-    };
-
-    const colorInstruction = mainColor ? `\n- The product MUST be shown in the color "${mainColor}" (hex: ${mainColorHex}). Change the product color to this specific color while keeping all other details.` : "";
-
-    let prompt: string;
-
-    if (marketingType === "benefit") {
-      prompt = `You are a professional product photographer and marketing expert.
-Edit this product image to create a compelling photo that highlights a specific BENEFIT of using this product.
-
-Product: "${productName || "this product"}"
-Benefit to highlight: "${benefitPrompt || "the main benefit of this product"}"
-Image variation: ${benefitIndex || 1} of 3 (make each variation UNIQUE and DIFFERENT from the others)
-
-RULES:
-- Keep the product as the MAIN FOCUS, centered and prominent.
-- Visually represent the described benefit in a creative, eye-catching way.
-- The image should clearly communicate the benefit to the viewer.
-- Show the positive outcome or result described.
-- Use clean, bright lighting and professional composition.
-- Each variation should use a DIFFERENT angle, composition, or visual metaphor.${colorInstruction}
-- Do NOT add any text, labels, watermarks, or overlays.
-- Keep it clean, professional, and aspirational.
-- Output at 1024x1024 resolution.`;
-    } else if (marketingType.startsWith("environment_")) {
-      // Legacy support for old format
-      const envKey = marketingType.replace("environment_", "");
-      const env = environmentLabels[envKey] || environmentLabels["living_room"];
-      prompt = `You are a professional product photographer and interior design expert.
-Edit this product image to show it in a beautiful ${env.name} environment.
-
-Product: "${productName || "this product"}"
-
-RULES:
-- Place the product naturally in a ${env.description} setting.
-- The product should be the MAIN FOCUS but integrated into the environment.
-- Make it look like a high-end lifestyle/interior design photo.${colorInstruction}
-- Do NOT add any text, labels, watermarks, or overlays.
-- Keep it professional and aspirational.
-- Output at 1024x1024 resolution.`;
-    } else if (environmentLabels[marketingType]) {
-      // New direct environment key format
-      const env = environmentLabels[marketingType];
-      prompt = `You are a professional product photographer and interior design expert.
-Edit this product image to show it in a beautiful ${env.name} environment.
-
-Product: "${productName || "this product"}"
-
-RULES:
-- Place the product naturally in a ${env.description} setting.
-- The product should be the MAIN FOCUS but integrated into the environment.
-- Make it look like a high-end lifestyle/interior design photo.${colorInstruction}
-- Do NOT add any text, labels, watermarks, or overlays.
-- Keep it professional and aspirational.
-- Output at 1024x1024 resolution.`;
-    } else {
-      prompt = `You are a professional product photographer and marketing expert.
-Edit this product image to create an eye-catching hero product photo.
-
-Product: "${productName || "this product"}"
-
-RULES:
-- Keep the product as the MAIN FOCUS, centered and prominent.
-- Use a CLEAN WHITE background with subtle professional lighting effects.
-- Make the product look PREMIUM and DESIRABLE.${colorInstruction}
-- Do NOT add any text, labels, watermarks, or overlays.
-- Keep it clean, minimal, and high-end.
-- Output at 1024x1024 resolution.`;
-    }
-
-    const response = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-3-pro-image-preview",
-          messages: [
-            {
-              role: "user",
-              content: [
-                { type: "text", text: prompt },
-                {
-                  type: "image_url",
-                  image_url: { url: imageBase64 },
-                },
-              ],
-            },
+    const response = await callGeminiGenerateContent(GEMINI_IMAGE_MODEL, {
+      contents: [
+        {
+          parts: [
+            buildTextPart(
+              buildPrompt({
+                productName,
+                marketingType,
+                benefitPrompt,
+                benefitIndex,
+                mainColor,
+                mainColorHex,
+              }),
+            ),
+            buildImagePart(imageBase64),
           ],
-          modalities: ["image", "text"],
-        }),
-      }
-    );
+        },
+      ],
+      generationConfig: {
+        responseModalities: ["IMAGE"],
+        imageConfig: {
+          aspectRatio: "1:1",
+          imageSize: "1K",
+        },
+      },
+    });
 
-    if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Aguarde um momento e tente novamente." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "Créditos insuficientes. Adicione créditos no workspace." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      throw new Error(`AI gateway error: ${response.status}`);
-    }
+    const imageUrl = extractGeminiImageDataUrl(response);
 
-    const data = await response.json();
-    const generatedImageUrl =
-      data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-
-    if (!generatedImageUrl) {
-      console.error("No image in response:", JSON.stringify(data).slice(0, 500));
-      throw new Error("AI did not return an image");
+    if (!imageUrl) {
+      throw new Error("Gemini nao retornou uma imagem de marketing.");
     }
 
     return new Response(
-      JSON.stringify({ imageUrl: generatedImageUrl }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ imageUrl }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
-  } catch (e) {
-    console.error("generate-marketing error:", e);
+  } catch (error) {
+    console.error("generate-marketing error:", error);
+
+    if (error instanceof GeminiHttpError) {
+      return new Response(
+        JSON.stringify({ error: error.message }),
+        { status: error.status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 });

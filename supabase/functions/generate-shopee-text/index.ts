@@ -1,10 +1,59 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import {
+  buildImagePart,
+  buildTextPart,
+  callGeminiStructuredJson,
+  GEMINI_TEXT_MODEL,
+  GeminiHttpError,
+} from "../_shared/gemini.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+type ShopeeTextResult = {
+  title: string;
+  description: string;
+  keywords: string[];
+};
+
+const shopeeTextSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    title: {
+      type: "string",
+      description: "SEO title for Shopee with up to 120 characters.",
+    },
+    description: {
+      type: "string",
+      description: "Complete product description for Shopee with up to 2000 characters.",
+    },
+    keywords: {
+      type: "array",
+      description: "Top 10 Shopee keywords for the product.",
+      items: {
+        type: "string",
+      },
+    },
+  },
+  required: ["title", "description", "keywords"],
+};
+
+function sanitizeKeywords(values: unknown) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  const normalized = values
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  return [...new Set(normalized)].slice(0, 10);
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -15,149 +64,79 @@ serve(async (req) => {
     const { productName, imageBase64, category, quantity, heights } = await req.json();
     const isKit = (quantity ?? 1) > 1;
     const qty = quantity ?? 1;
-    const heightList: string[] = Array.isArray(heights) ? heights.filter((h: string) => h && h.trim()) : [];
-
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
-    }
+    const heightList: string[] = Array.isArray(heights)
+      ? heights.filter((height: string) => height && height.trim())
+      : [];
 
     if (!productName) {
       throw new Error("productName is required");
     }
 
-    const systemPrompt = `Você é um especialista em SEO e vendas na Shopee Brasil. Você conhece profundamente as palavras-chave mais buscadas, técnicas de ranqueamento e copywriting que converte na plataforma.
-
-REGRAS OBRIGATÓRIAS:
-- NUNCA mencione o material do produto (não fale PLA, resina, plástico, 3D, impressão 3D, etc.)
-- Quando mencionar altura/tamanho do produto, SEMPRE use "aproximadamente" antes do valor (ex: "aproximadamente 15cm de altura")`;
-
     const heightInstruction = heightList.length > 0
-      ? `\nALTURAS DISPONÍVEIS: O produto possui ${heightList.length > 1 ? "as seguintes opções de altura" : "a seguinte altura"}: ${heightList.map(h => `aproximadamente ${h}cm`).join(", ")}. Mencione ${heightList.length > 1 ? "essas opções" : "essa medida"} na descrição usando SEMPRE "aproximadamente" antes do valor.`
-      : "";
+      ? `Alturas disponiveis: ${heightList.map((height) => `aproximadamente ${height}cm`).join(", ")}.`
+      : "Nao invente alturas se elas nao forem informadas.";
 
-    const userPrompt = `Gere um TÍTULO e DESCRIÇÃO otimizados para vender o produto "${productName}"${category ? ` na categoria "${category}"` : ""} na Shopee Brasil.
+    const prompt = `Voce e um especialista em SEO e vendas na Shopee Brasil.
 
-${isKit ? `IMPORTANTE: O anúncio é de um KIT com ${qty} unidades do produto. O título DEVE começar com "Kit ${qty}" seguido do nome do produto. NÃO mencione cores específicas no título.` : ""}
-${heightInstruction}
+Crie um JSON valido com title, description e keywords para anunciar o produto "${productName}"${
+      category ? ` na categoria "${category}"` : ""
+    }.
 
-TÍTULO (máximo 120 caracteres):
-- Use palavras-chave de ALTO VOLUME de busca na Shopee
-- Inclua variações e sinônimos relevantes
-${isKit ? `- OBRIGATÓRIO: Comece com "Kit ${qty}" e NÃO mencione cores específicas` : "- Formato: Palavra-chave principal + Características + Diferencial"}
-- Exemplo: ${isKit ? `"Kit ${qty} Escultura Decorativa Chama Abstrata Enfeite Mesa Luxo Sala Escritório Moderna"` : '"Suporte Celular Carro Veicular Universal Ventosa 360 Graus GPS"'}
+Regras obrigatorias:
+- Nunca mencione material de fabricacao, plastico, PLA, resina, impressao 3D ou similares.
+- Se mencionar altura, use sempre a palavra "aproximadamente".
+- O titulo precisa ter no maximo 120 caracteres.
+- A descricao precisa ter no maximo 2000 caracteres.
+- As keywords devem trazer exatamente 10 termos relevantes para busca.
+- Escreva em portugues do Brasil com foco em conversao.
+- Use emojis e bullets na descricao quando fizer sentido.
+- Inclua beneficios claros e um fechamento com chamada para compra.
+- ${heightInstruction}
+${
+      isKit
+        ? `- Este anuncio e um kit com ${qty} unidades. O titulo deve comecar com "Kit ${qty}".`
+        : ""
+    }`;
 
-DESCRIÇÃO (máximo 2000 caracteres):
-- Use emojis estrategicamente para chamar atenção
-- Bullet points com benefícios claros
-- Palavras-chave distribuídas naturalmente no texto
-- Inclua especificações técnicas quando relevante (EXCETO material de fabricação)
-- NUNCA mencione o material do produto (PLA, resina, plástico, impressão 3D, etc.)
-- Quando mencionar altura, SEMPRE use "aproximadamente" antes do valor
-${isKit ? `- Destaque que o anúncio inclui ${qty} unidades` : ""}
-- Call-to-action convincente no final
-- Formato profissional de anúncio Shopee
-
-Também retorne as 10 melhores palavras-chave/tags para esse produto na Shopee.`;
-
-    const messages: any[] = [
-      { role: "system", content: systemPrompt },
-    ];
+    const parts: Array<Record<string, unknown>> = [buildTextPart(prompt)];
 
     if (imageBase64) {
-      messages.push({
-        role: "user",
-        content: [
-          { type: "text", text: userPrompt },
-          { type: "image_url", image_url: { url: imageBase64 } },
-        ],
-      });
-    } else {
-      messages.push({ role: "user", content: userPrompt });
+      parts.push(buildImagePart(imageBase64));
     }
 
-    const response = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
+    const result = await callGeminiStructuredJson<ShopeeTextResult>(GEMINI_TEXT_MODEL, {
+      contents: [
+        {
+          parts,
         },
-        body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
-          messages,
-          tools: [
-            {
-              type: "function",
-              function: {
-                name: "shopee_product_text",
-                description: "Return optimized Shopee product title, description and keywords.",
-                parameters: {
-                  type: "object",
-                  properties: {
-                    title: {
-                      type: "string",
-                      description: "SEO-optimized product title for Shopee (max 120 chars)",
-                    },
-                    description: {
-                      type: "string",
-                      description: "Full product description with emojis, bullet points, and CTA (max 2000 chars)",
-                    },
-                    keywords: {
-                      type: "array",
-                      items: { type: "string" },
-                      description: "Top 10 search keywords/tags for this product on Shopee",
-                    },
-                  },
-                  required: ["title", "description", "keywords"],
-                  additionalProperties: false,
-                },
-              },
-            },
-          ],
-          tool_choice: { type: "function", function: { name: "shopee_product_text" } },
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Aguarde um momento e tente novamente." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "Créditos insuficientes. Adicione créditos no workspace." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      throw new Error(`AI gateway error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    
-    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-    if (!toolCall || toolCall.function.name !== "shopee_product_text") {
-      console.error("Unexpected response:", JSON.stringify(data).slice(0, 500));
-      throw new Error("AI did not return structured product text");
-    }
-
-    const result = JSON.parse(toolCall.function.arguments);
+      ],
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseJsonSchema: shopeeTextSchema,
+      },
+    });
 
     return new Response(
-      JSON.stringify(result),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({
+        title: result.title?.trim() || "",
+        description: result.description?.trim() || "",
+        keywords: sanitizeKeywords(result.keywords),
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
-  } catch (e) {
-    console.error("generate-shopee-text error:", e);
+  } catch (error) {
+    console.error("generate-shopee-text error:", error);
+
+    if (error instanceof GeminiHttpError) {
+      return new Response(
+        JSON.stringify({ error: error.message }),
+        { status: error.status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 });

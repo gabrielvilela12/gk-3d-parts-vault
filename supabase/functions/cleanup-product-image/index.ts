@@ -1,4 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import {
+  buildImagePart,
+  buildTextPart,
+  callGeminiGenerateContent,
+  extractGeminiImageDataUrl,
+  GEMINI_IMAGE_FALLBACK_MODEL,
+  GEMINI_IMAGE_MODEL,
+  GeminiHttpError,
+} from "../_shared/gemini.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -6,45 +15,43 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-async function tryGenerateImage(apiKey: string, model: string, prompt: string, imageBase64: string): Promise<string | null> {
-  const response = await fetch(
-    "https://ai.gateway.lovable.dev/v1/chat/completions",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: prompt },
-              {
-                type: "image_url",
-                image_url: { url: imageBase64 },
-              },
-            ],
-          },
-        ],
-        modalities: ["image", "text"],
-      }),
-    }
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`AI gateway error (${model}):`, response.status, errorText);
-    if (response.status === 429 || response.status === 402) {
-      throw { status: response.status };
-    }
-    return null;
+function buildImageConfig(model: string, aspectRatio: string) {
+  if (model === GEMINI_IMAGE_FALLBACK_MODEL) {
+    return { aspectRatio };
   }
 
-  const data = await response.json();
-  return data.choices?.[0]?.message?.images?.[0]?.image_url?.url || null;
+  return {
+    aspectRatio,
+    imageSize: "1K",
+  };
+}
+
+async function tryGenerateImage(model: string, prompt: string, imageBase64: string) {
+  try {
+    const response = await callGeminiGenerateContent(model, {
+      contents: [
+        {
+          parts: [
+            buildTextPart(prompt),
+            buildImagePart(imageBase64),
+          ],
+        },
+      ],
+      generationConfig: {
+        responseModalities: ["IMAGE"],
+        imageConfig: buildImageConfig(model, "1:1"),
+      },
+    });
+
+    return extractGeminiImageDataUrl(response);
+  } catch (error) {
+    if (error instanceof GeminiHttpError && (error.status === 402 || error.status === 429)) {
+      throw error;
+    }
+
+    console.error(`cleanup-product-image generation failed (${model}):`, error);
+    return null;
+  }
 }
 
 serve(async (req) => {
@@ -55,70 +62,55 @@ serve(async (req) => {
   try {
     const { imageBase64, productName } = await req.json();
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
-    }
-
     if (!imageBase64) {
       throw new Error("imageBase64 is required");
     }
 
-    const primaryPrompt = `Edit this product photo to create a clean, professional e-commerce product image.
+    const primaryPrompt = `Edit this product photo into a clean e-commerce packshot.
 
 Product: "${productName || "product"}"
 
-Instructions:
-- Remove the background and replace with PURE WHITE
-- Center the product, filling about 70-80% of the 1024x1024 frame
-- Apply professional studio lighting with soft shadows
-- Keep the product's original colors, shape and details exactly as they are
-- Remove any watermarks, text, logos, or UI elements
-- Make it look like a premium product photo for an online store
-- Output at 1024x1024 resolution`;
+Rules:
+- Remove the background and replace it with pure white.
+- Keep the product centered and prominent inside a square frame.
+- Preserve the original product shape, color, texture, and fine details.
+- Use soft professional studio lighting and subtle shadows.
+- Remove watermarks, text, logos, and UI elements.
+- Return a polished marketplace-ready product photo.`;
 
-    const fallbackPrompt = `Remove the background from this product photo and place it centered on a clean white background. Keep the product exactly as it is. Output 1024x1024.`;
+    const fallbackPrompt = `Using the provided image, isolate only the main product on a pure white background. Keep the product exactly the same and centered in a square studio photo.`;
 
-    // Try primary model first
-    let imageUrl = await tryGenerateImage(LOVABLE_API_KEY, "google/gemini-3-pro-image-preview", primaryPrompt, imageBase64);
+    let imageUrl = await tryGenerateImage(GEMINI_IMAGE_MODEL, primaryPrompt, imageBase64);
 
-    // If primary fails, retry with simpler prompt
     if (!imageUrl) {
-      console.log("Primary attempt failed, retrying with simpler prompt...");
-      imageUrl = await tryGenerateImage(LOVABLE_API_KEY, "google/gemini-3-pro-image-preview", fallbackPrompt, imageBase64);
-    }
-
-    // If still fails, try fallback model
-    if (!imageUrl) {
-      console.log("Retrying with fallback model (gemini-2.5-flash-image)...");
-      imageUrl = await tryGenerateImage(LOVABLE_API_KEY, "google/gemini-2.5-flash-image", fallbackPrompt, imageBase64);
+      imageUrl = await tryGenerateImage(GEMINI_IMAGE_MODEL, fallbackPrompt, imageBase64);
     }
 
     if (!imageUrl) {
-      throw new Error("Não foi possível processar a imagem. Tente com outra foto.");
+      imageUrl = await tryGenerateImage(GEMINI_IMAGE_FALLBACK_MODEL, fallbackPrompt, imageBase64);
+    }
+
+    if (!imageUrl) {
+      throw new Error("Nao foi possivel processar a imagem. Tente com outra foto.");
     }
 
     return new Response(
       JSON.stringify({ imageUrl }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
-  } catch (e: any) {
-    if (e?.status === 429) {
+  } catch (error) {
+    console.error("cleanup-product-image error:", error);
+
+    if (error instanceof GeminiHttpError) {
       return new Response(
-        JSON.stringify({ error: "Rate limit exceeded. Aguarde um momento e tente novamente." }),
-        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: error.message }),
+        { status: error.status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
-    if (e?.status === 402) {
-      return new Response(
-        JSON.stringify({ error: "Créditos insuficientes. Adicione créditos no workspace." }),
-        { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-    console.error("cleanup-product-image error:", e);
+
     return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 });

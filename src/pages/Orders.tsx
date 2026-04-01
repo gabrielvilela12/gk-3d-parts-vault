@@ -47,6 +47,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import QueueOptimizerChat from "@/components/QueueOptimizerChat";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 
 interface ImportRow {
@@ -133,6 +134,9 @@ interface QueueSection {
 }
 
 const UNASSIGNED_PRINTER_KEY = "__unassigned__";
+const PRINTER_MIGRATION_NAME = "20260401110000_add_printers_and_order_assignment.sql";
+const ORDER_STATUS_MIGRATION_NAME = "20260401123000_add_order_printing_status.sql";
+const FEATURE_MIGRATION_HELP = `Aplique as migrations ${PRINTER_MIGRATION_NAME} e ${ORDER_STATUS_MIGRATION_NAME} no Supabase.`;
 
 const getPrinterKey = (printerId: string | null) => printerId ?? UNASSIGNED_PRINTER_KEY;
 
@@ -197,10 +201,107 @@ const formatHour = (date: Date): string =>
     minute: "2-digit",
   });
 
+const COLOR_SWATCH_MAP: Record<string, string> = {
+  preto: "#1f2937",
+  branco: "#f8fafc",
+  vermelho: "#dc2626",
+  azul: "#2563eb",
+  verde: "#16a34a",
+  amarelo: "#facc15",
+  rosa: "#ec4899",
+  pink: "#ec4899",
+  roxo: "#7c3aed",
+  lilas: "#a855f7",
+  laranja: "#f97316",
+  marrom: "#7c2d12",
+  bege: "#d6c1a3",
+  cinza: "#6b7280",
+  cinzento: "#6b7280",
+  prata: "#94a3b8",
+  dourado: "#eab308",
+  gold: "#eab308",
+  nude: "#c4a484",
+  offwhite: "#f5f5f4",
+  transparente: "#e2e8f0",
+  natural: "#d6c1a3",
+  madeira: "#8b5a2b",
+};
+
+const normalizeColorToken = (value: string) =>
+  value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9#]/g, "");
+
+const getColorSwatchValue = (color: string | null) => {
+  if (!color) return null;
+
+  const trimmedColor = color.trim();
+
+  if (/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(trimmedColor)) {
+    return trimmedColor;
+  }
+
+  if (/^(rgb|hsl)a?\(/i.test(trimmedColor)) {
+    return trimmedColor;
+  }
+
+  const normalizedColor = normalizeColorToken(trimmedColor);
+
+  for (const [token, value] of Object.entries(COLOR_SWATCH_MAP)) {
+    if (normalizedColor.includes(token)) {
+      return value;
+    }
+  }
+
+  return null;
+};
+
+const toDateTimeLocalValue = (date: Date | string | null | undefined) => {
+  if (!date) return "";
+
+  const parsedDate = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(parsedDate.getTime())) return "";
+
+  const localDate = new Date(parsedDate.getTime() - parsedDate.getTimezoneOffset() * 60_000);
+  return localDate.toISOString().slice(0, 16);
+};
+
+const parseDateTimeLocalValue = (value: string) => {
+  const parsedDate = new Date(value);
+  return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
+};
+
+function ColorBadge({
+  color,
+  className = "text-[10px]",
+}: {
+  color: string;
+  className?: string;
+}) {
+  const swatchValue = getColorSwatchValue(color);
+
+  return (
+    <Badge variant="outline" className={`gap-1.5 ${className}`}>
+      <span
+        className={`h-2.5 w-2.5 shrink-0 rounded-full border border-black/10 ${
+          swatchValue ? "" : "bg-muted"
+        }`}
+        style={swatchValue ? { backgroundColor: swatchValue } : undefined}
+      />
+      <span>{color}</span>
+    </Badge>
+  );
+}
+
 export default function Orders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [pieces, setPieces] = useState<Piece[]>([]);
   const [printers, setPrinters] = useState<PrinterItem[]>([]);
+  const [printerSchemaReady, setPrinterSchemaReady] = useState(true);
+  const [orderStatusSchemaReady, setOrderStatusSchemaReady] = useState(true);
+  const [schemaWarning, setSchemaWarning] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(new Date());
   const [importRows, setImportRows] = useState<ImportRow[]>([]);
@@ -209,6 +310,8 @@ export default function Orders() {
   const [isPrinterDialogOpen, setIsPrinterDialogOpen] = useState(false);
   const [isSavingPrinter, setIsSavingPrinter] = useState(false);
   const [isPersistingQueue, setIsPersistingQueue] = useState(false);
+  const [editingStartTimes, setEditingStartTimes] = useState<Record<string, string>>({});
+  const [savingStartOrderId, setSavingStartOrderId] = useState<string | null>(null);
   const [newPrinter, setNewPrinter] = useState({ name: "", description: "" });
   const [filterColor, setFilterColor] = useState("all");
   const [filterSearch, setFilterSearch] = useState("");
@@ -220,6 +323,18 @@ export default function Orders() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isAutoCompletingRef = useRef(false);
   const { toast } = useToast();
+  const isMobile = useIsMobile();
+  const canUsePrinterFeatures = printerSchemaReady;
+  const canUseProductionFlow = printerSchemaReady && orderStatusSchemaReady;
+  const queuePrinterSelectClassName = isMobile ? "h-9 w-full text-xs" : "h-7 w-[190px] text-xs";
+  const queueStatusSelectClassName = isMobile ? "h-9 w-full text-xs" : "h-7 w-[150px] text-xs";
+  const doneStatusSelectClassName = isMobile ? "h-9 w-full text-xs" : "h-7 w-[130px] text-xs";
+  const showSchemaWarningToast = () =>
+    toast({
+      title: "Banco desatualizado",
+      description: schemaWarning ?? FEATURE_MIGRATION_HELP,
+      variant: "destructive",
+    });
 
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date()), 60_000);
@@ -238,11 +353,11 @@ export default function Orders() {
 
       if (!user) return;
 
-      const [ordersRes, piecesRes, printersRes] = await Promise.all([
+      const [ordersRes, piecesRes, printersRes, orderFeatureProbeRes] = await Promise.all([
         supabase
           .from("orders")
           .select(
-            "*, pieces(name, tempo_impressao_min, image_url), piece_price_variations(variation_name, tempo_impressao_min), printers(name)",
+            "*, pieces(name, tempo_impressao_min, image_url), piece_price_variations(variation_name, tempo_impressao_min)",
           )
           .eq("user_id", user.id)
           .order("position", { ascending: true })
@@ -257,22 +372,54 @@ export default function Orders() {
           .select("id, name, description, created_at, updated_at")
           .eq("user_id", user.id)
           .order("created_at", { ascending: true }),
+        supabase
+          .from("orders")
+          .select("id, printer_id, status, started_at, expected_finish_at")
+          .eq("user_id", user.id)
+          .limit(1),
       ]);
 
       if (ordersRes.error) throw ordersRes.error;
       if (piecesRes.error) throw piecesRes.error;
-      if (printersRes.error) throw printersRes.error;
 
-      const normalizedOrders = ((ordersRes.data as Order[]) || []).map((order) => ({
-        ...order,
-        status: getOrderStatus(order),
-        started_at: order.started_at ?? null,
-        expected_finish_at: order.expected_finish_at ?? null,
-      }));
+      const printersAvailable = !printersRes.error;
+      const orderStatusAvailable = !orderFeatureProbeRes.error;
+      const printersData = printersAvailable ? ((printersRes.data as PrinterItem[]) || []) : [];
+      const printersById = new Map(printersData.map((printer) => [printer.id, printer]));
+      const warnings: string[] = [];
+
+      if (!printersAvailable) {
+        warnings.push("A migration de impressoras ainda nao foi aplicada.");
+        console.warn("Printers schema unavailable:", printersRes.error);
+      }
+
+      if (!orderStatusAvailable) {
+        warnings.push('A migration do fluxo "pendente/fazendo/feito" ainda nao foi aplicada.');
+        console.warn("Order status schema unavailable:", orderFeatureProbeRes.error);
+      }
+
+      setPrinterSchemaReady(printersAvailable);
+      setOrderStatusSchemaReady(orderStatusAvailable);
+      setSchemaWarning(warnings.length > 0 ? `${warnings.join(" ")} ${FEATURE_MIGRATION_HELP}` : null);
+
+      const normalizedOrders = ((ordersRes.data as Order[]) || []).map((order) => {
+        const printerId = printersAvailable ? order.printer_id ?? null : null;
+        const printer = printerId ? printersById.get(printerId) : null;
+
+        return {
+          ...order,
+          position: order.position ?? 0,
+          printer_id: printerId,
+          printers: printer ? { name: printer.name } : null,
+          status: orderStatusAvailable ? getOrderStatus(order) : (order.is_printed ? "done" : "pending"),
+          started_at: orderStatusAvailable ? order.started_at ?? null : null,
+          expected_finish_at: orderStatusAvailable ? order.expected_finish_at ?? null : null,
+        };
+      });
 
       setOrders(normalizedOrders);
       setPieces((piecesRes.data as Piece[]) || []);
-      setPrinters((printersRes.data as PrinterItem[]) || []);
+      setPrinters(printersData);
     } catch (error) {
       console.error("Error fetching data:", error);
       toast({ title: "Erro ao carregar dados", variant: "destructive" });
@@ -668,6 +815,11 @@ export default function Orders() {
     successToast?: { title: string; description?: string },
     overrides: Map<string, OrderPersistenceUpdate> = new Map(),
   ) => {
+    if (!canUsePrinterFeatures) {
+      showSchemaWarningToast();
+      return;
+    }
+
     setIsPersistingQueue(true);
 
     try {
@@ -734,6 +886,11 @@ export default function Orders() {
   };
 
   const handleOrderPrinterChange = async (orderId: string, printerId: string | null) => {
+    if (!canUsePrinterFeatures) {
+      showSchemaWarningToast();
+      return;
+    }
+
     await moveOrderInQueue(orderId, printerId, null, {
       title: "Pedido direcionado",
       description: "A fila foi atualizada para a impressora selecionada.",
@@ -741,6 +898,11 @@ export default function Orders() {
   };
 
   const handleOrderStatusChange = async (orderId: string, nextStatus: OrderStatus) => {
+    if (!canUseProductionFlow) {
+      showSchemaWarningToast();
+      return;
+    }
+
     const order = orders.find((item) => item.id === orderId);
     if (!order) return;
 
@@ -864,7 +1026,78 @@ export default function Orders() {
     }
   };
 
+  const handleStartTimeDraftChange = (orderId: string, value: string) => {
+    setEditingStartTimes((previousDrafts) => ({
+      ...previousDrafts,
+      [orderId]: value,
+    }));
+  };
+
+  const handleUpdateOrderStartTime = async (order: Order, value: string) => {
+    if (!canUseProductionFlow) {
+      showSchemaWarningToast();
+      return;
+    }
+
+    if (!isOrderPrinting(order)) {
+      toast({
+        title: "Ajuste disponivel apenas em pedidos fazendo",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const startedAt = parseDateTimeLocalValue(value);
+
+    if (!startedAt) {
+      toast({
+        title: "Horario invalido",
+        description: "Escolha uma data e hora validas para o inicio.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const expectedFinishAt = new Date(startedAt.getTime() + getPrintTimeMin(order) * 60_000);
+    setSavingStartOrderId(order.id);
+
+    try {
+      const { error } = await supabase
+        .from("orders")
+        .update({
+          started_at: startedAt.toISOString(),
+          expected_finish_at: expectedFinishAt.toISOString(),
+        })
+        .eq("id", order.id);
+
+      if (error) throw error;
+
+      setEditingStartTimes((previousDrafts) => {
+        const nextDrafts = { ...previousDrafts };
+        delete nextDrafts[order.id];
+        return nextDrafts;
+      });
+
+      toast({
+        title: "Inicio ajustado",
+        description: `Fim recalculado para ${formatHour(expectedFinishAt)}.`,
+      });
+
+      await fetchData();
+    } catch (error) {
+      console.error("Error updating order start time:", error);
+      toast({ title: "Erro ao ajustar inicio", variant: "destructive" });
+    } finally {
+      setSavingStartOrderId(null);
+    }
+  };
+
   const handleCreatePrinter = async () => {
+    if (!canUsePrinterFeatures) {
+      showSchemaWarningToast();
+      return;
+    }
+
     if (!newPrinter.name.trim()) {
       toast({ title: "Informe o nome da impressora", variant: "destructive" });
       return;
@@ -899,6 +1132,11 @@ export default function Orders() {
   };
 
   const handleDeletePrinter = async (printerId: string) => {
+    if (!canUsePrinterFeatures) {
+      showSchemaWarningToast();
+      return;
+    }
+
     try {
       const { error } = await supabase.from("printers").delete().eq("id", printerId);
       if (error) throw error;
@@ -1237,7 +1475,8 @@ export default function Orders() {
     [queueSections],
   );
 
-  const canReorderQueue = filterColor === "all" && !filterSearch.trim() && !isPersistingQueue;
+  const canReorderQueue =
+    canUsePrinterFeatures && filterColor === "all" && !filterSearch.trim() && !isPersistingQueue;
   const unassignedQueueCount = printerStatsMap.get(UNASSIGNED_PRINTER_KEY)?.count || 0;
 
   const handleDragStart = (order: Order) => {
@@ -1316,7 +1555,12 @@ export default function Orders() {
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
           <Dialog open={isPrinterDialogOpen} onOpenChange={setIsPrinterDialogOpen}>
             <DialogTrigger asChild>
-              <Button variant="outline" className="w-full sm:w-auto">
+              <Button
+                variant="outline"
+                className="w-full sm:w-auto"
+                disabled={!canUsePrinterFeatures}
+                title={!canUsePrinterFeatures ? FEATURE_MIGRATION_HELP : undefined}
+              >
                 <Printer className="mr-2 h-4 w-4" />
                 Gerenciar impressoras
               </Button>
@@ -1350,7 +1594,7 @@ export default function Orders() {
                       }
                     />
                   </div>
-                  <Button onClick={handleCreatePrinter} disabled={isSavingPrinter}>
+                  <Button onClick={handleCreatePrinter} disabled={isSavingPrinter || !canUsePrinterFeatures}>
                     <Plus className="mr-2 h-4 w-4" />
                     {isSavingPrinter ? "Salvando..." : "Adicionar impressora"}
                   </Button>
@@ -1435,6 +1679,20 @@ export default function Orders() {
         </div>
       </div>
 
+      {schemaWarning ? (
+        <Card className="mb-6 border-amber-300 bg-amber-50">
+          <CardContent className="pt-4 pb-4 px-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-amber-700 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-amber-900">Banco precisa ser atualizado</p>
+                <p className="text-sm text-amber-800">{schemaWarning}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh]">
           <DialogHeader>
@@ -1504,11 +1762,7 @@ export default function Orders() {
                             </div>
                           )}
                           <div className="flex gap-2 flex-wrap">
-                            {row.color ? (
-                              <Badge variant="outline" className="text-[10px]">
-                                {row.color}
-                              </Badge>
-                            ) : null}
+                            {row.color ? <ColorBadge color={row.color} /> : null}
                             <Badge variant="secondary" className="text-[10px]">
                               x{row.quantity}
                             </Badge>
@@ -1538,7 +1792,7 @@ export default function Orders() {
         </DialogContent>
       </Dialog>
 
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-6">
         <Card>
           <CardContent className="pt-4 pb-3 px-4">
             <p className="text-xs text-muted-foreground">Ativos</p>
@@ -1595,18 +1849,30 @@ export default function Orders() {
             <SelectItem value="all">Todas as cores</SelectItem>
             {uniqueColors.map((color) => (
               <SelectItem key={color} value={color}>
-                {color}
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`h-2.5 w-2.5 rounded-full border border-black/10 ${
+                      getColorSwatchValue(color) ? "" : "bg-muted"
+                    }`}
+                    style={
+                      getColorSwatchValue(color)
+                        ? { backgroundColor: getColorSwatchValue(color) ?? undefined }
+                        : undefined
+                    }
+                  />
+                  <span>{color}</span>
+                </div>
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <div className="flex gap-1">
+        <div className="grid grid-cols-3 gap-1 sm:flex">
           {(["all", "queue", "done"] as const).map((status) => (
             <Button
               key={status}
               variant={filterStatus === status ? "default" : "outline"}
               size="sm"
-              className="text-xs h-9"
+              className="h-9 text-xs"
               onClick={() => setFilterStatus(status)}
             >
               {status === "all" ? "Todos" : status === "queue" ? "Na fila" : "Concluidos"}
@@ -1676,28 +1942,32 @@ export default function Orders() {
                     }`}
                   >
                     <CardHeader className="py-3 px-3 sm:px-4 bg-muted/40 border-b">
-                      <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-start gap-2 sm:items-center">
                         <Printer className="h-4 w-4 text-primary" />
-                        <span className="text-sm font-semibold">{section.title}</span>
-                        <Badge variant="secondary" className="text-[10px]">
-                          {section.orders.length} {section.orders.length === 1 ? "item" : "itens"}
-                        </Badge>
-                        {section.printingCount > 0 ? (
-                          <Badge className="text-[10px]">Fazendo {section.printingCount}</Badge>
-                        ) : null}
-                        {section.pendingCount > 0 ? (
-                          <Badge variant="outline" className="text-[10px]">
-                            Pendentes {section.pendingCount}
-                          </Badge>
-                        ) : null}
-                        <Badge variant="outline" className="text-[10px]">
-                          Restante {formatTime(section.totalMin)}
-                        </Badge>
-                        {section.busyUntil ? (
-                          <Badge variant="outline" className="text-[10px]">
-                            Ocupada ate {formatHour(section.busyUntil)}
-                          </Badge>
-                        ) : null}
+                        <div className="flex flex-1 flex-col gap-2 min-w-0">
+                          <span className="text-sm font-semibold">{section.title}</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            <Badge variant="secondary" className="text-[10px]">
+                              {section.orders.length} {section.orders.length === 1 ? "item" : "itens"}
+                            </Badge>
+                            {section.printingCount > 0 ? (
+                              <Badge className="text-[10px]">Fazendo {section.printingCount}</Badge>
+                            ) : null}
+                            {section.pendingCount > 0 ? (
+                              <Badge variant="outline" className="text-[10px]">
+                                Pendentes {section.pendingCount}
+                              </Badge>
+                            ) : null}
+                            <Badge variant="outline" className="text-[10px]">
+                              Restante {formatTime(section.totalMin)}
+                            </Badge>
+                            {section.busyUntil ? (
+                              <Badge variant="outline" className="text-[10px]">
+                                Ocupada ate {formatHour(section.busyUntil)}
+                              </Badge>
+                            ) : null}
+                          </div>
+                        </div>
                       </div>
                       <p className="text-xs text-muted-foreground">{section.description}</p>
                     </CardHeader>
@@ -1737,93 +2007,155 @@ export default function Orders() {
                                 }
                                 onDrop={isPendingRow ? (event) => handleOrderDrop(event, order) : undefined}
                               >
-                                <div className="flex items-start gap-3">
-                                  <div
-                                    draggable={canReorderQueue && isPendingRow}
-                                    onDragStart={() => handleDragStart(order)}
-                                    onDragEnd={handleDragEnd}
-                                    className={`mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-dashed ${
-                                      canReorderQueue && isPendingRow
-                                        ? "cursor-grab text-muted-foreground hover:text-foreground"
-                                        : "opacity-40 cursor-not-allowed"
-                                    }`}
-                                    title={
-                                      canReorderQueue && isPendingRow
-                                        ? "Arraste para reordenar ou mover de impressora"
-                                        : isPrintingRow
-                                          ? "Pedido em producao nao pode ser arrastado"
-                                          : "Limpe os filtros para arrastar"
-                                    }
-                                  >
-                                    <GripVertical className="h-4 w-4" />
-                                  </div>
-
-                                  {order.pieces.image_url ? (
-                                    <img
-                                      src={order.pieces.image_url}
-                                      alt={order.pieces.name}
-                                      className="h-11 w-11 rounded-lg object-cover shrink-0"
-                                    />
-                                  ) : (
-                                    <div className="h-11 w-11 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                                      <Package className="h-4 w-4 text-muted-foreground" />
-                                    </div>
-                                  )}
-
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                      <span className="font-medium text-sm truncate">{order.pieces.name}</span>
-                                      {order.quantity > 1 ? (
-                                        <Badge variant="secondary" className="text-[10px]">
-                                          x{order.quantity}
-                                        </Badge>
-                                      ) : null}
-                                      {order.color ? (
-                                        <Badge variant="outline" className="text-[10px]">
-                                          {order.color}
-                                        </Badge>
-                                      ) : null}
-                                      {order.piece_price_variations ? (
-                                        <Badge variant="outline" className="text-[10px]">
-                                          {order.piece_price_variations.variation_name}
-                                        </Badge>
-                                      ) : null}
-                                      {platformId !== "sem-pedido" ? (
-                                        <Badge variant="secondary" className="text-[10px] font-mono">
-                                          {platformId}
-                                        </Badge>
-                                      ) : null}
-                                      <Badge
-                                        variant={isPrintingRow ? "default" : "outline"}
-                                        className="text-[10px]"
-                                      >
-                                        {isPrintingRow ? "Fazendo" : "Pendente"}
-                                      </Badge>
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                                  <div className="flex items-start gap-3">
+                                    <div
+                                      draggable={canReorderQueue && isPendingRow}
+                                      onDragStart={() => handleDragStart(order)}
+                                      onDragEnd={handleDragEnd}
+                                      className={`mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-dashed ${
+                                        canReorderQueue && isPendingRow
+                                          ? "cursor-grab text-muted-foreground hover:text-foreground"
+                                          : "opacity-40 cursor-not-allowed"
+                                      }`}
+                                      title={
+                                        canReorderQueue && isPendingRow
+                                          ? "Arraste para reordenar ou mover de impressora"
+                                          : isPrintingRow
+                                            ? "Pedido em producao nao pode ser arrastado"
+                                            : "Limpe os filtros para arrastar"
+                                      }
+                                    >
+                                      <GripVertical className="h-4 w-4" />
                                     </div>
 
-                                    <div className="flex flex-wrap items-center gap-3 mt-2">
-                                      <div className="flex items-center gap-1">
-                                        <Clock className="h-3 w-3 text-muted-foreground" />
-                                        <span className="text-[11px] font-medium">
-                                          {isPrintingRow ? `Resta ${formatTime(remainingMin)}` : formatTime(totalMin)}
-                                        </span>
+                                    {order.pieces.image_url ? (
+                                      <img
+                                        src={order.pieces.image_url}
+                                        alt={order.pieces.name}
+                                        className="h-11 w-11 rounded-lg object-cover shrink-0"
+                                      />
+                                    ) : (
+                                      <div className="h-11 w-11 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                                        <Package className="h-4 w-4 text-muted-foreground" />
                                       </div>
-                                      {isPrintingRow ? (
-                                        <div className="flex items-center gap-1">
-                                          <Timer className="h-3 w-3 text-primary" />
-                                          <span className="text-[11px] text-primary font-medium">
-                                            Inicio {formatHour(startAt)}
+                                    )}
+
+                                    <div className="flex-1 min-w-0 space-y-2">
+                                      <div className="flex items-start justify-between gap-2">
+                                        <div className="min-w-0 space-y-2">
+                                          <span className="block font-medium text-sm leading-5 break-words">
+                                            {order.pieces.name}
+                                          </span>
+                                          <div className="flex flex-wrap gap-1.5">
+                                            {order.quantity > 1 ? (
+                                              <Badge variant="secondary" className="text-[10px]">
+                                                x{order.quantity}
+                                              </Badge>
+                                            ) : null}
+                                            {order.color ? (
+                                              <ColorBadge color={order.color} />
+                                            ) : null}
+                                            {order.piece_price_variations ? (
+                                              <Badge variant="outline" className="text-[10px]">
+                                                {order.piece_price_variations.variation_name}
+                                              </Badge>
+                                            ) : null}
+                                            {platformId !== "sem-pedido" ? (
+                                              <Badge variant="secondary" className="text-[10px] font-mono">
+                                                {platformId}
+                                              </Badge>
+                                            ) : null}
+                                            <Badge
+                                              variant={isPrintingRow ? "default" : "outline"}
+                                              className="text-[10px]"
+                                            >
+                                              {isPrintingRow ? "Fazendo" : "Pendente"}
+                                            </Badge>
+                                          </div>
+                                        </div>
+
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive sm:hidden"
+                                          onClick={() => void handleDeleteOrder(order.id)}
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </div>
+
+                                      <div className="grid gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
+                                        <div className="flex items-center gap-1 rounded-md bg-muted/60 px-2.5 py-2 sm:bg-transparent sm:px-0 sm:py-0">
+                                          <Clock className="h-3 w-3 text-muted-foreground" />
+                                          <span className="text-[11px] font-medium">
+                                            {isPrintingRow ? `Resta ${formatTime(remainingMin)}` : formatTime(totalMin)}
                                           </span>
                                         </div>
-                                      ) : null}
-                                      <div className="flex items-center gap-1">
-                                        <CalendarClock className="h-3 w-3 text-primary" />
-                                        <span className="text-[11px] text-primary font-medium">
-                                          {isPrintingRow ? `Termina ${formatHour(finishAt)}` : `Prev. ${formatDateTime(finishAt)}`}
-                                        </span>
+                                        {isPrintingRow ? (
+                                          <div className="flex items-center gap-1 rounded-md bg-primary/10 px-2.5 py-2 sm:bg-transparent sm:px-0 sm:py-0">
+                                            <Timer className="h-3 w-3 text-primary" />
+                                            <span className="text-[11px] text-primary font-medium">
+                                              Inicio {formatHour(startAt)}
+                                            </span>
+                                          </div>
+                                        ) : null}
+                                        <div className="flex items-center gap-1 rounded-md bg-primary/10 px-2.5 py-2 sm:bg-transparent sm:px-0 sm:py-0">
+                                          <CalendarClock className="h-3 w-3 text-primary" />
+                                          <span className="text-[11px] text-primary font-medium">
+                                            {isPrintingRow ? `Termina ${formatHour(finishAt)}` : `Prev. ${formatDateTime(finishAt)}`}
+                                          </span>
+                                        </div>
                                       </div>
+
+                                      {isPrintingRow ? (
+                                        <div className="rounded-lg border bg-muted/20 p-2.5">
+                                          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                                            <div className="flex-1 space-y-1">
+                                              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                                                Ajustar inicio
+                                              </p>
+                                              <Input
+                                                type="datetime-local"
+                                                step={60}
+                                                value={
+                                                  editingStartTimes[order.id] ??
+                                                  toDateTimeLocalValue(order.started_at || startAt)
+                                                }
+                                                onChange={(event) =>
+                                                  handleStartTimeDraftChange(order.id, event.target.value)
+                                                }
+                                                className="h-9 text-xs"
+                                              />
+                                            </div>
+                                            <Button
+                                              size="sm"
+                                              className="h-9 w-full gap-1.5 sm:w-auto"
+                                              disabled={savingStartOrderId === order.id}
+                                              onClick={() =>
+                                                void handleUpdateOrderStartTime(
+                                                  order,
+                                                  editingStartTimes[order.id] ??
+                                                    toDateTimeLocalValue(order.started_at || startAt),
+                                                )
+                                              }
+                                            >
+                                              <Check className="h-3.5 w-3.5" />
+                                              {savingStartOrderId === order.id ? "Salvando..." : "Salvar inicio"}
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  </div>
+
+                                  <div className="grid gap-2 sm:ml-auto sm:min-w-[210px]">
+                                    <div className="space-y-1">
+                                      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                                        Impressora
+                                      </p>
                                       <Select
-                                        disabled={isPrintingRow}
+                                        disabled={isPrintingRow || !canUsePrinterFeatures}
                                         value={getPrinterKey(order.printer_id)}
                                         onValueChange={(value) => {
                                           const nextPrinterId = fromPrinterKey(value);
@@ -1831,7 +2163,7 @@ export default function Orders() {
                                           void handleOrderPrinterChange(order.id, nextPrinterId);
                                         }}
                                       >
-                                        <SelectTrigger className="h-7 w-[190px] text-xs">
+                                        <SelectTrigger className={queuePrinterSelectClassName}>
                                           <SelectValue placeholder="Direcionar impressora" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -1845,13 +2177,20 @@ export default function Orders() {
                                           ))}
                                         </SelectContent>
                                       </Select>
+                                    </div>
+
+                                    <div className="space-y-1">
+                                      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                                        Status
+                                      </p>
                                       <Select
+                                        disabled={!canUseProductionFlow}
                                         value={orderStatus}
                                         onValueChange={(value) =>
                                           void handleOrderStatusChange(order.id, value as OrderStatus)
                                         }
                                       >
-                                        <SelectTrigger className="h-7 w-[150px] text-xs">
+                                        <SelectTrigger className={queueStatusSelectClassName}>
                                           <SelectValue placeholder="Status" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -1863,7 +2202,7 @@ export default function Orders() {
                                     </div>
                                   </div>
 
-                                  <div className="flex items-center gap-1 shrink-0">
+                                  <div className="hidden items-center gap-1 shrink-0 sm:flex">
                                     <Button
                                       variant="ghost"
                                       size="icon"
@@ -1915,7 +2254,7 @@ export default function Orders() {
                   <div className="divide-y divide-border">
                     {groupOrders.map((order) => (
                       <div key={order.id} className="py-2 px-3 sm:px-4">
-                        <div className="flex items-center gap-3">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                           {order.pieces.image_url ? (
                             <img
                               src={order.pieces.image_url}
@@ -1927,9 +2266,9 @@ export default function Orders() {
                               <Package className="h-4 w-4 text-muted-foreground" />
                             </div>
                           )}
-                          <div className="flex-1 min-w-0">
+                          <div className="flex-1 min-w-0 space-y-2">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-sm line-through text-muted-foreground truncate">
+                              <span className="text-sm line-through text-muted-foreground break-words">
                                 {order.pieces.name}
                               </span>
                               {order.quantity > 1 ? (
@@ -1938,9 +2277,7 @@ export default function Orders() {
                                 </Badge>
                               ) : null}
                               {order.color ? (
-                                <Badge variant="outline" className="text-xs">
-                                  {order.color}
-                                </Badge>
+                                <ColorBadge color={order.color} className="text-xs" />
                               ) : null}
                               {order.printers?.name ? (
                                 <Badge variant="outline" className="text-xs">
@@ -1948,20 +2285,21 @@ export default function Orders() {
                                 </Badge>
                               ) : null}
                             </div>
+                            {order.printed_at ? (
+                              <span className="block text-xs text-muted-foreground">
+                                Finalizado em {formatDateTime(new Date(order.printed_at))}
+                              </span>
+                            ) : null}
                           </div>
-                          {order.printed_at ? (
-                            <span className="text-xs text-muted-foreground shrink-0">
-                              {formatDateTime(new Date(order.printed_at))}
-                            </span>
-                          ) : null}
-                          <div className="flex items-center gap-2 shrink-0">
+                          <div className="grid gap-2 sm:ml-auto sm:flex sm:items-center shrink-0">
                             <Select
+                              disabled={!canUseProductionFlow}
                               value={getOrderStatus(order)}
                               onValueChange={(value) =>
                                 void handleOrderStatusChange(order.id, value as OrderStatus)
                               }
                             >
-                              <SelectTrigger className="h-7 w-[130px] text-xs">
+                              <SelectTrigger className={doneStatusSelectClassName}>
                                 <SelectValue placeholder="Status" />
                               </SelectTrigger>
                               <SelectContent>

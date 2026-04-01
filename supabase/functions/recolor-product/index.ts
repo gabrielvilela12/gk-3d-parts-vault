@@ -1,9 +1,23 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import {
+  buildImagePart,
+  buildTextPart,
+  callGeminiGenerateContent,
+  extractGeminiImageDataUrl,
+  GEMINI_IMAGE_MODEL,
+  GeminiHttpError,
+} from "../_shared/gemini.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+};
+
+const aspectRatios: Record<string, string> = {
+  square: "1:1",
+  story: "9:16",
+  banner: "16:9",
 };
 
 serve(async (req) => {
@@ -12,100 +26,67 @@ serve(async (req) => {
   }
 
   try {
-    const { imageBase64, colorName, colorHex, productName, backgroundStyle, format } = await req.json();
-
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
-    }
+    const { imageBase64, colorName, colorHex, productName, format } = await req.json();
 
     if (!imageBase64) {
       throw new Error("imageBase64 is required");
     }
 
-    // Build dimensions text
-    const dims: Record<string, string> = {
-      square: "1080x1080",
-      story: "1080x1920 (vertical/portrait)",
-      banner: "1920x1080 (horizontal/landscape)",
-    };
-    const dimText = dims[format] || "1080x1080";
+    const aspectRatio = aspectRatios[format] || "1:1";
+    const prompt = `Recolor only the main product in this image.
 
-    const prompt = `Edit this image. Change ONLY the color of the main highlighted product/object to the color "${colorName}" (hex: ${colorHex}).
+Product name: "${productName || "product"}"
+Target color: "${colorName}" (${colorHex})
 
-ABSOLUTE RULES - DO NOT BREAK:
-- Keep the EXACT same image: same background, same lighting, same shadows, same composition, same angle, same position, same proportions.
-- Keep ALL details, textures, patterns, and surface features of the product exactly as they are.
-- Do NOT add any text, labels, badges, watermarks, or overlays.
-- Do NOT change the background in any way.
-- Do NOT move, resize, rotate, or reshape the product.
-- Do NOT add or remove any objects.
-- The ONLY change should be the color/hue of the main product object changing to ${colorName} (${colorHex}).
-- Output the image at the same resolution as the input.`;
+Absolute rules:
+- Change only the color of the main product.
+- Keep the background, lighting, shadows, framing, angle, scale, and composition exactly the same.
+- Preserve every texture, detail, pattern, and surface feature of the product.
+- Do not add or remove objects.
+- Do not add text, labels, badges, watermarks, or overlays.
+- The result must look like the same photo, with only the product color changed.`;
 
-    const response = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-3-pro-image-preview",
-          messages: [
-            {
-              role: "user",
-              content: [
-                { type: "text", text: prompt },
-                {
-                  type: "image_url",
-                  image_url: { url: imageBase64 },
-                },
-              ],
-            },
+    const response = await callGeminiGenerateContent(GEMINI_IMAGE_MODEL, {
+      contents: [
+        {
+          parts: [
+            buildTextPart(prompt),
+            buildImagePart(imageBase64),
           ],
-          modalities: ["image", "text"],
-        }),
-      }
-    );
+        },
+      ],
+      generationConfig: {
+        responseModalities: ["IMAGE"],
+        imageConfig: {
+          aspectRatio,
+          imageSize: "1K",
+        },
+      },
+    });
 
-    if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Aguarde um momento e tente novamente." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "Créditos insuficientes. Adicione créditos no workspace." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      throw new Error(`AI gateway error: ${response.status}`);
-    }
+    const imageUrl = extractGeminiImageDataUrl(response);
 
-    const data = await response.json();
-    const generatedImageUrl =
-      data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-
-    if (!generatedImageUrl) {
-      console.error("No image in response:", JSON.stringify(data).slice(0, 500));
-      throw new Error("AI did not return an image");
+    if (!imageUrl) {
+      throw new Error("Gemini nao retornou uma imagem recolorida.");
     }
 
     return new Response(
-      JSON.stringify({ imageUrl: generatedImageUrl }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ imageUrl }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
-  } catch (e) {
-    console.error("recolor-product error:", e);
+  } catch (error) {
+    console.error("recolor-product error:", error);
+
+    if (error instanceof GeminiHttpError) {
+      return new Response(
+        JSON.stringify({ error: error.message }),
+        { status: error.status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 });

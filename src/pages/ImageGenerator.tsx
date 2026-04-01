@@ -79,6 +79,7 @@ const MARKETING_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generat
 const SHOPEE_TEXT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-shopee-text`;
 const IDENTIFY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/identify-product`;
 const CLEANUP_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cleanup-product-image`;
+const GEMINI_CREDIT_MESSAGE = "Verifique a cota ou o billing da sua API Gemini.";
 
 interface ShopeeText {
   title: string;
@@ -224,7 +225,7 @@ export default function ImageGenerator() {
         return;
       }
       if (resp.status === 402) {
-        toast({ title: "Créditos insuficientes", description: "Adicione créditos no workspace.", variant: "destructive" });
+        toast({ title: "Creditos insuficientes", description: GEMINI_CREDIT_MESSAGE, variant: "destructive" });
         return;
       }
       if (!resp.ok) {
@@ -299,7 +300,7 @@ export default function ImageGenerator() {
         return null;
       }
       if (resp.status === 402) {
-        toast({ title: "Créditos insuficientes", description: "Adicione créditos no workspace.", variant: "destructive" });
+        toast({ title: "Creditos insuficientes", description: GEMINI_CREDIT_MESSAGE, variant: "destructive" });
         return null;
       }
       if (!resp.ok) {
@@ -344,7 +345,7 @@ export default function ImageGenerator() {
         return null;
       }
       if (resp.status === 402) {
-        toast({ title: "Créditos insuficientes", description: "Adicione créditos no workspace.", variant: "destructive" });
+        toast({ title: "Creditos insuficientes", description: GEMINI_CREDIT_MESSAGE, variant: "destructive" });
         return null;
       }
       if (!resp.ok) {
@@ -383,7 +384,7 @@ export default function ImageGenerator() {
         return null;
       }
       if (resp.status === 402) {
-        toast({ title: "Créditos insuficientes", description: "Adicione créditos no workspace.", variant: "destructive" });
+        toast({ title: "Creditos insuficientes", description: GEMINI_CREDIT_MESSAGE, variant: "destructive" });
         return null;
       }
       if (!resp.ok) {
@@ -421,7 +422,7 @@ export default function ImageGenerator() {
         return null;
       }
       if (resp.status === 402) {
-        toast({ title: "Créditos insuficientes", description: "Adicione créditos no workspace.", variant: "destructive" });
+        toast({ title: "Creditos insuficientes", description: GEMINI_CREDIT_MESSAGE, variant: "destructive" });
         return null;
       }
       if (!resp.ok) {
