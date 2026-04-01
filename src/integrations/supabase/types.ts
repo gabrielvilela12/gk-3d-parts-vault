@@ -387,14 +387,18 @@ export type Database = {
         Row: {
           color: string | null
           created_at: string
+          expected_finish_at: string | null
           id: string
           is_printed: boolean
           notes: string | null
           piece_id: string
           position: number | null
+          printer_id: string | null
           printed_at: string | null
           printed_by: string | null
           quantity: number
+          started_at: string | null
+          status: string
           updated_at: string
           user_id: string
           variation_id: string | null
@@ -402,14 +406,18 @@ export type Database = {
         Insert: {
           color?: string | null
           created_at?: string
+          expected_finish_at?: string | null
           id?: string
           is_printed?: boolean
           notes?: string | null
           piece_id: string
           position?: number | null
+          printer_id?: string | null
           printed_at?: string | null
           printed_by?: string | null
           quantity?: number
+          started_at?: string | null
+          status?: string
           updated_at?: string
           user_id: string
           variation_id?: string | null
@@ -417,14 +425,18 @@ export type Database = {
         Update: {
           color?: string | null
           created_at?: string
+          expected_finish_at?: string | null
           id?: string
           is_printed?: boolean
           notes?: string | null
           piece_id?: string
           position?: number | null
+          printer_id?: string | null
           printed_at?: string | null
           printed_by?: string | null
           quantity?: number
+          started_at?: string | null
+          status?: string
           updated_at?: string
           user_id?: string
           variation_id?: string | null
@@ -438,6 +450,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "orders_printer_id_fkey"
+            columns: ["printer_id"]
+            isOneToOne: false
+            referencedRelation: "printers"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "orders_variation_id_fkey"
             columns: ["variation_id"]
             isOneToOne: false
@@ -445,6 +464,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      printers: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       piece_price_variations: {
         Row: {
