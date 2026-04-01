@@ -53,7 +53,7 @@ interface PriceVariation {
 // ── Shopee Price Calculator ────────────────────────────
 function calcShopeePrice(custoUnitario: number, markup: number, quantidade = 1) {
   const COMISSAO = 0.20;
-  const TAXA_FIXA_PADRAO = 7.00;
+  const TAXA_FIXA_PADRAO = 4.00;
   const TAXA_FIXA_MINIMA = 2.00;
   const LIMITE_PRECO_TAXA_MINIMA = 8.00;
   const LIMITE_COMISSAO_REAIS = 100.00;
@@ -97,6 +97,8 @@ function calcCostForFilament(
     filament,
     custoMaterial,
     custoEnergia,
+    custoAcessorios: d.custoAcessorios,
+    custoFixoUnit,
     custoAmortizacao,
     custoFalhas,
     custoUnitario,
@@ -417,7 +419,7 @@ export default function PieceDetail() {
                 Preço por Filamento / Cor
               </CardTitle>
               <p className="text-sm text-muted-foreground">
-                Cálculo automático com Shopee (20% comissão + R$ 7,00 taxa fixa) • Markup: {mkInput}
+                Cálculo automático com Shopee (20% comissão + R$ 4,00 frete/taxa) • Markup: {mkInput}
               </p>
             </CardHeader>
             <CardContent>
@@ -480,8 +482,8 @@ export default function PieceDetail() {
                                 >
                                   R$ {fc.precoComMarkup.toFixed(2)}
                                 </span>
-                                <span className={`text-xs font-medium ${fc.lucroLiquido >= 0 ? "text-green-500" : "text-red-500"}`}>
-                                  {fc.lucroLiquido >= 0 ? "+" : ""}R$ {fc.lucroLiquido.toFixed(2)}/un
+                                <span className={`text-xs font-medium ${Math.abs(fc.lucroLiquido) < 0.01 ? "text-muted-foreground" : fc.lucroLiquido > 0 ? "text-green-500" : "text-red-500"}`}>
+                                  {fc.lucroLiquido > 0.005 ? "+" : ""}R$ {Math.abs(fc.lucroLiquido) < 0.01 ? "0.00" : fc.lucroLiquido.toFixed(2)}/un
                                 </span>
                               </div>
                               <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 [[data-state=open]_&]:rotate-180" />
@@ -494,12 +496,20 @@ export default function PieceDetail() {
                             {/* Cost breakdown */}
                             <div className="space-y-1.5 text-sm pt-3">
                               <div className="flex justify-between">
-                                <span className="text-muted-foreground">Material:</span>
+                                <span className="text-muted-foreground">Filamento:</span>
                                 <span>R$ {fc.custoMaterial.toFixed(2)}</span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Energia:</span>
                                 <span>R$ {fc.custoEnergia.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Embalagem (Acessórios):</span>
+                                <span>R$ {fc.custoAcessorios.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Custo Fixo:</span>
+                                <span>R$ {fc.custoFixoUnit.toFixed(2)}</span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Amortização:</span>
@@ -513,6 +523,15 @@ export default function PieceDetail() {
                               <div className="flex justify-between font-medium">
                                 <span>Custo Fabricação:</span>
                                 <span>R$ {fc.custoUnitario.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between font-medium">
+                                <span>Frete (Shopee / Taxa Fixa):</span>
+                                <span>R$ {fc.taxaFixa.toFixed(2)}</span>
+                              </div>
+                              <Separator className="my-1" />
+                              <div className="flex justify-between font-bold text-primary">
+                                <span>Custo Base Total:</span>
+                                <span>R$ {(fc.custoUnitario + fc.taxaFixa).toFixed(2)}</span>
                               </div>
                             </div>
 
@@ -538,20 +557,16 @@ export default function PieceDetail() {
                                 <span className="text-red-500">-R$ {fc.comissao.toFixed(2)}</span>
                               </div>
                               <div className="flex justify-between text-muted-foreground">
-                                <span>- Taxa Fixa:</span>
-                                <span className="text-red-500">-R$ {fc.taxaFixa.toFixed(2)}</span>
-                              </div>
-                              <div className="flex justify-between text-muted-foreground">
-                                <span>- Custo Produção:</span>
-                                <span className="text-red-500">-R$ {fc.custoUnitario.toFixed(2)}</span>
+                                <span>- Custo Base Total (Prod+Frete):</span>
+                                <span className="text-red-500">-R$ {(fc.custoUnitario + fc.taxaFixa).toFixed(2)}</span>
                               </div>
                               <div className="flex justify-between items-center border-t border-border/30 pt-1.5 mt-1">
                                 <span className="font-semibold text-sm flex items-center gap-1">
                                   <TrendingUp className="h-3.5 w-3.5" />
                                   Lucro Líquido:
                                 </span>
-                                <span className={`font-bold text-sm ${fc.lucroLiquido >= 0 ? "text-green-500" : "text-red-500"}`}>
-                                  R$ {fc.lucroLiquido.toFixed(2)}
+                                <span className={`font-bold text-sm ${Math.abs(fc.lucroLiquido) < 0.01 ? "text-muted-foreground" : fc.lucroLiquido > 0 ? "text-green-500" : "text-red-500"}`}>
+                                  R$ {Math.abs(fc.lucroLiquido) < 0.01 ? "0.00" : fc.lucroLiquido.toFixed(2)}
                                 </span>
                               </div>
                             </div>
@@ -660,8 +675,8 @@ export default function PieceDetail() {
                             <span className="font-semibold text-sm flex items-center gap-1">
                               <TrendingUp className="h-3.5 w-3.5" /> Lucro:
                             </span>
-                            <span className={`font-bold text-sm ${shopeeMarkup.lucroLiquido >= 0 ? "text-green-500" : "text-red-500"}`}>
-                              R$ {shopeeMarkup.lucroLiquido.toFixed(2)}
+                            <span className={`font-bold text-sm ${Math.abs(shopeeMarkup.lucroLiquido) < 0.01 ? "text-muted-foreground" : shopeeMarkup.lucroLiquido > 0 ? "text-green-500" : "text-red-500"}`}>
+                              R$ {Math.abs(shopeeMarkup.lucroLiquido) < 0.01 ? "0.00" : shopeeMarkup.lucroLiquido.toFixed(2)}
                             </span>
                           </div>
                         </div>

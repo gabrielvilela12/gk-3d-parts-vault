@@ -92,7 +92,7 @@ interface PriceVariation {
 // Calcular preço Shopee (sempre com frete grátis = 20%)
 function calcShopeePrice(custoUnitario: number, markup: number, quantidade: number) {
   const COMISSAO = 0.20;
-  const TAXA_FIXA_PADRAO = 7.00;
+  const TAXA_FIXA_PADRAO = 4.00;
   const TAXA_FIXA_MINIMA = 2.00;
   const LIMITE_PRECO_TAXA_MINIMA = 8.00;
   const LIMITE_COMISSAO_REAIS = 100.00;
@@ -327,6 +327,8 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
         custoEnergia,
         custoAmortizacao,
         custoFalhas,
+        custoAcessorios: d.custoAcessorios,
+        custoFixoUnitario,
         custoUnitario,
         precoConsumidor: shopee.precoConsumidor,
         comissaoShopee: shopee.comissaoEmReais,
@@ -502,7 +504,7 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
         <Card className="card-gradient border-border/50 sticky top-16 z-40 backdrop-blur-lg">
           <CardHeader>
             <CardTitle>{isEditMode ? "Recalcular Preços" : "Resumo de Preços"}</CardTitle>
-            <CardDescription>Cálculo automático com taxas Shopee (20% + R$ 7,00)</CardDescription>
+            <CardDescription>Cálculo automático com taxas Shopee (20% + R$ 4,00)</CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Collapsible asChild>
@@ -515,7 +517,7 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
                 <CollapsibleContent className="space-y-1 pt-2 text-sm">
                   <div className="flex justify-between"><span className="text-muted-foreground">Filamento:</span> R$ {costs.custoMaterial.toFixed(2)}</div>
                   <div className="flex justify-between"><span className="text-muted-foreground">Energia:</span> R$ {costs.custoEnergia.toFixed(2)}</div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">Acessórios:</span> R$ {costs.custoAcessorios.toFixed(2)}</div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Embalagem (Acessórios):</span> R$ {costs.custoAcessorios.toFixed(2)}</div>
                   <div className="flex justify-between"><span className="text-muted-foreground">Custo Fixo:</span> R$ {costs.custoFixoUnitario.toFixed(2)}</div>
                   <div className="flex justify-between"><span className="text-muted-foreground">Amortização:</span> R$ {costs.custoAmortizacao.toFixed(2)}</div>
                   <div className="flex justify-between"><span className="text-muted-foreground">Falhas:</span> R$ {costs.custoFalhas.toFixed(2)}</div>
@@ -550,7 +552,7 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
                 Relatório de Custos por Filamento
               </CardTitle>
               <CardDescription>
-                Preço automático Shopee (20% comissão + R$ 7,00 taxa) para cada filamento • Markup {costDefaults.markup}x
+                Preço automático Shopee (20% comissão + R$ 4,00 taxa) para cada filamento • Markup {costDefaults.markup}x
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -574,8 +576,8 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
                           <span className="text-right text-muted-foreground">R$ {fc.custoMaterial.toFixed(2)}</span>
                           <span className="text-right">R$ {fc.custoUnitario.toFixed(2)}</span>
                           <span className="text-right font-semibold text-primary">R$ {fc.precoConsumidor.toFixed(2)}</span>
-                          <span className={`text-right font-semibold ${fc.lucroLiquido >= 0 ? 'text-green-500' : 'text-destructive'}`}>
-                            R$ {fc.lucroLiquido.toFixed(2)}
+                          <span className={`text-right font-semibold ${Math.abs(fc.lucroLiquido) < 0.01 ? 'text-muted-foreground' : fc.lucroLiquido > 0 ? 'text-green-500' : 'text-destructive'}`}>
+                            R$ {Math.abs(fc.lucroLiquido) < 0.01 ? "0.00" : fc.lucroLiquido.toFixed(2)}
                           </span>
                         </div>
                       </CollapsibleTrigger>
@@ -586,15 +588,15 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
                             <span className="font-medium">R$ {fc.custoEnergia.toFixed(2)}</span>
                           </div>
                           <div className="p-2 bg-muted/30 rounded">
-                            <span className="text-muted-foreground block">Amortização</span>
-                            <span className="font-medium">R$ {fc.custoAmortizacao.toFixed(2)}</span>
+                            <span className="text-muted-foreground block">Embalagem</span>
+                            <span className="font-medium">R$ {fc.custoAcessorios.toFixed(2)}</span>
                           </div>
                           <div className="p-2 bg-muted/30 rounded">
-                            <span className="text-muted-foreground block">Comissão Shopee</span>
-                            <span className="font-medium">R$ {fc.comissaoShopee.toFixed(2)}</span>
+                            <span className="text-muted-foreground block">Fixos/Amort.</span>
+                            <span className="font-medium">R$ {(fc.custoAmortizacao + fc.custoFixoUnitario).toFixed(2)}</span>
                           </div>
                           <div className="p-2 bg-muted/30 rounded">
-                            <span className="text-muted-foreground block">Taxa Fixa</span>
+                            <span className="text-muted-foreground block">Frete (Fixa)</span>
                             <span className="font-medium">R$ {fc.taxaFixaShopee.toFixed(2)}</span>
                           </div>
                         </div>
@@ -617,7 +619,7 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Nome do STL *</Label>
+              <Label htmlFor="name">Nome do Arquivo *</Label>
               <Input id="name" value={formData.name} onChange={handleInputChange} required list="mining-products-list" placeholder="Digite ou selecione um produto minerado..." />
               <datalist id="mining-products-list">
                 {miningProducts.map((product) => (<option key={product.id} value={product.name} />))}
@@ -658,10 +660,10 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="stl">Arquivo STL (Opcional)</Label>
-              <Input id="stl" type="file" accept=".stl" onChange={(e) => setStlFile(e.target.files?.[0] || null)} />
+              <Label htmlFor="stl">Arquivo 3D (.mf / .3mf) (Opcional)</Label>
+              <Input id="stl" type="file" accept=".mf,.3mf,.stl" onChange={(e) => setStlFile(e.target.files?.[0] || null)} />
               {isEditMode && existingFiles.stl_url && !stlFile && (
-                <p className="text-xs text-muted-foreground">Arquivo atual: <a href={existingFiles.stl_url} target="_blank" rel="noopener noreferrer" className="text-primary underline">Ver STL</a></p>
+                <p className="text-xs text-muted-foreground">Arquivo atual: <a href={existingFiles.stl_url} target="_blank" rel="noopener noreferrer" className="text-primary underline">Ver Arquivo 3D</a></p>
               )}
             </div>
             <div className="space-y-2">

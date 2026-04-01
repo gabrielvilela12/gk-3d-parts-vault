@@ -92,8 +92,6 @@ export default function Orders() {
   const [variations, setVariations] = useState<Variation[]>([]);
   const [filaments, setFilaments] = useState<Filament[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const hasSynced = useRef(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [now, setNow] = useState(new Date());
   const [newOrder, setNewOrder] = useState({
@@ -110,7 +108,6 @@ export default function Orders() {
   const [filterColor, setFilterColor] = useState<string>("all");
   const [filterSearch, setFilterSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | "queue" | "done">("all");
-  const [syncMessage, setSyncMessage] = useState("Por favor, aguarde. O robô está extraindo seus envios pendentes e sincronizando a sua base de dados...");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const { toast } = useToast();
@@ -122,115 +119,10 @@ export default function Orders() {
   }, []);
 
   useEffect(() => {
-    if (!hasSynced.current) {
-      hasSynced.current = true;
-      handleShopeeSync();
-    } else {
-      fetchData();
-    }
+    fetchData();
   }, []);
 
-  async function handleShopeeSync() {
-      setIsSyncing(true);
-      setSyncMessage("Conectando ao terminal invisível do robô...");
-
-      const pollInterval = setInterval(async () => {
-         try {
-             const res = await fetch('http://localhost:3001/api/scrape/status');
-             const data = await res.json();
-             if (data.message) setSyncMessage(data.message);
-         } catch(e) {}
-      }, 1500);
-
-      try {
-          const { data: accountsData } = await supabase.from('accounts').select('*');
-          const shopeeAccounts = accountsData?.filter(a => {
-              const title = a.title.toLowerCase();
-              return (title.includes('shoppe') || title.includes('shopee')) && !title.includes('upsell');
-          });
-          
-          let botPayload = null;
-          if (shopeeAccounts && shopeeAccounts.length > 0) {
-              const stores = shopeeAccounts.map(a => ({
-                  id: a.title,
-                  email: a.email,
-                  password: atob(a.encrypted_password),
-                  sessionFile: `shopee-session-${a.email.replace(/[^a-zA-Z0-9]/g, '')}.json`
-              }));
-              botPayload = { stores };
-          }
-
-          try {
-              const res = await fetch('http://localhost:3001/api/scrape', {
-                  method: botPayload ? 'POST' : 'GET',
-                  headers: botPayload ? { 'Content-Type': 'application/json' } : {},
-                  body: botPayload ? JSON.stringify(botPayload) : undefined
-              });
-              const data = await res.json();
-              if (data?.pedidos?.length > 0) {
-                  const parsed: ImportRow[] = data.pedidos.map((p: any) => {
-                      const chunks = p.RawText.split(' | ');
-                      let productName = p.RawText;
-                      let variation = "";
-                      let colorPart = "";
-                      let quantity = 1;
-
-                      let idxVariacao = chunks.findIndex((c: string) => c.includes("Variação:"));
-                      if (idxVariacao >= 0) {
-                          variation = chunks[idxVariacao].replace("Variação:", "").trim();
-                          colorPart = variation.split(",")[0]?.trim() || variation;
-                          if (idxVariacao > 0) {
-                              productName = chunks[idxVariacao - 1].trim();
-                          }
-                      } else {
-                          let maxLen = 0;
-                          chunks.forEach((c: string) => {
-                              if (c.length > maxLen && !c.includes("R$") && !c.match(/^x\d+$/) && !c.match(/^[2-9][0-9A-Z]{13,15}$/)) {
-                                  maxLen = c.length;
-                                  productName = c.trim();
-                              }
-                          });
-                      }
-
-                      chunks.forEach((c: string) => {
-                         if (c.match(/^x\d+$/)) {
-                            quantity = parseInt(c.replace("x", ""));
-                         }
-                      });
-
-                      return {
-                        platformOrderId: p.ExternalOrderId,
-                        productName: productName,
-                        variation: variation,
-                        color: colorPart,
-                        quantity: quantity,
-                        buyerNotes: p.ProductSummary || "Shopee Sync",
-                        matchedPieceId: null,
-                        matchedPieceName: null,
-                        imageUrl: null,
-                        shopeeImageUrl: p.shopeeImageUrl || null,
-                      };
-                  });
-                  await processImportRows(parsed);
-                  toast({ title: "Shopee Sincronizada", description: `Encontramos ${data.pedidos.length} pedido(s) pendentes!` });
-              } else {
-                  toast({ title: "Shopee Sincronizada", description: "Não há novos pedidos na Shopee hoje." });
-              }
-          } catch (err) {
-              console.error("Bot API offline", err);
-              toast({ title: "Aviso Shopee", description: "O Bot da Shopee não está rodando na porta 3001 no momento.", variant: "destructive" });
-          } finally {
-              clearInterval(pollInterval);
-              setIsSyncing(false);
-              fetchData();
-          }
-      } catch (err) {
-          clearInterval(pollInterval);
-          console.error("Failed to query accounts", err);
-          setIsSyncing(false);
-          fetchData();
-      }
-  }  async function fetchData() {
+  async function fetchData() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -667,18 +559,10 @@ export default function Orders() {
 
   const availableVariations = variations.filter(v => v.piece_id === newOrder.piece_id);
 
-  if (loading || isSyncing) {
+  if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen">
-        <div className={isSyncing ? "h-10 w-10 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" : "h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin"} />
-        {isSyncing && (
-           <>
-              <h3 className="text-xl font-bold">Buscando Pedidos da Shopee...</h3>
-              <p className="text-muted-foreground mt-2 max-w-[280px] text-center leading-relaxed text-sm font-medium text-blue-400 animate-pulse">
-                {syncMessage}
-              </p>
-           </>
-        )}
+        <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }

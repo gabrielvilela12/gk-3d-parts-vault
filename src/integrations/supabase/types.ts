@@ -327,6 +327,7 @@ export type Database = {
           notes: string | null
           quantity: number
           source_url: string | null
+          status: string | null
           stl_url: string | null
           unit: string | null
           updated_at: string
