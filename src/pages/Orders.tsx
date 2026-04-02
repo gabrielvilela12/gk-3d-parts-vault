@@ -78,6 +78,10 @@ interface Order {
   printed_by: string | null;
   notes: string | null;
   color: string | null;
+  platform_order_id?: string | null;
+  source_product_name?: string | null;
+  snapshot_unit_cost?: number | null;
+  snapshot_unit_price?: number | null;
   created_at: string;
   pieces: {
     name: string;
@@ -96,6 +100,11 @@ interface Order {
 interface Piece {
   id: string;
   name: string;
+  cost: number | null;
+  custo_material: number | null;
+  custo_energia: number | null;
+  custo_acessorios: number | null;
+  preco_venda: number | null;
   tempo_impressao_min: number | null;
   image_url: string | null;
 }
@@ -136,7 +145,8 @@ interface QueueSection {
 const UNASSIGNED_PRINTER_KEY = "__unassigned__";
 const PRINTER_MIGRATION_NAME = "20260401110000_add_printers_and_order_assignment.sql";
 const ORDER_STATUS_MIGRATION_NAME = "20260401123000_add_order_printing_status.sql";
-const FEATURE_MIGRATION_HELP = `Aplique as migrations ${PRINTER_MIGRATION_NAME} e ${ORDER_STATUS_MIGRATION_NAME} no Supabase.`;
+const ORDER_COST_SNAPSHOT_MIGRATION_NAME = "20260401170000_add_order_cost_snapshots.sql";
+const FEATURE_MIGRATION_HELP = `Aplique as migrations ${PRINTER_MIGRATION_NAME}, ${ORDER_STATUS_MIGRATION_NAME} e ${ORDER_COST_SNAPSHOT_MIGRATION_NAME} no Supabase.`;
 
 const getPrinterKey = (printerId: string | null) => printerId ?? UNASSIGNED_PRINTER_KEY;
 
@@ -158,6 +168,24 @@ const isOrderPrinting = (order: Pick<Order, "status" | "is_printed">) =>
 
 const isOrderPending = (order: Pick<Order, "status" | "is_printed">) =>
   getOrderStatus(order) === "pending";
+
+const getPieceSnapshotUnitCost = (
+  piece: Pick<
+    Piece,
+    "cost" | "custo_material" | "custo_energia" | "custo_acessorios"
+  >,
+) => {
+  const compositeCost =
+    (piece.custo_material ?? 0) +
+    (piece.custo_energia ?? 0) +
+    (piece.custo_acessorios ?? 0);
+
+  if (compositeCost > 0) {
+    return compositeCost;
+  }
+
+  return piece.cost ?? null;
+};
 
 const sortQueueOrders = (left: Order, right: Order) => {
   const leftPrinting = isOrderPrinting(left);
@@ -301,6 +329,7 @@ export default function Orders() {
   const [printers, setPrinters] = useState<PrinterItem[]>([]);
   const [printerSchemaReady, setPrinterSchemaReady] = useState(true);
   const [orderStatusSchemaReady, setOrderStatusSchemaReady] = useState(true);
+  const [orderCostSnapshotSchemaReady, setOrderCostSnapshotSchemaReady] = useState(true);
   const [schemaWarning, setSchemaWarning] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(new Date());
@@ -353,7 +382,7 @@ export default function Orders() {
 
       if (!user) return;
 
-      const [ordersRes, piecesRes, printersRes, orderFeatureProbeRes] = await Promise.all([
+      const [ordersRes, piecesRes, printersRes, orderFeatureProbeRes, orderCostProbeRes] = await Promise.all([
         supabase
           .from("orders")
           .select(
@@ -364,7 +393,9 @@ export default function Orders() {
           .order("created_at", { ascending: true }),
         supabase
           .from("pieces")
-          .select("id, name, tempo_impressao_min, image_url")
+          .select(
+            "id, name, cost, custo_material, custo_energia, custo_acessorios, preco_venda, tempo_impressao_min, image_url",
+          )
           .eq("user_id", user.id)
           .order("name", { ascending: true }),
         supabase
@@ -377,6 +408,11 @@ export default function Orders() {
           .select("id, printer_id, status, started_at, expected_finish_at")
           .eq("user_id", user.id)
           .limit(1),
+        supabase
+          .from("orders")
+          .select("id, platform_order_id, source_product_name, snapshot_unit_cost, snapshot_unit_price")
+          .eq("user_id", user.id)
+          .limit(1),
       ]);
 
       if (ordersRes.error) throw ordersRes.error;
@@ -384,6 +420,7 @@ export default function Orders() {
 
       const printersAvailable = !printersRes.error;
       const orderStatusAvailable = !orderFeatureProbeRes.error;
+      const orderCostSnapshotAvailable = !orderCostProbeRes.error;
       const printersData = printersAvailable ? ((printersRes.data as PrinterItem[]) || []) : [];
       const printersById = new Map(printersData.map((printer) => [printer.id, printer]));
       const warnings: string[] = [];
@@ -398,8 +435,14 @@ export default function Orders() {
         console.warn("Order status schema unavailable:", orderFeatureProbeRes.error);
       }
 
+      if (!orderCostSnapshotAvailable) {
+        warnings.push("A migration que congela custo e preco dos pedidos vendidos ainda nao foi aplicada.");
+        console.warn("Order cost snapshot schema unavailable:", orderCostProbeRes.error);
+      }
+
       setPrinterSchemaReady(printersAvailable);
       setOrderStatusSchemaReady(orderStatusAvailable);
+      setOrderCostSnapshotSchemaReady(orderCostSnapshotAvailable);
       setSchemaWarning(warnings.length > 0 ? `${warnings.join(" ")} ${FEATURE_MIGRATION_HELP}` : null);
 
       const normalizedOrders = ((ordersRes.data as Order[]) || []).map((order) => {
@@ -505,7 +548,9 @@ export default function Orders() {
       if (user) {
         const { data } = await supabase
           .from("pieces")
-          .select("id, name, tempo_impressao_min, image_url")
+          .select(
+            "id, name, cost, custo_material, custo_energia, custo_acessorios, preco_venda, tempo_impressao_min, image_url",
+          )
           .eq("user_id", user.id)
           .order("name", { ascending: true });
 
@@ -645,6 +690,15 @@ export default function Orders() {
   };
 
   const handleConfirmImport = async () => {
+    if (!orderCostSnapshotSchemaReady) {
+      toast({
+        title: "Banco desatualizado",
+        description: `Aplique a migration ${ORDER_COST_SNAPSHOT_MIGRATION_NAME} para congelar o custo dos pedidos importados.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     const matchedRows = importRows.filter((row) => row.matchedPieceId);
     if (matchedRows.length === 0) {
       toast({ title: "Nenhum produto correspondente encontrado", variant: "destructive" });
@@ -676,12 +730,15 @@ export default function Orders() {
       const consolidatedRows = Array.from(consolidatedMap.values());
 
       const newRows = consolidatedRows.filter((row) => {
-        const noteKey = row.platformOrderId || "";
-        if (!noteKey) return true;
+        const orderKey = row.platformOrderId || "";
+        if (!orderKey) return true;
 
         return !orders.some((order) => {
-          const orderNote = order.notes || "";
-          return orderNote.includes(noteKey) && order.piece_id === row.matchedPieceId;
+          if (order.piece_id !== row.matchedPieceId) {
+            return false;
+          }
+
+          return (order.platform_order_id || "") === orderKey || (order.notes || "").includes(orderKey);
         });
       });
 
@@ -698,17 +755,27 @@ export default function Orders() {
       const skipped = consolidatedRows.length - newRows.length;
       let nextPosition = getNextPosition(null);
 
-      const inserts = newRows.map((row) => ({
-        user_id: user.id,
-        piece_id: row.matchedPieceId!,
-        quantity: row.quantity,
-        color: row.color || null,
-        notes: row.buyerNotes ? `${row.platformOrderId} - ${row.buyerNotes}` : row.platformOrderId || null,
-        status: "pending",
-        position: nextPosition++,
-        started_at: null,
-        expected_finish_at: null,
-      }));
+      const inserts = newRows.map((row) => {
+        const piece = pieces.find((item) => item.id === row.matchedPieceId);
+        const snapshotUnitCost = piece ? getPieceSnapshotUnitCost(piece) : null;
+        const snapshotUnitPrice = piece?.preco_venda ?? null;
+
+        return {
+          user_id: user.id,
+          piece_id: row.matchedPieceId!,
+          quantity: row.quantity,
+          color: row.color || null,
+          notes: row.buyerNotes ? `${row.platformOrderId} - ${row.buyerNotes}` : row.platformOrderId || null,
+          platform_order_id: row.platformOrderId || null,
+          source_product_name: row.productName || piece?.name || null,
+          snapshot_unit_cost: snapshotUnitCost,
+          snapshot_unit_price: snapshotUnitPrice,
+          status: "pending",
+          position: nextPosition++,
+          started_at: null,
+          expected_finish_at: null,
+        };
+      });
 
       const { error } = await supabase.from("orders").insert(inserts);
       if (error) throw error;

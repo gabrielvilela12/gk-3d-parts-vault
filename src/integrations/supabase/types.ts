@@ -393,10 +393,14 @@ export type Database = {
           notes: string | null
           piece_id: string
           position: number | null
+          platform_order_id: string | null
           printer_id: string | null
           printed_at: string | null
           printed_by: string | null
           quantity: number
+          snapshot_unit_cost: number | null
+          snapshot_unit_price: number | null
+          source_product_name: string | null
           started_at: string | null
           status: string
           updated_at: string
@@ -412,10 +416,14 @@ export type Database = {
           notes?: string | null
           piece_id: string
           position?: number | null
+          platform_order_id?: string | null
           printer_id?: string | null
           printed_at?: string | null
           printed_by?: string | null
           quantity?: number
+          snapshot_unit_cost?: number | null
+          snapshot_unit_price?: number | null
+          source_product_name?: string | null
           started_at?: string | null
           status?: string
           updated_at?: string
@@ -431,10 +439,14 @@ export type Database = {
           notes?: string | null
           piece_id?: string
           position?: number | null
+          platform_order_id?: string | null
           printer_id?: string | null
           printed_at?: string | null
           printed_by?: string | null
           quantity?: number
+          snapshot_unit_cost?: number | null
+          snapshot_unit_price?: number | null
+          source_product_name?: string | null
           started_at?: string | null
           status?: string
           updated_at?: string

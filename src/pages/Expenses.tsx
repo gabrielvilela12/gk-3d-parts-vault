@@ -22,6 +22,66 @@ import { cn } from "@/lib/utils";
 import * as XLSX from "xlsx";
 
 const PAGE_SIZE = 25;
+const ORDER_COST_SNAPSHOT_MIGRATION_NAME = "20260401170000_add_order_cost_snapshots.sql";
+
+interface PieceCostInfo {
+  cost: number;
+  price: number;
+}
+
+interface OrderCostSnapshot {
+  id: string;
+  platform_order_id: string | null;
+  source_product_name: string | null;
+  quantity: number;
+  snapshot_unit_cost: number | null;
+  snapshot_unit_price: number | null;
+  pieces?: {
+    name: string | null;
+  } | null;
+}
+
+const normalizeImportText = (value: string) =>
+  value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const getPieceCurrentUnitCost = (piece: {
+  cost: number | null;
+  custo_material: number | null;
+  custo_energia: number | null;
+  custo_acessorios: number | null;
+}) => {
+  const compositeCost =
+    (piece.custo_material ?? 0) +
+    (piece.custo_energia ?? 0) +
+    (piece.custo_acessorios ?? 0);
+
+  if (compositeCost > 0) {
+    return compositeCost;
+  }
+
+  return piece.cost ?? 0;
+};
+
+const getNameMatchScore = (left: string, right: string) => {
+  const normalizedLeft = normalizeImportText(left);
+  const normalizedRight = normalizeImportText(right);
+
+  if (!normalizedLeft || !normalizedRight) return 0;
+  if (normalizedLeft === normalizedRight) return 100;
+  if (normalizedLeft.includes(normalizedRight) || normalizedRight.includes(normalizedLeft)) return 80;
+
+  const leftWords = new Set(normalizedLeft.split(/\s+/).filter((word) => word.length >= 3));
+  const rightWords = new Set(normalizedRight.split(/\s+/).filter((word) => word.length >= 3));
+
+  if (leftWords.size === 0 || rightWords.size === 0) return 0;
+
+  const overlap = Array.from(leftWords).filter((word) => rightWords.has(word)).length;
+  return overlap === 0 ? 0 : (overlap / Math.max(leftWords.size, rightWords.size)) * 60;
+};
 
 interface Expense {
   id: string;
@@ -442,32 +502,91 @@ export default function Expenses() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não autenticado");
 
-      const { data: piecesData } = await supabase
-        .from("pieces")
-        .select("id, name, cost, custo_material, custo_energia, custo_acessorios, preco_venda")
-        .eq("user_id", user.id);
+      const [{ data: piecesData, error: piecesError }, { data: orderSnapshotsData, error: orderSnapshotsError }] =
+        await Promise.all([
+          supabase
+            .from("pieces")
+            .select("id, name, cost, custo_material, custo_energia, custo_acessorios, preco_venda")
+            .eq("user_id", user.id),
+          supabase
+            .from("orders")
+            .select(
+              "id, platform_order_id, source_product_name, quantity, snapshot_unit_cost, snapshot_unit_price, pieces(name)",
+            )
+            .eq("user_id", user.id)
+            .not("platform_order_id", "is", null),
+        ]);
+
+      if (piecesError) throw piecesError;
+      if (orderSnapshotsError) {
+        throw new Error(
+          `Aplique a migration ${ORDER_COST_SNAPSHOT_MIGRATION_NAME} para congelar o custo dos pedidos vendidos antes de importar as despesas.`,
+        );
+      }
 
       const pieces = piecesData || [];
+      const orderSnapshots = ((orderSnapshotsData as OrderCostSnapshot[] | null) || []).filter(
+        (order) => order.platform_order_id,
+      );
 
-      const normalizeName = (v: string) =>
-        v.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const pieceCostMap = new Map<string, PieceCostInfo>();
+      for (const piece of pieces) {
+        const costToUse = getPieceCurrentUnitCost(piece);
+        const priceToUse = piece.preco_venda || 0;
 
-      const pieceCostMap = new Map<string, { cost: number; price: number }>();
-      for (const p of pieces) {
-        const totalCost = (p.custo_material || 0) + (p.custo_energia || 0) + (p.custo_acessorios || 0);
-        const costToUse = totalCost > 0 ? totalCost : (p.cost || 0);
-        if (costToUse > 0) {
-          pieceCostMap.set(normalizeName(p.name), { cost: costToUse, price: p.preco_venda || 0 });
+        if (costToUse > 0 || priceToUse > 0) {
+          pieceCostMap.set(normalizeImportText(piece.name), {
+            cost: costToUse,
+            price: priceToUse,
+          });
         }
       }
 
-      const findPieceInfo = (productName: string): { cost: number; price: number } => {
-        const normalized = normalizeName(productName);
+      const ordersByPlatformId = new Map<string, OrderCostSnapshot[]>();
+      for (const order of orderSnapshots) {
+        const orderKey = order.platform_order_id?.trim();
+        if (!orderKey) continue;
+
+        const bucket = ordersByPlatformId.get(orderKey) || [];
+        bucket.push(order);
+        ordersByPlatformId.set(orderKey, bucket);
+      }
+
+      const findPieceInfo = (productName: string): PieceCostInfo => {
+        const normalized = normalizeImportText(productName);
         if (pieceCostMap.has(normalized)) return pieceCostMap.get(normalized)!;
         for (const [name, info] of pieceCostMap) {
           if (normalized.includes(name) || name.includes(normalized)) return info;
         }
         return { cost: 0, price: 0 };
+      };
+
+      const findMatchingOrderSnapshot = (platformOrderId: string, productName: string) => {
+        const orderKey = platformOrderId.trim();
+        if (!orderKey) return null;
+
+        const candidates = ordersByPlatformId.get(orderKey) || [];
+        if (candidates.length === 0) return null;
+        if (candidates.length === 1) return candidates[0];
+
+        let bestCandidate: OrderCostSnapshot | null = null;
+        let bestScore = 0;
+
+        for (const candidate of candidates) {
+          const searchTerms = [candidate.source_product_name, candidate.pieces?.name].filter(
+            (value): value is string => Boolean(value && value.trim()),
+          );
+
+          for (const term of searchTerms) {
+            const score = getNameMatchScore(productName, term);
+            if (score > bestScore) {
+              bestScore = score;
+              bestCandidate = candidate;
+            }
+          }
+        }
+
+        return bestScore > 0 ? bestCandidate : null;
       };
 
       const { data: existingData } = await supabase
@@ -492,28 +611,35 @@ export default function Expenses() {
           const productPrice = parseNumericValue(row["Preço do produto"]);
 
           const productName = String(row["Nome do produto"] || "");
+          const platformOrderId = String(row["ID do pedido"] || "");
+          const matchedOrder = findMatchingOrderSnapshot(platformOrderId, productName);
           const pieceInfo = findPieceInfo(productName);
+          const unitCost = matchedOrder?.snapshot_unit_cost ?? pieceInfo.cost;
+          const unitPrice = matchedOrder?.snapshot_unit_price ?? pieceInfo.price;
 
           const rawQty = parseNumericValue(row["Quantidade"]);
-          let quantity = rawQty > 0 ? rawQty : 1;
+          let quantity = rawQty > 0 ? rawQty : matchedOrder?.quantity || 1;
 
-          if (rawQty <= 0 && pieceInfo.price > 0 && productPrice > 0) {
-            const derived = Math.round(productPrice / pieceInfo.price);
-            if (derived > 1) quantity = derived;
+          if (rawQty <= 0 && !matchedOrder?.quantity && unitPrice > 0 && productPrice > 0) {
+            const derived = Math.round(productPrice / unitPrice);
+            if (derived > 0) quantity = derived;
           }
 
-          const productionCost = pieceInfo.cost * quantity;
+          const productionCost = unitCost * quantity;
           const estimatedProfit = totalReleased - productionCost;
 
           return {
             user_id: user.id,
             expense_type: "order" as const,
-            platform_order_id: String(row["ID do pedido"] || ""),
+            platform_order_id: platformOrderId,
+            internal_order_id: matchedOrder?.id || null,
             platform: "Shopee",
             order_status: "Concluído",
             order_date: parseExcelDate(String(row["Data de criação do pedido"] || "")),
             payment_date: parseExcelDate(String(row["Data de conclusão do pagamento"] || "")),
             order_value: totalReleased,
+            product_value: productPrice > 0 ? productPrice : null,
+            product_price: unitPrice > 0 ? unitPrice : null,
             amount: productionCost,
             estimated_profit: estimatedProfit,
             product_name: productName,
