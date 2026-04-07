@@ -1307,7 +1307,17 @@ export default function Orders() {
     () => orders.filter((order) => !isOrderDone(order)).sort(sortQueueOrders),
     [orders],
   );
-  const done = useMemo(() => orders.filter((order) => isOrderDone(order)), [orders]);
+  const done = useMemo(
+    () =>
+      orders
+        .filter((order) => isOrderDone(order))
+        .sort(
+          (a, b) =>
+            new Date(b.printed_at ?? b.created_at).getTime() -
+            new Date(a.printed_at ?? a.created_at).getTime(),
+        ),
+    [orders],
+  );
   const printingCount = useMemo(
     () => queue.filter((order) => isOrderPrinting(order)).length,
     [queue],
