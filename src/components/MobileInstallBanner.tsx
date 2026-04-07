@@ -55,20 +55,12 @@ export function MobileInstallBanner() {
 
     syncStandaloneState();
 
-    if ("addEventListener" in displayMode) {
-      displayMode.addEventListener("change", syncStandaloneState);
-    } else {
-      displayMode.addListener(syncStandaloneState);
-    }
+    displayMode.addEventListener("change", syncStandaloneState);
 
     window.addEventListener("appinstalled", syncStandaloneState);
 
     return () => {
-      if ("removeEventListener" in displayMode) {
-        displayMode.removeEventListener("change", syncStandaloneState);
-      } else {
-        displayMode.removeListener(syncStandaloneState);
-      }
+      displayMode.removeEventListener("change", syncStandaloneState);
 
       window.removeEventListener("appinstalled", syncStandaloneState);
     };
