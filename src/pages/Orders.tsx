@@ -301,6 +301,38 @@ const parseDateTimeLocalValue = (value: string) => {
   return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
 };
 
+const normalizeSpreadsheetHeader = (value: string) =>
+  value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const buildSpreadsheetRowMap = (row: Record<string, unknown>) => {
+  const rowMap = new Map<string, unknown>();
+
+  Object.entries(row).forEach(([key, value]) => {
+    rowMap.set(normalizeSpreadsheetHeader(key), value);
+  });
+
+  return rowMap;
+};
+
+const getSpreadsheetCellValue = (rowMap: Map<string, unknown>, aliases: string[]) => {
+  for (const alias of aliases) {
+    const value = rowMap.get(normalizeSpreadsheetHeader(alias));
+
+    if (value === undefined || value === null) continue;
+    if (typeof value === "string" && value.trim() === "") continue;
+
+    return value;
+  }
+
+  return undefined;
+};
+
 function ColorBadge({
   color,
   className = "text-[10px]",
@@ -639,6 +671,71 @@ export default function Orders() {
     setIsImportDialogOpen(true);
   }
 
+  const handleOrderSpreadsheetUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
+
+      const parsed: ImportRow[] = [];
+
+      for (const row of rows) {
+        const rowMap = buildSpreadsheetRowMap(row);
+        const productName = String(
+          getSpreadsheetCellValue(rowMap, ["Nome do Anuncio"]) || "",
+        ).trim();
+
+        if (!productName) continue;
+
+        const variation = String(
+          getSpreadsheetCellValue(rowMap, ["Variacao"]) || "",
+        ).trim();
+        const colorPart = variation.split(",")[0]?.trim() || "";
+        const quantity =
+          Number.parseInt(
+            String(getSpreadsheetCellValue(rowMap, ["Qtd do Produto", "Quantidade"]) || 1),
+            10,
+          ) || 1;
+        const platformOrderId = String(
+          getSpreadsheetCellValue(rowMap, [
+            "N de Pedido da Plataforma",
+            "Numero de Pedido da Plataforma",
+          ]) || "",
+        ).trim();
+        const buyerNotes = String(getSpreadsheetCellValue(rowMap, ["Notas do Comprador"]) || "");
+        const shopeeImageUrl = String(
+          getSpreadsheetCellValue(rowMap, ["Link da Imagem"]) || "",
+        ).replace(/\\/g, "");
+
+        parsed.push({
+          platformOrderId,
+          productName,
+          variation,
+          color: colorPart,
+          quantity,
+          buyerNotes,
+          matchedPieceId: null,
+          matchedPieceName: null,
+          imageUrl: null,
+          shopeeImageUrl: shopeeImageUrl || null,
+        });
+      }
+
+      await processImportRows(parsed);
+    } catch (error) {
+      console.error("Error parsing file:", error);
+      toast({ title: "Erro ao ler arquivo", variant: "destructive" });
+    }
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
   const handleFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -735,6 +832,10 @@ export default function Orders() {
 
         return !orders.some((order) => {
           if (order.piece_id !== row.matchedPieceId) {
+            return false;
+          }
+
+          if ((order.color || null) !== (row.color || null)) {
             return false;
           }
 
@@ -1331,12 +1432,20 @@ export default function Orders() {
   const filterOrder = (order: Order) => {
     if (filterColor !== "all" && order.color !== filterColor) return false;
 
-    if (
-      filterSearch &&
-      !order.pieces.name.toLowerCase().includes(filterSearch.toLowerCase()) &&
-      !(order.notes || "").toLowerCase().includes(filterSearch.toLowerCase())
-    ) {
-      return false;
+    const normalizedSearch = filterSearch.trim().toLowerCase();
+
+    if (normalizedSearch) {
+      const searchableValues = [
+        order.pieces.name,
+        order.source_product_name || "",
+        order.platform_order_id || "",
+        order.piece_price_variations?.variation_name || "",
+        order.notes || "",
+      ];
+
+      if (!searchableValues.some((value) => value.toLowerCase().includes(normalizedSearch))) {
+        return false;
+      }
     }
 
     return true;
@@ -1346,6 +1455,10 @@ export default function Orders() {
   const filteredDone = useMemo(() => done.filter(filterOrder), [done, filterColor, filterSearch]);
 
   const getPlatformId = (order: Order) => {
+    if (order.platform_order_id?.trim()) {
+      return order.platform_order_id.trim();
+    }
+
     const notes = order.notes || "";
     const match = notes.match(/^(\S+)/);
     return match?.[1] || "sem-pedido";
@@ -1746,7 +1859,7 @@ export default function Orders() {
             ref={fileInputRef}
             type="file"
             accept=".xlsx,.xls"
-            onChange={handleFileUpload}
+            onChange={handleOrderSpreadsheetUpload}
             className="hidden"
           />
           <Button className="w-full sm:w-auto" onClick={() => fileInputRef.current?.click()}>
@@ -1840,6 +1953,11 @@ export default function Orders() {
                           )}
                           <div className="flex gap-2 flex-wrap">
                             {row.color ? <ColorBadge color={row.color} /> : null}
+                            {row.variation && row.variation !== row.color ? (
+                              <Badge variant="outline" className="text-[10px]">
+                                {row.variation}
+                              </Badge>
+                            ) : null}
                             <Badge variant="secondary" className="text-[10px]">
                               x{row.quantity}
                             </Badge>
@@ -1912,7 +2030,7 @@ export default function Orders() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
-            placeholder="Buscar peca ou no do pedido..."
+            placeholder="Buscar peca, anuncio ou no do pedido..."
             value={filterSearch}
             onChange={(event) => setFilterSearch(event.target.value)}
             className="pl-9 h-9 text-sm"
@@ -2070,6 +2188,10 @@ export default function Orders() {
                             const isPrintingRow = orderStatus === "printing";
                             const isPendingRow = orderStatus === "pending";
                             const platformId = getPlatformId(order);
+                            const showSourceProductName =
+                              Boolean(order.source_product_name) &&
+                              normalizeText(order.source_product_name || "") !==
+                                normalizeText(order.pieces.name);
 
                             return (
                               <div
@@ -2124,6 +2246,11 @@ export default function Orders() {
                                           <span className="block font-medium text-sm leading-5 break-words">
                                             {order.pieces.name}
                                           </span>
+                                          {showSourceProductName ? (
+                                            <p className="text-[11px] text-muted-foreground break-words">
+                                              Anuncio: {order.source_product_name}
+                                            </p>
+                                          ) : null}
                                           <div className="flex flex-wrap gap-1.5">
                                             {order.quantity > 1 ? (
                                               <Badge variant="secondary" className="text-[10px]">
@@ -2329,7 +2456,13 @@ export default function Orders() {
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="divide-y divide-border">
-                    {groupOrders.map((order) => (
+                    {groupOrders.map((order) => {
+                      const showSourceProductName =
+                        Boolean(order.source_product_name) &&
+                        normalizeText(order.source_product_name || "") !==
+                          normalizeText(order.pieces.name);
+
+                      return (
                       <div key={order.id} className="py-2 px-3 sm:px-4">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                           {order.pieces.image_url ? (
@@ -2362,6 +2495,11 @@ export default function Orders() {
                                 </Badge>
                               ) : null}
                             </div>
+                            {showSourceProductName ? (
+                              <p className="text-xs text-muted-foreground break-words">
+                                Anuncio: {order.source_product_name}
+                              </p>
+                            ) : null}
                             {order.printed_at ? (
                               <span className="block text-xs text-muted-foreground">
                                 Finalizado em {formatDateTime(new Date(order.printed_at))}
@@ -2396,7 +2534,8 @@ export default function Orders() {
                           </div>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </CardContent>
               </Card>
