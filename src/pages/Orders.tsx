@@ -229,6 +229,26 @@ const formatHour = (date: Date): string =>
     minute: "2-digit",
   });
 
+const getLocalDateKey = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate(),
+  ).padStart(2, "0")}`;
+
+const getOrderCompletedAt = (order: Pick<Order, "printed_at" | "created_at">) =>
+  new Date(order.printed_at ?? order.created_at);
+
+const formatDoneDateLabel = (date: Date, referenceDate = new Date()) => {
+  const baseLabel = date.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    weekday: "long",
+  });
+
+  return getLocalDateKey(date) === getLocalDateKey(referenceDate)
+    ? `Hoje - ${baseLabel}`
+    : baseLabel;
+};
+
 const COLOR_SWATCH_MAP: Record<string, string> = {
   preto: "#1f2937",
   branco: "#f8fafc",
@@ -1149,10 +1169,7 @@ export default function Orders() {
       }
 
       if (nextStatus === "done") {
-        const completedAt =
-          currentStatus === "printing" && order.expected_finish_at
-            ? order.expected_finish_at
-            : new Date().toISOString();
+        const completedAt = new Date().toISOString();
 
         await updateSingleOrder(
           order.id,
@@ -1377,7 +1394,7 @@ export default function Orders() {
             .update({
               status: "done",
               is_printed: true,
-              printed_at: order.expected_finish_at ?? new Date().toISOString(),
+              printed_at: new Date().toISOString(),
               printed_by: user?.email ?? "automatico",
             })
             .eq("id", order.id),
@@ -1412,11 +1429,7 @@ export default function Orders() {
     () =>
       orders
         .filter((order) => isOrderDone(order))
-        .sort(
-          (a, b) =>
-            new Date(b.printed_at ?? b.created_at).getTime() -
-            new Date(a.printed_at ?? a.created_at).getTime(),
-        ),
+        .sort((a, b) => getOrderCompletedAt(b).getTime() - getOrderCompletedAt(a).getTime()),
     [orders],
   );
   const printingCount = useMemo(
@@ -1476,7 +1489,34 @@ export default function Orders() {
     return Object.entries(groups);
   };
 
-  const groupedDone = useMemo(() => groupOrders(filteredDone), [filteredDone]);
+  const doneSections = useMemo(
+    () =>
+      Array.from(
+        filteredDone.reduce((sections, order) => {
+          const completedAt = getOrderCompletedAt(order);
+          const dateKey = getLocalDateKey(completedAt);
+          const existingSection = sections.get(dateKey);
+
+          if (existingSection) {
+            existingSection.orders.push(order);
+            return sections;
+          }
+
+          sections.set(dateKey, {
+            date: completedAt,
+            orders: [order],
+          });
+
+          return sections;
+        }, new Map<string, { date: Date; orders: Order[] }>()),
+      ).map(([dateKey, section]) => ({
+        dateKey,
+        dateLabel: formatDoneDateLabel(section.date, now),
+        orderGroups: groupOrders(section.orders),
+        totalOrders: section.orders.length,
+      })),
+    [filteredDone, now],
+  );
 
   const totalQueueMin = useMemo(
     () => queue.reduce((total, order) => total + getRemainingPrintTimeMin(order), 0),
@@ -2437,108 +2477,121 @@ export default function Orders() {
             <CheckCircle2 className="h-5 w-5 text-primary" />
             Concluidos ({filteredDone.length})
           </h2>
-          <div className="space-y-4">
-            {groupedDone.map(([platformId, groupOrders]) => (
-              <Card
-                key={platformId}
-                className="overflow-hidden opacity-80 hover:opacity-100 transition-opacity"
-              >
-                <CardHeader className="py-2 px-3 sm:px-4 bg-muted/30 border-b">
-                  <div className="flex items-center gap-2">
-                    <ShoppingBag className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="text-xs font-semibold font-mono text-muted-foreground">
-                      {platformId === "sem-pedido" ? "Sem no de pedido" : platformId}
-                    </span>
-                    <Badge variant="secondary" className="text-[10px] ml-auto">
-                      {groupOrders.length} {groupOrders.length === 1 ? "item" : "itens"}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="divide-y divide-border">
-                    {groupOrders.map((order) => {
-                      const showSourceProductName =
-                        Boolean(order.source_product_name) &&
-                        normalizeText(order.source_product_name || "") !==
-                          normalizeText(order.pieces.name);
+          <div className="space-y-5">
+            {doneSections.map((section) => (
+              <div key={section.dateKey} className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-xs">
+                    {section.dateLabel}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {section.totalOrders} {section.totalOrders === 1 ? "item" : "itens"}
+                  </span>
+                </div>
 
-                      return (
-                      <div key={order.id} className="py-2 px-3 sm:px-4">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                          {order.pieces.image_url ? (
-                            <img
-                              src={order.pieces.image_url}
-                              alt={order.pieces.name}
-                              className="h-9 w-9 rounded-lg object-cover shrink-0"
-                            />
-                          ) : (
-                            <div className="h-9 w-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                              <Package className="h-4 w-4 text-muted-foreground" />
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0 space-y-2">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-sm line-through text-muted-foreground break-words">
-                                {order.pieces.name}
-                              </span>
-                              {order.quantity > 1 ? (
-                                <Badge variant="secondary" className="text-xs">
-                                  x{order.quantity}
-                                </Badge>
-                              ) : null}
-                              {order.color ? (
-                                <ColorBadge color={order.color} className="text-xs" />
-                              ) : null}
-                              {order.printers?.name ? (
-                                <Badge variant="outline" className="text-xs">
-                                  {order.printers.name}
-                                </Badge>
-                              ) : null}
-                            </div>
-                            {showSourceProductName ? (
-                              <p className="text-xs text-muted-foreground break-words">
-                                Anuncio: {order.source_product_name}
-                              </p>
-                            ) : null}
-                            {order.printed_at ? (
-                              <span className="block text-xs text-muted-foreground">
-                                Finalizado em {formatDateTime(new Date(order.printed_at))}
-                              </span>
-                            ) : null}
-                          </div>
-                          <div className="grid gap-2 sm:ml-auto sm:flex sm:items-center shrink-0">
-                            <Select
-                              disabled={!canUseProductionFlow}
-                              value={getOrderStatus(order)}
-                              onValueChange={(value) =>
-                                void handleOrderStatusChange(order.id, value as OrderStatus)
-                              }
-                            >
-                              <SelectTrigger className={doneStatusSelectClassName}>
-                                <SelectValue placeholder="Status" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="pending">Pendente</SelectItem>
-                                <SelectItem value="printing">Fazendo</SelectItem>
-                                <SelectItem value="done">Feito</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                              onClick={() => void handleDeleteOrder(order.id)}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
+                <div className="space-y-4">
+                  {section.orderGroups.map(([platformId, groupOrders]) => (
+                    <Card
+                      key={`${section.dateKey}-${platformId}`}
+                      className="overflow-hidden opacity-80 hover:opacity-100 transition-opacity"
+                    >
+                      <CardHeader className="py-2 px-3 sm:px-4 bg-muted/30 border-b">
+                        <div className="flex items-center gap-2">
+                          <ShoppingBag className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="text-xs font-semibold font-mono text-muted-foreground">
+                            {platformId === "sem-pedido" ? "Sem no de pedido" : platformId}
+                          </span>
+                          <Badge variant="secondary" className="text-[10px] ml-auto">
+                            {groupOrders.length} {groupOrders.length === 1 ? "item" : "itens"}
+                          </Badge>
                         </div>
-                      </div>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
+                      </CardHeader>
+                      <CardContent className="p-0">
+                        <div className="divide-y divide-border">
+                          {groupOrders.map((order) => {
+                            const showSourceProductName =
+                              Boolean(order.source_product_name) &&
+                              normalizeText(order.source_product_name || "") !==
+                                normalizeText(order.pieces.name);
+
+                            return (
+                              <div key={order.id} className="py-2 px-3 sm:px-4">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                                  {order.pieces.image_url ? (
+                                    <img
+                                      src={order.pieces.image_url}
+                                      alt={order.pieces.name}
+                                      className="h-9 w-9 rounded-lg object-cover shrink-0"
+                                    />
+                                  ) : (
+                                    <div className="h-9 w-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                                      <Package className="h-4 w-4 text-muted-foreground" />
+                                    </div>
+                                  )}
+                                  <div className="flex-1 min-w-0 space-y-2">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="text-sm line-through text-muted-foreground break-words">
+                                        {order.pieces.name}
+                                      </span>
+                                      {order.quantity > 1 ? (
+                                        <Badge variant="secondary" className="text-xs">
+                                          x{order.quantity}
+                                        </Badge>
+                                      ) : null}
+                                      {order.color ? (
+                                        <ColorBadge color={order.color} className="text-xs" />
+                                      ) : null}
+                                      {order.printers?.name ? (
+                                        <Badge variant="outline" className="text-xs">
+                                          {order.printers.name}
+                                        </Badge>
+                                      ) : null}
+                                    </div>
+                                    {showSourceProductName ? (
+                                      <p className="text-xs text-muted-foreground break-words">
+                                        Anuncio: {order.source_product_name}
+                                      </p>
+                                    ) : null}
+                                    <span className="block text-xs text-muted-foreground">
+                                      Finalizado em {formatDateTime(getOrderCompletedAt(order))}
+                                    </span>
+                                  </div>
+                                  <div className="grid gap-2 sm:ml-auto sm:flex sm:items-center shrink-0">
+                                    <Select
+                                      disabled={!canUseProductionFlow}
+                                      value={getOrderStatus(order)}
+                                      onValueChange={(value) =>
+                                        void handleOrderStatusChange(order.id, value as OrderStatus)
+                                      }
+                                    >
+                                      <SelectTrigger className={doneStatusSelectClassName}>
+                                        <SelectValue placeholder="Status" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="pending">Pendente</SelectItem>
+                                        <SelectItem value="printing">Fazendo</SelectItem>
+                                        <SelectItem value="done">Feito</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                      onClick={() => void handleDeleteOrder(order.id)}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </div>
