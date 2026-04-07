@@ -152,7 +152,11 @@ export default function Dashboard() {
 
   // Derived data
   const queueOrders = useMemo(() => orders.filter(o => !o.is_printed), [orders]);
-  const doneOrders = useMemo(() => orders.filter(o => o.is_printed), [orders]);
+  const doneOrders = useMemo(() =>
+    orders
+      .filter(o => o.is_printed)
+      .sort((a, b) => new Date(b.printed_at ?? 0).getTime() - new Date(a.printed_at ?? 0).getTime()),
+    [orders]);
   const totalQueueMinutes = useMemo(() => queueOrders.reduce((acc, o) => acc + (o.tempo_min || 0) * o.quantity, 0), [queueOrders]);
 
   const topMaterials = Object.entries(stats.materialCounts).sort(([, a], [, b]) => b - a).slice(0, 5);
