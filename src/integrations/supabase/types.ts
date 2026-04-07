@@ -348,6 +348,7 @@ export type Database = {
           notes?: string | null
           quantity?: number
           source_url?: string | null
+          status?: string | null
           stl_url?: string | null
           unit?: string | null
           updated_at?: string
@@ -368,6 +369,7 @@ export type Database = {
           notes?: string | null
           quantity?: number
           source_url?: string | null
+          status?: string | null
           stl_url?: string | null
           unit?: string | null
           updated_at?: string
@@ -392,11 +394,11 @@ export type Database = {
           is_printed: boolean
           notes: string | null
           piece_id: string
-          position: number | null
           platform_order_id: string | null
-          printer_id: string | null
+          position: number | null
           printed_at: string | null
           printed_by: string | null
+          printer_id: string | null
           quantity: number
           snapshot_unit_cost: number | null
           snapshot_unit_price: number | null
@@ -415,11 +417,11 @@ export type Database = {
           is_printed?: boolean
           notes?: string | null
           piece_id: string
-          position?: number | null
           platform_order_id?: string | null
-          printer_id?: string | null
+          position?: number | null
           printed_at?: string | null
           printed_by?: string | null
+          printer_id?: string | null
           quantity?: number
           snapshot_unit_cost?: number | null
           snapshot_unit_price?: number | null
@@ -438,11 +440,11 @@ export type Database = {
           is_printed?: boolean
           notes?: string | null
           piece_id?: string
-          position?: number | null
           platform_order_id?: string | null
-          printer_id?: string | null
+          position?: number | null
           printed_at?: string | null
           printed_by?: string | null
+          printer_id?: string | null
           quantity?: number
           snapshot_unit_cost?: number | null
           snapshot_unit_price?: number | null
@@ -476,33 +478,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      printers: {
-        Row: {
-          created_at: string
-          description: string | null
-          id: string
-          name: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          description?: string | null
-          id?: string
-          name: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          description?: string | null
-          id?: string
-          name?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
       }
       piece_price_variations: {
         Row: {
@@ -700,6 +675,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      printers: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
