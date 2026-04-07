@@ -60,11 +60,7 @@ export function MobileInstallBanner() {
     window.addEventListener("appinstalled", syncStandaloneState);
 
     return () => {
-      if ("removeEventListener" in displayMode) {
-        displayMode.removeEventListener("change", syncStandaloneState);
-      } else {
-        displayMode.removeListener(syncStandaloneState);
-      }
+      displayMode.removeEventListener("change", syncStandaloneState);
 
       window.removeEventListener("appinstalled", syncStandaloneState);
     };
