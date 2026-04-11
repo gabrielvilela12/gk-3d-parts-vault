@@ -107,6 +107,7 @@ interface Piece {
   preco_venda: number | null;
   tempo_impressao_min: number | null;
   image_url: string | null;
+  peso_g: number | null;
 }
 
 interface PrinterItem {
@@ -446,7 +447,7 @@ export default function Orders() {
         supabase
           .from("pieces")
           .select(
-            "id, name, cost, custo_material, custo_energia, custo_acessorios, preco_venda, tempo_impressao_min, image_url",
+            "id, name, cost, custo_material, custo_energia, custo_acessorios, preco_venda, tempo_impressao_min, image_url, peso_g",
           )
           .eq("user_id", user.id)
           .order("name", { ascending: true }),
@@ -974,6 +975,45 @@ export default function Orders() {
     }
   };
 
+  const deductFilamentStock = async (order: Order) => {
+    try {
+      const piece = pieces.find(p => p.id === order.piece_id);
+      if (!piece || !piece.peso_g || piece.peso_g <= 0) return;
+
+      const orderColor = order.color?.trim().toLowerCase();
+      if (!orderColor) return;
+
+      // Find matching filament by color
+      const { data: filaments } = await supabase
+        .from("filaments")
+        .select("id, color, stock_kg")
+        .ilike("color", orderColor);
+
+      if (!filaments || filaments.length === 0) return;
+
+      const filament = filaments[0];
+      const deductKg = (piece.peso_g * order.quantity) / 1000;
+      const newStock = Math.max(0, filament.stock_kg - deductKg);
+
+      const { error } = await supabase
+        .from("filaments")
+        .update({ stock_kg: newStock })
+        .eq("id", filament.id);
+
+      if (error) {
+        console.error("Error deducting filament:", error);
+        return;
+      }
+
+      toast({
+        title: "Filamento descontado",
+        description: `${deductKg.toFixed(1)}g de ${filament.color} descontado (restam ${newStock.toFixed(1)} kg)`,
+      });
+    } catch (err) {
+      console.error("Error in filament deduction:", err);
+    }
+  };
+
   const buildQueueBuckets = (queueOrders: Order[]) => {
     const buckets = new Map<string, Order[]>();
     buckets.set(UNASSIGNED_PRINTER_KEY, []);
@@ -1183,6 +1223,9 @@ export default function Orders() {
           },
           { title: "Pedido marcado como feito" },
         );
+
+        // Auto-deduct filament stock based on piece weight and order color
+        await deductFilamentStock(order);
         return;
       }
 
