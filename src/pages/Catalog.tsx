@@ -202,19 +202,6 @@ export default function Catalog() {
             <SelectItem value="false">Fora do Ar</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={filterStore} onValueChange={setFilterStore}>
-          <SelectTrigger className="w-full sm:w-[170px] h-9 text-sm">
-            <SelectValue placeholder="Loja / Conta" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas as lojas</SelectItem>
-            {stores.map((store) => (
-              <SelectItem key={store} value={store}>
-                {store}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </div>
 
       {/* Pieces Grid */}
