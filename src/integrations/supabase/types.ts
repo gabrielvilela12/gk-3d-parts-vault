@@ -405,6 +405,7 @@ export type Database = {
           source_product_name: string | null
           started_at: string | null
           status: string
+          store_name: string | null
           updated_at: string
           user_id: string
           variation_id: string | null
@@ -428,6 +429,7 @@ export type Database = {
           source_product_name?: string | null
           started_at?: string | null
           status?: string
+          store_name?: string | null
           updated_at?: string
           user_id: string
           variation_id?: string | null
@@ -451,6 +453,7 @@ export type Database = {
           source_product_name?: string | null
           started_at?: string | null
           status?: string
+          store_name?: string | null
           updated_at?: string
           user_id?: string
           variation_id?: string | null

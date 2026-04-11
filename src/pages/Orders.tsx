@@ -12,7 +12,6 @@ import {
   CalendarClock,
   Check,
   CheckCircle2,
-  Clock,
   FileSpreadsheet,
   GripVertical,
   Package,
@@ -34,7 +33,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -53,6 +51,7 @@ import { useToast } from "@/hooks/use-toast";
 interface ImportRow {
   platformOrderId: string;
   productName: string;
+  storeName: string;
   variation: string;
   color: string;
   quantity: number;
@@ -80,6 +79,7 @@ interface Order {
   color: string | null;
   platform_order_id?: string | null;
   source_product_name?: string | null;
+  store_name?: string | null;
   snapshot_unit_cost?: number | null;
   snapshot_unit_price?: number | null;
   created_at: string;
@@ -100,6 +100,7 @@ interface Order {
 interface Piece {
   id: string;
   name: string;
+  reference_names?: string[] | null;
   cost: number | null;
   custo_material: number | null;
   custo_energia: number | null;
@@ -144,10 +145,145 @@ interface QueueSection {
 }
 
 const UNASSIGNED_PRINTER_KEY = "__unassigned__";
+const ALL_PRINTERS_FILTER_KEY = "__all_printers__";
 const PRINTER_MIGRATION_NAME = "20260401110000_add_printers_and_order_assignment.sql";
 const ORDER_STATUS_MIGRATION_NAME = "20260401123000_add_order_printing_status.sql";
 const ORDER_COST_SNAPSHOT_MIGRATION_NAME = "20260401170000_add_order_cost_snapshots.sql";
-const FEATURE_MIGRATION_HELP = `Aplique as migrations ${PRINTER_MIGRATION_NAME}, ${ORDER_STATUS_MIGRATION_NAME} e ${ORDER_COST_SNAPSHOT_MIGRATION_NAME} no Supabase.`;
+const ORDER_STORE_MIGRATION_NAME = "20260411184500_add_order_store_name.sql";
+const FEATURE_MIGRATION_HELP = `Aplique as migrations ${PRINTER_MIGRATION_NAME}, ${ORDER_STATUS_MIGRATION_NAME}, ${ORDER_COST_SNAPSHOT_MIGRATION_NAME} e ${ORDER_STORE_MIGRATION_NAME} no Supabase.`;
+
+type PrinterDotDetail = "solid" | "ring" | "core" | "satellite";
+
+type PrinterAccent = {
+  dot: string;
+  soft: string;
+  border: string;
+  badge: string;
+  mutedText: string;
+  strongText: string;
+  detail: PrinterDotDetail;
+};
+
+const NEUTRAL_PRINTER_ACCENT: PrinterAccent = {
+  dot: "bg-slate-400",
+  soft: "bg-white/[0.04]",
+  border: "border-white/10",
+  badge: "border-white/10 bg-white/[0.06] text-slate-200",
+  mutedText: "text-slate-400",
+  strongText: "text-slate-100",
+  detail: "solid",
+};
+
+const PRINTER_ACCENTS: Array<Omit<PrinterAccent, "detail">> = [
+  {
+    dot: "bg-sky-400",
+    soft: "bg-sky-500/10",
+    border: "border-sky-400/20",
+    badge: "border-sky-400/20 bg-sky-500/15 text-sky-100",
+    mutedText: "text-sky-200/80",
+    strongText: "text-sky-50",
+  },
+  {
+    dot: "bg-emerald-400",
+    soft: "bg-emerald-500/10",
+    border: "border-emerald-400/20",
+    badge: "border-emerald-400/20 bg-emerald-500/15 text-emerald-100",
+    mutedText: "text-emerald-200/80",
+    strongText: "text-emerald-50",
+  },
+  {
+    dot: "bg-orange-400",
+    soft: "bg-orange-500/10",
+    border: "border-orange-400/20",
+    badge: "border-orange-400/20 bg-orange-500/15 text-orange-100",
+    mutedText: "text-orange-200/80",
+    strongText: "text-orange-50",
+  },
+  {
+    dot: "bg-fuchsia-400",
+    soft: "bg-fuchsia-500/10",
+    border: "border-fuchsia-400/20",
+    badge: "border-fuchsia-400/20 bg-fuchsia-500/15 text-fuchsia-100",
+    mutedText: "text-fuchsia-200/80",
+    strongText: "text-fuchsia-50",
+  },
+  {
+    dot: "bg-cyan-400",
+    soft: "bg-cyan-500/10",
+    border: "border-cyan-400/20",
+    badge: "border-cyan-400/20 bg-cyan-500/15 text-cyan-100",
+    mutedText: "text-cyan-200/80",
+    strongText: "text-cyan-50",
+  },
+  {
+    dot: "bg-lime-400",
+    soft: "bg-lime-500/10",
+    border: "border-lime-400/20",
+    badge: "border-lime-400/20 bg-lime-500/15 text-lime-100",
+    mutedText: "text-lime-200/80",
+    strongText: "text-lime-50",
+  },
+];
+
+const PRINTER_DOT_DETAILS: PrinterDotDetail[] = ["solid", "ring", "core", "satellite"];
+
+const hashPrinterSeed = (value: string) =>
+  value.split("").reduce((total, char, index) => total + char.charCodeAt(0) * (index + 1), 0);
+
+const getPrinterAccentBySlot = (slot: number): PrinterAccent => {
+  const palette = PRINTER_ACCENTS[slot % PRINTER_ACCENTS.length];
+  const detail = PRINTER_DOT_DETAILS[slot % PRINTER_DOT_DETAILS.length];
+  return {
+    ...palette,
+    detail,
+  };
+};
+
+const getPrinterOccupancyLabel = (stats: {
+  count: number;
+  printingCount: number;
+}) => {
+  if (stats.printingCount > 0) return "Ocupada";
+  if (stats.count > 0) return "Em espera";
+  return "Livre";
+};
+
+const getPieceSearchNames = (piece: Piece) =>
+  [piece.name, ...(piece.reference_names || [])]
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value));
+
+const getStoreName = (value?: string | null) => {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
+};
+
+const getStoreBadgeLabel = (value?: string | null) => {
+  const storeName = getStoreName(value);
+  return storeName ? `Loja ${storeName}` : null;
+};
+
+const renderPrinterDot = (accent: PrinterAccent, size: "sm" | "md" = "sm") => {
+  const boxClass = size === "sm" ? "h-2.5 w-2.5" : "h-3 w-3";
+  const coreClass = size === "sm" ? "h-1 w-1" : "h-1.5 w-1.5";
+  const ringInsetClass = size === "sm" ? "inset-[1px]" : "inset-[1.5px]";
+  const satelliteClass =
+    size === "sm" ? "-right-0.5 -top-0.5 h-1.5 w-1.5" : "-right-0.5 -top-0.5 h-2 w-2";
+
+  return (
+    <span className={`relative inline-flex ${boxClass} shrink-0 items-center justify-center rounded-full ${accent.dot}`}>
+      {accent.detail === "ring" ? (
+        <span className={`absolute ${ringInsetClass} rounded-full border border-[#050816]`} />
+      ) : null}
+      {accent.detail === "core" ? (
+        <span className={`absolute ${coreClass} rounded-full bg-[#050816] ring-1 ring-white/10`} />
+      ) : null}
+      {accent.detail === "satellite" ? (
+        <span className={`absolute ${satelliteClass} rounded-full border border-[#050816] bg-white/90`} />
+      ) : null}
+    </span>
+  );
+};
 
 const getPrinterKey = (printerId: string | null) => printerId ?? UNASSIGNED_PRINTER_KEY;
 
@@ -307,6 +443,102 @@ const getColorSwatchValue = (color: string | null) => {
   return null;
 };
 
+const HEX_COLOR_PATTERN = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
+const RGB_COLOR_PATTERN = /^rgba?\(([^)]+)\)$/i;
+
+const getColorRgbChannels = (color: string | null) => {
+  const swatch = getColorSwatchValue(color);
+  if (!swatch) return null;
+
+  if (HEX_COLOR_PATTERN.test(swatch)) {
+    const hex = swatch.slice(1);
+    const expandedHex =
+      hex.length === 3 ? hex.split("").map((char) => `${char}${char}`).join("") : hex;
+    const red = Number.parseInt(expandedHex.slice(0, 2), 16);
+    const green = Number.parseInt(expandedHex.slice(2, 4), 16);
+    const blue = Number.parseInt(expandedHex.slice(4, 6), 16);
+    return [red, green, blue] as const;
+  }
+
+  const rgbMatch = swatch.match(RGB_COLOR_PATTERN);
+  if (rgbMatch) {
+    const [red, green, blue] = rgbMatch[1]
+      .split(",")
+      .slice(0, 3)
+      .map((value) => Number.parseFloat(value.trim()));
+
+    if ([red, green, blue].every((channel) => Number.isFinite(channel))) {
+      return [red, green, blue] as const;
+    }
+  }
+
+  return null;
+};
+
+const getColorWithAlpha = (color: string | null, alpha: number) => {
+  const rgb = getColorRgbChannels(color);
+  if (!rgb) return null;
+
+  return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`;
+};
+
+const getProductLuminance = (color: string | null) => {
+  const rgb = getColorRgbChannels(color);
+  if (!rgb) return null;
+
+  const [red, green, blue] = rgb;
+  return (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 255;
+};
+
+const getProductAtmosphereStyle = (color: string | null, isPrintingRow: boolean) => {
+  const luminance = getProductLuminance(color);
+  if (luminance === null) return undefined;
+
+  const isDarkProduct = luminance < 0.28;
+  const isLightProduct = luminance > 0.74;
+  const strongTint = isDarkProduct
+    ? getColorWithAlpha(color, isPrintingRow ? 0.82 : 0.74)
+    : isLightProduct
+      ? getColorWithAlpha(color, isPrintingRow ? 0.34 : 0.28)
+      : getColorWithAlpha(color, isPrintingRow ? 0.50 : 0.42);
+  const midTint = isDarkProduct
+    ? getColorWithAlpha(color, isPrintingRow ? 0.54 : 0.44)
+    : isLightProduct
+      ? getColorWithAlpha(color, isPrintingRow ? 0.20 : 0.15)
+      : getColorWithAlpha(color, isPrintingRow ? 0.30 : 0.22);
+  const softTint = isDarkProduct
+    ? getColorWithAlpha(color, isPrintingRow ? 0.24 : 0.18)
+    : isLightProduct
+      ? getColorWithAlpha(color, isPrintingRow ? 0.10 : 0.07)
+      : getColorWithAlpha(color, isPrintingRow ? 0.14 : 0.10);
+
+  if (!strongTint || !midTint || !softTint) return undefined;
+
+  return {
+    backgroundImage: `linear-gradient(100deg, ${strongTint} 0%, ${midTint} 34%, ${softTint} 58%, transparent 78%), radial-gradient(circle at 14% 18%, ${strongTint} 0%, ${midTint} 24%, transparent 48%)`,
+  };
+};
+
+const getColorDotClassName = (color: string | null, size: "sm" | "md" = "md") => {
+  const luminance = getProductLuminance(color);
+  const sizeClass = size === "sm" ? "h-2.5 w-2.5" : "h-3 w-3";
+  const baseClass = `${sizeClass} shrink-0 rounded-full`;
+
+  if (luminance === null) {
+    return `${baseClass} border border-white/10 bg-muted shadow-[0_0_0_2px_rgba(148,163,184,0.14)]`;
+  }
+
+  if (luminance < 0.28) {
+    return `${baseClass} border border-slate-200/75 shadow-[0_0_0_2px_rgba(226,232,240,0.24),0_0_14px_rgba(255,255,255,0.10)]`;
+  }
+
+  if (luminance > 0.74) {
+    return `${baseClass} border border-slate-950/20 shadow-[0_0_0_2px_rgba(15,23,42,0.30)]`;
+  }
+
+  return `${baseClass} border border-white/20 shadow-[0_0_0_2px_rgba(15,23,42,0.34)]`;
+};
+
 const toDateTimeLocalValue = (date: Date | string | null | undefined) => {
   if (!date) return "";
 
@@ -354,6 +586,17 @@ const getSpreadsheetCellValue = (rowMap: Map<string, unknown>, aliases: string[]
   return undefined;
 };
 
+const STORE_NAME_COLUMN_ALIASES = [
+  "Loja",
+  "Nome da Loja",
+  "Conta",
+  "Nome da Conta",
+  "Store",
+  "Shop",
+  "Canal",
+  "Canal de Venda",
+];
+
 function ColorBadge({
   color,
   className = "text-[10px]",
@@ -362,13 +605,24 @@ function ColorBadge({
   className?: string;
 }) {
   const swatchValue = getColorSwatchValue(color);
+  const badgeBackground = getColorWithAlpha(color, 0.16);
+  const badgeBorder = getColorWithAlpha(color, 0.34);
 
   return (
-    <Badge variant="outline" className={`gap-1.5 ${className}`}>
+    <Badge
+      variant="outline"
+      className={`gap-1.5 border-white/10 text-slate-100 ${className}`}
+      style={
+        badgeBackground || badgeBorder
+          ? {
+              backgroundColor: badgeBackground || undefined,
+              borderColor: badgeBorder || undefined,
+            }
+          : undefined
+      }
+    >
       <span
-        className={`h-2.5 w-2.5 shrink-0 rounded-full border border-black/10 ${
-          swatchValue ? "" : "bg-muted"
-        }`}
+        className={`${getColorDotClassName(color, "md")} ${swatchValue ? "" : "bg-muted"}`}
         style={swatchValue ? { backgroundColor: swatchValue } : undefined}
       />
       <span>{color}</span>
@@ -383,6 +637,7 @@ export default function Orders() {
   const [printerSchemaReady, setPrinterSchemaReady] = useState(true);
   const [orderStatusSchemaReady, setOrderStatusSchemaReady] = useState(true);
   const [orderCostSnapshotSchemaReady, setOrderCostSnapshotSchemaReady] = useState(true);
+  const [orderStoreSchemaReady, setOrderStoreSchemaReady] = useState(true);
   const [schemaWarning, setSchemaWarning] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(new Date());
@@ -397,7 +652,8 @@ export default function Orders() {
   const [newPrinter, setNewPrinter] = useState({ name: "", description: "" });
   const [filterColor, setFilterColor] = useState("all");
   const [filterSearch, setFilterSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState<"all" | "queue" | "done">("all");
+  const [filterStatus, setFilterStatus] = useState<"queue" | "printing" | "done">("queue");
+  const [filterPrinterKey, setFilterPrinterKey] = useState(ALL_PRINTERS_FILTER_KEY);
   const [draggedOrderId, setDraggedOrderId] = useState<string | null>(null);
   const [dragOverOrderId, setDragOverOrderId] = useState<string | null>(null);
   const [dragOverPrinterKey, setDragOverPrinterKey] = useState<string | null>(null);
@@ -408,8 +664,6 @@ export default function Orders() {
   const isMobile = useIsMobile();
   const canUsePrinterFeatures = printerSchemaReady;
   const canUseProductionFlow = printerSchemaReady && orderStatusSchemaReady;
-  const queuePrinterSelectClassName = isMobile ? "h-9 w-full text-xs" : "h-7 w-[190px] text-xs";
-  const queueStatusSelectClassName = isMobile ? "h-9 w-full text-xs" : "h-7 w-[150px] text-xs";
   const doneStatusSelectClassName = isMobile ? "h-9 w-full text-xs" : "h-7 w-[130px] text-xs";
   const showSchemaWarningToast = () =>
     toast({
@@ -435,7 +689,14 @@ export default function Orders() {
 
       if (!user) return;
 
-      const [ordersRes, piecesRes, printersRes, orderFeatureProbeRes, orderCostProbeRes] = await Promise.all([
+      const [
+        ordersRes,
+        piecesRes,
+        printersRes,
+        orderFeatureProbeRes,
+        orderCostProbeRes,
+        orderStoreProbeRes,
+      ] = await Promise.all([
         supabase
           .from("orders")
           .select(
@@ -447,7 +708,7 @@ export default function Orders() {
         supabase
           .from("pieces")
           .select(
-            "id, name, cost, custo_material, custo_energia, custo_acessorios, preco_venda, tempo_impressao_min, image_url, peso_g",
+            "id, name, reference_names, cost, custo_material, custo_energia, custo_acessorios, preco_venda, tempo_impressao_min, image_url, peso_g",
           )
           .eq("user_id", user.id)
           .order("name", { ascending: true }),
@@ -466,6 +727,11 @@ export default function Orders() {
           .select("id, platform_order_id, source_product_name, snapshot_unit_cost, snapshot_unit_price")
           .eq("user_id", user.id)
           .limit(1),
+        supabase
+          .from("orders")
+          .select("id, store_name")
+          .eq("user_id", user.id)
+          .limit(1),
       ]);
 
       if (ordersRes.error) throw ordersRes.error;
@@ -474,6 +740,7 @@ export default function Orders() {
       const printersAvailable = !printersRes.error;
       const orderStatusAvailable = !orderFeatureProbeRes.error;
       const orderCostSnapshotAvailable = !orderCostProbeRes.error;
+      const orderStoreAvailable = !orderStoreProbeRes.error;
       const printersData = printersAvailable ? ((printersRes.data as PrinterItem[]) || []) : [];
       const printersById = new Map(printersData.map((printer) => [printer.id, printer]));
       const warnings: string[] = [];
@@ -493,9 +760,15 @@ export default function Orders() {
         console.warn("Order cost snapshot schema unavailable:", orderCostProbeRes.error);
       }
 
+      if (!orderStoreAvailable) {
+        warnings.push("A migration que salva a loja de cada pedido ainda nao foi aplicada.");
+        console.warn("Order store schema unavailable:", orderStoreProbeRes.error);
+      }
+
       setPrinterSchemaReady(printersAvailable);
       setOrderStatusSchemaReady(orderStatusAvailable);
       setOrderCostSnapshotSchemaReady(orderCostSnapshotAvailable);
+      setOrderStoreSchemaReady(orderStoreAvailable);
       setSchemaWarning(warnings.length > 0 ? `${warnings.join(" ")} ${FEATURE_MIGRATION_HELP}` : null);
 
       const normalizedOrders = ((ordersRes.data as Order[]) || []).map((order) => {
@@ -545,12 +818,16 @@ export default function Orders() {
 
   const findBestMatch = (productName: string, activePieces: Piece[] = pieces): Piece | null => {
     const normalized = normalizeText(productName);
-    const exactMatch = activePieces.find((piece) => normalizeText(piece.name) === normalized);
+    const exactMatch = activePieces.find((piece) =>
+      getPieceSearchNames(piece).some((candidateName) => normalizeText(candidateName) === normalized),
+    );
     if (exactMatch) return exactMatch;
 
     const containMatches = activePieces.filter((piece) => {
-      const normalizedPiece = normalizeText(piece.name);
-      return normalized.includes(normalizedPiece) || normalizedPiece.includes(normalized);
+      return getPieceSearchNames(piece).some((candidateName) => {
+        const normalizedPiece = normalizeText(candidateName);
+        return normalized.includes(normalizedPiece) || normalizedPiece.includes(normalized);
+      });
     });
 
     if (containMatches.length === 1) return containMatches[0];
@@ -563,20 +840,22 @@ export default function Orders() {
     let bestPiece: Piece | null = null;
 
     for (const piece of activePieces) {
-      const normalizedPiece = normalizeText(piece.name);
-      const pieceWords = normalizedPiece.split(/\s+/).filter((word) => word.length >= 3);
-      const productInPiece = words.filter((word) => normalizedPiece.includes(word)).length;
-      const pieceInProduct = pieceWords.filter((word) => normalized.includes(word)).length;
-      const scoreForward = productInPiece / Math.max(words.length, 1);
-      const scoreReverse = pieceInProduct / Math.max(pieceWords.length, 1);
-      const score =
-        scoreForward + scoreReverse > 0
-          ? (2 * scoreForward * scoreReverse) / (scoreForward + scoreReverse)
-          : 0;
+      for (const candidateName of getPieceSearchNames(piece)) {
+        const normalizedPiece = normalizeText(candidateName);
+        const pieceWords = normalizedPiece.split(/\s+/).filter((word) => word.length >= 3);
+        const productInPiece = words.filter((word) => normalizedPiece.includes(word)).length;
+        const pieceInProduct = pieceWords.filter((word) => normalized.includes(word)).length;
+        const scoreForward = productInPiece / Math.max(words.length, 1);
+        const scoreReverse = pieceInProduct / Math.max(pieceWords.length, 1);
+        const score =
+          scoreForward + scoreReverse > 0
+            ? (2 * scoreForward * scoreReverse) / (scoreForward + scoreReverse)
+            : 0;
 
-      if (score > bestScore && score >= 0.5) {
-        bestScore = score;
-        bestPiece = piece;
+        if (score > bestScore && score >= 0.5) {
+          bestScore = score;
+          bestPiece = piece;
+        }
       }
     }
 
@@ -602,7 +881,7 @@ export default function Orders() {
         const { data } = await supabase
           .from("pieces")
           .select(
-            "id, name, cost, custo_material, custo_energia, custo_acessorios, preco_venda, tempo_impressao_min, image_url",
+            "id, name, reference_names, cost, custo_material, custo_energia, custo_acessorios, preco_venda, tempo_impressao_min, image_url",
           )
           .eq("user_id", user.id)
           .order("name", { ascending: true });
@@ -721,6 +1000,9 @@ export default function Orders() {
             String(getSpreadsheetCellValue(rowMap, ["Qtd do Produto", "Quantidade"]) || 1),
             10,
           ) || 1;
+        const storeName = String(
+          getSpreadsheetCellValue(rowMap, STORE_NAME_COLUMN_ALIASES) || "",
+        ).trim();
         const platformOrderId = String(
           getSpreadsheetCellValue(rowMap, [
             "N de Pedido da Plataforma",
@@ -735,6 +1017,7 @@ export default function Orders() {
         parsed.push({
           platformOrderId,
           productName,
+          storeName,
           variation,
           color: colorPart,
           quantity,
@@ -785,6 +1068,9 @@ export default function Orders() {
         parsed.push({
           platformOrderId,
           productName,
+          storeName: String(
+            row["Loja"] || row["Nome da Loja"] || row["Conta"] || row["Nome da Conta"] || "",
+          ).trim(),
           variation,
           color: colorPart,
           quantity,
@@ -835,7 +1121,7 @@ export default function Orders() {
       const consolidatedMap = new Map<string, ImportRow>();
 
       for (const row of matchedRows) {
-        const key = `${row.platformOrderId}::${row.matchedPieceId}::${row.color}`;
+        const key = `${row.platformOrderId}::${normalizeText(row.storeName || "")}::${row.matchedPieceId}::${row.color}`;
         const existing = consolidatedMap.get(key);
 
         if (existing) {
@@ -849,6 +1135,7 @@ export default function Orders() {
 
       const newRows = consolidatedRows.filter((row) => {
         const orderKey = row.platformOrderId || "";
+        const rowStoreName = getStoreName(row.storeName);
         if (!orderKey) return true;
 
         return !orders.some((order) => {
@@ -860,7 +1147,19 @@ export default function Orders() {
             return false;
           }
 
-          return (order.platform_order_id || "") === orderKey || (order.notes || "").includes(orderKey);
+          const matchesOrderKey =
+            (order.platform_order_id || "") === orderKey || (order.notes || "").includes(orderKey);
+
+          if (!matchesOrderKey) {
+            return false;
+          }
+
+          const orderStoreName = getStoreName(order.store_name);
+          if (!rowStoreName || !orderStoreName) {
+            return true;
+          }
+
+          return normalizeText(orderStoreName) === normalizeText(rowStoreName);
         });
       });
 
@@ -881,6 +1180,7 @@ export default function Orders() {
         const piece = pieces.find((item) => item.id === row.matchedPieceId);
         const snapshotUnitCost = piece ? getPieceSnapshotUnitCost(piece) : null;
         const snapshotUnitPrice = piece?.preco_venda ?? null;
+        const storeName = getStoreName(row.storeName);
 
         return {
           user_id: user.id,
@@ -890,6 +1190,7 @@ export default function Orders() {
           notes: row.buyerNotes ? `${row.platformOrderId} - ${row.buyerNotes}` : row.platformOrderId || null,
           platform_order_id: row.platformOrderId || null,
           source_product_name: row.productName || piece?.name || null,
+          ...(orderStoreSchemaReady ? { store_name: storeName } : {}),
           snapshot_unit_cost: snapshotUnitCost,
           snapshot_unit_price: snapshotUnitPrice,
           status: "pending",
@@ -909,6 +1210,14 @@ export default function Orders() {
             ? `${newRows.length} novo(s), ${skipped} duplicado(s) ignorado(s)`
             : `${newRows.length} pedido(s) importado(s)!`,
       });
+
+      if (!orderStoreSchemaReady && newRows.some((row) => getStoreName(row.storeName))) {
+        toast({
+          title: "Loja ainda nao foi salva",
+          description: `Aplique a migration ${ORDER_STORE_MIGRATION_NAME} para gravar a loja junto dos pedidos.`,
+          variant: "destructive",
+        });
+      }
 
       setIsImportDialogOpen(false);
       setImportRows([]);
@@ -1340,17 +1649,25 @@ export default function Orders() {
 
       if (!user) return;
 
-      const { error } = await supabase.from("printers").insert({
-        user_id: user.id,
-        name: newPrinter.name.trim(),
-        description: newPrinter.description.trim() || null,
-      });
+      const { data: insertedPrinter, error } = await supabase
+        .from("printers")
+        .insert({
+          user_id: user.id,
+          name: newPrinter.name.trim(),
+          description: newPrinter.description.trim() || null,
+        })
+        .select("id")
+        .single();
 
       if (error) throw error;
 
       setNewPrinter({ name: "", description: "" });
+      setIsPrinterDialogOpen(false);
       toast({ title: "Impressora adicionada!" });
       await fetchData();
+      if (insertedPrinter?.id) {
+        setFilterPrinterKey(insertedPrinter.id);
+      }
     } catch (error) {
       console.error("Error creating printer:", error);
       toast({ title: "Erro ao adicionar impressora", variant: "destructive" });
@@ -1464,6 +1781,12 @@ export default function Orders() {
     void syncOverduePrintingOrders();
   }, [now, orders]);
 
+  useEffect(() => {
+    if (filterPrinterKey === ALL_PRINTERS_FILTER_KEY) return;
+    if (printers.some((printer) => printer.id === filterPrinterKey)) return;
+    setFilterPrinterKey(ALL_PRINTERS_FILTER_KEY);
+  }, [filterPrinterKey, printers]);
+
   const queue = useMemo(
     () => orders.filter((order) => !isOrderDone(order)).sort(sortQueueOrders),
     [orders],
@@ -1479,6 +1802,10 @@ export default function Orders() {
     () => queue.filter((order) => isOrderPrinting(order)).length,
     [queue],
   );
+  const pendingCount = useMemo(
+    () => queue.filter((order) => isOrderPending(order)).length,
+    [queue],
+  );
 
   const uniqueColors = useMemo(() => {
     const colors = new Set(orders.map((order) => order.color).filter(Boolean) as string[]);
@@ -1487,6 +1814,12 @@ export default function Orders() {
 
   const filterOrder = (order: Order) => {
     if (filterColor !== "all" && order.color !== filterColor) return false;
+    if (
+      filterPrinterKey !== ALL_PRINTERS_FILTER_KEY &&
+      getPrinterKey(order.printer_id) !== filterPrinterKey
+    ) {
+      return false;
+    }
 
     const normalizedSearch = filterSearch.trim().toLowerCase();
 
@@ -1495,6 +1828,7 @@ export default function Orders() {
         order.pieces.name,
         order.source_product_name || "",
         order.platform_order_id || "",
+        order.store_name || "",
         order.piece_price_variations?.variation_name || "",
         order.notes || "",
       ];
@@ -1507,8 +1841,14 @@ export default function Orders() {
     return true;
   };
 
-  const filteredQueue = useMemo(() => queue.filter(filterOrder), [queue, filterColor, filterSearch]);
-  const filteredDone = useMemo(() => done.filter(filterOrder), [done, filterColor, filterSearch]);
+  const filteredQueue = useMemo(
+    () => queue.filter(filterOrder),
+    [queue, filterColor, filterPrinterKey, filterSearch],
+  );
+  const filteredDone = useMemo(
+    () => done.filter(filterOrder),
+    [done, filterColor, filterPrinterKey, filterSearch],
+  );
 
   const getPlatformId = (order: Order) => {
     if (order.platform_order_id?.trim()) {
@@ -1521,15 +1861,34 @@ export default function Orders() {
   };
 
   const groupOrders = (orderList: Order[]) => {
-    const groups: Record<string, Order[]> = {};
+    const groups = new Map<
+      string,
+      {
+        platformId: string;
+        storeName: string | null;
+        orders: Order[];
+      }
+    >();
 
     for (const order of orderList) {
-      const key = getPlatformId(order);
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(order);
+      const platformId = getPlatformId(order);
+      const storeName = getStoreName(order.store_name);
+      const key = `${platformId}::${normalizeText(storeName || "")}`;
+      const existingGroup = groups.get(key);
+
+      if (existingGroup) {
+        existingGroup.orders.push(order);
+        continue;
+      }
+
+      groups.set(key, {
+        platformId,
+        storeName,
+        orders: [order],
+      });
     }
 
-    return Object.entries(groups);
+    return Array.from(groups.values());
   };
 
   const doneSections = useMemo(
@@ -1564,11 +1923,6 @@ export default function Orders() {
   const totalQueueMin = useMemo(
     () => queue.reduce((total, order) => total + getRemainingPrintTimeMin(order), 0),
     [queue],
-  );
-
-  const filteredQueueMin = useMemo(
-    () => filteredQueue.reduce((total, order) => total + getRemainingPrintTimeMin(order), 0),
-    [filteredQueue],
   );
 
   const printerStatsMap = useMemo(() => {
@@ -1621,7 +1975,7 @@ export default function Orders() {
   }, [now, printers, queue]);
 
   const queueSections = useMemo<QueueSection[]>(() => {
-    const sections = [
+    const allSections = [
       {
         printerId: null,
         title: "Sem impressora",
@@ -1635,6 +1989,11 @@ export default function Orders() {
         orders: [] as Order[],
       })),
     ];
+
+    const sections =
+      filterPrinterKey === ALL_PRINTERS_FILTER_KEY
+        ? allSections
+        : allSections.filter((section) => getPrinterKey(section.printerId) === filterPrinterKey);
 
     const sectionMap = new Map<string, (typeof sections)[number]>();
     sections.forEach((section) => {
@@ -1683,8 +2042,11 @@ export default function Orders() {
           pendingCount: pendingOrders,
         };
       })
-      .filter((section) => section.orders.length > 0 || section.printerId === null || printers.length === 0);
-  }, [filteredQueue, now, printers]);
+      .filter((section) => {
+        if (filterPrinterKey !== ALL_PRINTERS_FILTER_KEY) return true;
+        return section.orders.length > 0 || section.printerId === null || printers.length === 0;
+      });
+  }, [filteredQueue, filterPrinterKey, now, printers]);
 
   const queueTimeMap = useMemo(() => {
     const timeMap = new Map<
@@ -1738,19 +2100,134 @@ export default function Orders() {
     return timeMap;
   }, [now, queueSections]);
 
-  const hasQueueVisible = useMemo(
-    () => queueSections.some((section) => section.orders.length > 0),
-    [queueSections],
+  const isQueueView = filterStatus === "queue";
+  const isPrintingView = filterStatus === "printing";
+  const isAllPrintersView = filterPrinterKey === ALL_PRINTERS_FILTER_KEY;
+  const printerNameById = useMemo(
+    () => new Map(printers.map((printer) => [printer.id, printer.name])),
+    [printers],
   );
+  const activePrinter = useMemo(
+    () => printers.find((printer) => printer.id === filterPrinterKey) || null,
+    [filterPrinterKey, printers],
+  );
+  const printerAccentMap = useMemo(() => {
+    const accentMap = new Map<string, PrinterAccent>();
+    printers.forEach((printer, index) => {
+      accentMap.set(printer.id, getPrinterAccentBySlot(index));
+    });
+    return accentMap;
+  }, [printers]);
+  const getPrinterAccent = (printerId: string | null) => {
+    if (!printerId) return NEUTRAL_PRINTER_ACCENT;
+    return printerAccentMap.get(printerId) || getPrinterAccentBySlot(hashPrinterSeed(printerId));
+  };
+  const activePrinterStats = useMemo(
+    () =>
+      activePrinter
+        ? printerStatsMap.get(activePrinter.id) || {
+            count: 0,
+            totalMin: 0,
+            printingCount: 0,
+            busyUntil: null,
+          }
+        : null,
+    [activePrinter, printerStatsMap],
+  );
+  const activePrinterAccent = getPrinterAccent(activePrinter?.id ?? null);
+  const activePrinterLoadLabel = activePrinterStats
+    ? getPrinterOccupancyLabel(activePrinterStats)
+    : null;
+  const activeQueueSection = useMemo(
+    () =>
+      isAllPrintersView
+        ? null
+        : queueSections.find((section) => section.printerId === filterPrinterKey) || null,
+    [filterPrinterKey, isAllPrintersView, queueSections],
+  );
+  const allQueueOrders = useMemo(
+    () =>
+      [...filteredQueue].sort((left, right) => {
+        const leftUnassigned = !left.printer_id;
+        const rightUnassigned = !right.printer_id;
 
+        if (leftUnassigned !== rightUnassigned) {
+          return leftUnassigned ? -1 : 1;
+        }
+
+        if (left.printer_id !== right.printer_id) {
+          return (printerNameById.get(left.printer_id || "") || "").localeCompare(
+            printerNameById.get(right.printer_id || "") || "",
+            "pt-BR",
+          );
+        }
+
+        return sortQueueOrders(left, right);
+      }),
+    [filteredQueue, printerNameById],
+  );
+  const visibleQueueOrders = useMemo(
+    () =>
+      (isAllPrintersView ? allQueueOrders : activeQueueSection?.orders || []).filter((order) =>
+        isPrintingView ? isOrderPrinting(order) : isOrderPending(order),
+      ),
+    [activeQueueSection, allQueueOrders, isAllPrintersView, isPrintingView],
+  );
+  const visibleQueueTotalMin = useMemo(
+    () => visibleQueueOrders.reduce((total, order) => total + getRemainingPrintTimeMin(order, now), 0),
+    [now, visibleQueueOrders],
+  );
+  const visibleQueuePrintingCount = useMemo(
+    () => visibleQueueOrders.filter((order) => isOrderPrinting(order)).length,
+    [visibleQueueOrders],
+  );
+  const visibleQueuePendingCount = useMemo(
+    () => visibleQueueOrders.filter((order) => isOrderPending(order)).length,
+    [visibleQueueOrders],
+  );
+  const visibleUnassignedCount = useMemo(
+    () => visibleQueueOrders.filter((order) => !order.printer_id).length,
+    [visibleQueueOrders],
+  );
+  const hasQueueVisible = visibleQueueOrders.length > 0;
   const activeQueueSections = useMemo(
-    () => queueSections.filter((section) => section.orders.length > 0).length,
-    [queueSections],
+    () =>
+      queueSections.filter((section) =>
+        isPrintingView ? section.printingCount > 0 : section.pendingCount > 0,
+      ).length,
+    [isPrintingView, queueSections],
   );
-
+  const printerTabs = useMemo(
+    () => [
+      {
+        id: ALL_PRINTERS_FILTER_KEY,
+        label: "Todas",
+        count: isPrintingView ? printingCount : pendingCount,
+        accent: NEUTRAL_PRINTER_ACCENT,
+      },
+      ...printers.map((printer) => ({
+        id: printer.id,
+        label: printer.name,
+        count: isPrintingView
+          ? printerStatsMap.get(printer.id)?.printingCount || 0
+          : (printerStatsMap.get(printer.id)?.count || 0) -
+            (printerStatsMap.get(printer.id)?.printingCount || 0),
+        accent: getPrinterAccent(printer.id),
+      })),
+    ],
+    [isPrintingView, pendingCount, printerStatsMap, printers, printingCount],
+  );
   const canReorderQueue =
-    canUsePrinterFeatures && filterColor === "all" && !filterSearch.trim() && !isPersistingQueue;
-  const unassignedQueueCount = printerStatsMap.get(UNASSIGNED_PRINTER_KEY)?.count || 0;
+    isQueueView &&
+    canUsePrinterFeatures &&
+    !isAllPrintersView &&
+    filterColor === "all" &&
+    !filterSearch.trim() &&
+    !isPersistingQueue;
+  const unassignedQueueCount = useMemo(
+    () => queue.filter((order) => !order.printer_id && isOrderPending(order)).length,
+    [queue],
+  );
 
   const handleDragStart = (order: Order) => {
     if (!canReorderQueue || !isOrderPending(order)) return;
@@ -1799,6 +2276,394 @@ export default function Orders() {
     await moveOrderInQueue(draggedOrderId, order.printer_id, order.id);
   };
 
+  const renderQueueOrderCard = (order: Order, queueIndex?: number) => {
+    const times = queueTimeMap.get(order.id);
+    const totalMin = times?.totalMin || 0;
+    const remainingMin = times?.remainingMin || 0;
+    const startAt = times?.startAt || now;
+    const finishAt = times?.finishAt || now;
+    const orderStatus = getOrderStatus(order);
+    const isPrintingRow = orderStatus === "printing";
+    const platformId = getPlatformId(order);
+    const showSourceProductName =
+      Boolean(order.source_product_name) &&
+      normalizeText(order.source_product_name || "") !== normalizeText(order.pieces.name);
+    const currentPrinterName =
+      order.printers?.name ||
+      (order.printer_id ? printerNameById.get(order.printer_id) || "Impressora" : "Sem impressora");
+    const storeBadgeLabel = getStoreBadgeLabel(order.store_name);
+    const accent = getPrinterAccent(order.printer_id);
+    const isUnassignedCard = !order.printer_id;
+    const productAtmosphereStyle = getProductAtmosphereStyle(order.color, isPrintingRow);
+    const cardTone = isUnassignedCard && isAllPrintersView
+      ? "border-amber-400/20 bg-[#081121]"
+      : "border-white/10 bg-[#081121]";
+    const printerStripeClass = isUnassignedCard ? "bg-amber-300" : accent.dot;
+    const canDragCard = isQueueView && canReorderQueue && isOrderPending(order);
+
+    return (
+      <div
+        key={order.id}
+        className={`relative overflow-hidden rounded-2xl border p-3 sm:p-4 backdrop-blur-sm transition-all ${
+          dragOverOrderId === order.id
+            ? "ring-2 ring-primary/60 border-primary/40"
+            : "hover:border-white/15 hover:shadow-[0_18px_40px_rgba(2,6,23,0.28)]"
+        } ${cardTone}`}
+        onDragOver={canDragCard ? (event) => handleOrderDragOver(event, order) : undefined}
+        onDrop={canDragCard ? (event) => void handleOrderDrop(event, order) : undefined}
+      >
+        <div className={`absolute inset-y-3 left-0 w-1 rounded-r-full ${printerStripeClass}`} />
+        {productAtmosphereStyle ? (
+          <div className="pointer-events-none absolute inset-0" style={productAtmosphereStyle} />
+        ) : null}
+
+        <div className="relative z-10 flex flex-col gap-4 xl:flex-row xl:items-start">
+          <div className="flex flex-1 min-w-0 items-start gap-3">
+            {isAllPrintersView ? (
+              <div
+                className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-[#0b1628] text-[11px] font-semibold ${
+                  isUnassignedCard
+                    ? "border-amber-400/20 text-amber-100"
+                    : `${accent.border} ${accent.strongText}`
+                }`}
+              >
+                {isUnassignedCard ? "?" : currentPrinterName.slice(0, 2).toUpperCase()}
+              </div>
+            ) : isQueueView ? (
+              <div className="flex items-start gap-2">
+                <div
+                  draggable={canDragCard}
+                  onDragStart={() => handleDragStart(order)}
+                  onDragEnd={handleDragEnd}
+                  className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-dashed ${
+                    canDragCard
+                      ? "cursor-grab border-white/15 text-slate-400 hover:border-white/30 hover:text-slate-100"
+                      : "cursor-not-allowed border-white/10 text-slate-600"
+                  }`}
+                  title={
+                    canDragCard
+                      ? "Arraste para reorganizar a fila"
+                      : "Reordenacao disponivel apenas para pedidos pendentes"
+                  }
+                >
+                  <GripVertical className="h-4 w-4" />
+                </div>
+                <div
+                  className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border bg-[#0b1628] text-sm font-semibold ${accent.border} ${accent.strongText}`}
+                >
+                  {String((queueIndex || 0) + 1).padStart(2, "0")}
+                </div>
+              </div>
+            ) : (
+              <div
+                className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border bg-[#0b1628] text-[11px] font-semibold ${accent.border} ${accent.strongText}`}
+              >
+                {currentPrinterName.slice(0, 2).toUpperCase()}
+              </div>
+            )}
+
+            {order.pieces.image_url ? (
+              <img
+                src={order.pieces.image_url}
+                alt={order.pieces.name}
+                className="h-16 w-16 shrink-0 rounded-2xl object-cover ring-1 ring-white/10 shadow-[0_10px_30px_rgba(2,6,23,0.35)]"
+              />
+            ) : (
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03]">
+                <Package className="h-5 w-5 text-slate-500" />
+              </div>
+            )}
+
+            <div className="min-w-0 flex-1 space-y-3">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-sm sm:text-base font-semibold text-slate-50 break-words">
+                    {order.pieces.name}
+                  </p>
+                  <Badge
+                    variant="outline"
+                    className={`text-[10px] uppercase tracking-[0.18em] ${
+                      isPrintingRow
+                        ? "border-primary/30 bg-primary/15 text-primary"
+                        : "border-white/10 bg-white/[0.05] text-slate-200"
+                    }`}
+                  >
+                    {isPrintingRow ? "Imprimindo" : "Pendente"}
+                  </Badge>
+                  {order.quantity > 1 ? (
+                    <Badge variant="secondary" className="text-[10px]">
+                      x{order.quantity}
+                    </Badge>
+                  ) : null}
+                  {order.color ? <ColorBadge color={order.color} className="text-[10px]" /> : null}
+                  {order.piece_price_variations?.variation_name ? (
+                    <Badge variant="outline" className="text-[10px] border-white/10 bg-white/[0.04] text-slate-200">
+                      {order.piece_price_variations.variation_name}
+                    </Badge>
+                  ) : null}
+                  {platformId !== "sem-pedido" ? (
+                    <Badge variant="outline" className="text-[10px] font-mono border-white/10 bg-white/[0.04] text-slate-200">
+                      #{platformId}
+                    </Badge>
+                  ) : null}
+                  {storeBadgeLabel ? (
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] border-sky-400/20 bg-sky-500/10 text-sky-100"
+                    >
+                      {storeBadgeLabel}
+                    </Badge>
+                  ) : null}
+                  {isAllPrintersView ? (
+                    <Badge className={`text-[10px] ${isUnassignedCard ? "border-amber-400/20 bg-amber-500/10 text-amber-100" : accent.badge}`}>
+                      <span className="mr-1 inline-flex">
+                        {isUnassignedCard ? (
+                          <span className="inline-block h-2 w-2 rounded-full bg-amber-300" />
+                        ) : (
+                          renderPrinterDot(accent, "sm")
+                        )}
+                      </span>
+                      {currentPrinterName}
+                    </Badge>
+                  ) : null}
+                </div>
+
+                {showSourceProductName ? (
+                  <p className="text-xs text-slate-400 break-words">
+                    Anuncio: {order.source_product_name}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-3">
+                <div className="rounded-xl border border-white/10 bg-[#050816]/70 px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Tempo</p>
+                  <p className="mt-1 text-sm font-medium text-slate-100">
+                    {isPrintingRow ? `Restam ${formatTime(remainingMin)}` : formatTime(totalMin)}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-[#050816]/70 px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">
+                    {isPrintingRow ? "Inicio" : "Previsao"}
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-slate-100">
+                    {isPrintingRow ? formatHour(startAt) : formatDateTime(finishAt)}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-[#050816]/70 px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">
+                    {isPrintingRow ? "Termino" : "Entrega da fila"}
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-slate-100">
+                    {formatHour(finishAt)}
+                  </p>
+                </div>
+              </div>
+
+              {isPrintingRow ? (
+                <div className="rounded-2xl border border-white/10 bg-[#050816]/72 p-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                    <div className="flex-1 space-y-1">
+                      <p className="text-[10px] font-medium uppercase tracking-[0.24em] text-slate-500">
+                        Ajustar inicio
+                      </p>
+                      <Input
+                        type="datetime-local"
+                        step={60}
+                        value={
+                          editingStartTimes[order.id] ??
+                          toDateTimeLocalValue(order.started_at || startAt)
+                        }
+                        onChange={(event) =>
+                          handleStartTimeDraftChange(order.id, event.target.value)
+                        }
+                        className="h-10 border-white/10 bg-[#050816] text-xs text-slate-100"
+                      />
+                    </div>
+                    <Button
+                      size="sm"
+                      className="h-10 w-full gap-1.5 sm:w-auto"
+                      disabled={savingStartOrderId === order.id}
+                      onClick={() =>
+                        void handleUpdateOrderStartTime(
+                          order,
+                          editingStartTimes[order.id] ??
+                            toDateTimeLocalValue(order.started_at || startAt),
+                        )
+                      }
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                      {savingStartOrderId === order.id ? "Salvando..." : "Salvar inicio"}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="grid gap-2 xl:min-w-[230px]">
+            {isAllPrintersView ? (
+              isPrintingView ? (
+                <div className="rounded-2xl border border-white/10 bg-black/10 p-3">
+                  <p className="text-[10px] font-medium uppercase tracking-[0.24em] text-slate-500">
+                    Impressora ativa
+                  </p>
+                  <div
+                    className={`mt-2 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs ${isUnassignedCard ? "border-amber-400/20 bg-amber-500/10 text-amber-100" : accent.badge}`}
+                  >
+                    {isUnassignedCard ? (
+                      <span className="inline-block h-2.5 w-2.5 rounded-full bg-amber-300" />
+                    ) : (
+                      renderPrinterDot(accent, "sm")
+                    )}
+                    <span>{currentPrinterName}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-white/10 bg-black/10 p-3">
+                  <p className="text-[10px] font-medium uppercase tracking-[0.24em] text-slate-500">
+                    Direcionar para
+                  </p>
+                  <Select
+                    disabled={isPrintingRow || !canUsePrinterFeatures}
+                    value={getPrinterKey(order.printer_id)}
+                    onValueChange={(value) => {
+                      const nextPrinterId = fromPrinterKey(value);
+                      if ((order.printer_id ?? null) === nextPrinterId) return;
+                      void handleOrderPrinterChange(order.id, nextPrinterId);
+                    }}
+                  >
+                    <SelectTrigger className="mt-2 h-10 border-white/10 bg-[#050816] text-xs text-slate-100">
+                      <SelectValue placeholder="Direcionar impressora" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={UNASSIGNED_PRINTER_KEY}>Sem impressora</SelectItem>
+                      {printers.map((printer) => (
+                        <SelectItem key={printer.id} value={printer.id}>
+                          {printer.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )
+            ) : isQueueView ? (
+              <div className="rounded-2xl border border-white/10 bg-black/10 p-3">
+                <p className="text-[10px] font-medium uppercase tracking-[0.24em] text-slate-500">
+                  Fila
+                </p>
+                <p className="mt-1 text-sm font-medium text-slate-100">
+                  Posicao {String((queueIndex || 0) + 1).padStart(2, "0")}
+                </p>
+                <p className="mt-1 text-xs text-slate-400">
+                  {canDragCard ? "Arraste para reordenar." : "Fila bloqueada durante busca ou filtros."}
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-white/10 bg-black/10 p-3">
+                <p className="text-[10px] font-medium uppercase tracking-[0.24em] text-slate-500">
+                  Em execucao
+                </p>
+                <p className="mt-1 text-sm font-medium text-slate-100">{currentPrinterName}</p>
+                <p className="mt-1 text-xs text-slate-400">
+                  Termino previsto {formatHour(finishAt)}
+                </p>
+              </div>
+            )}
+
+            <div className="rounded-2xl border border-white/10 bg-black/10 p-3">
+              <p className="text-[10px] font-medium uppercase tracking-[0.24em] text-slate-500">
+                Status
+              </p>
+              <Select
+                disabled={!canUseProductionFlow}
+                value={orderStatus}
+                onValueChange={(value) =>
+                  void handleOrderStatusChange(order.id, value as OrderStatus)
+                }
+              >
+                <SelectTrigger className="mt-2 h-10 border-white/10 bg-[#050816] text-xs text-slate-100">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">Pendente</SelectItem>
+                  <SelectItem value="printing">Fazendo</SelectItem>
+                  <SelectItem value="done">Feito</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Button
+              variant="ghost"
+              className="h-10 justify-center rounded-2xl border border-white/10 text-slate-400 hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => void handleDeleteOrder(order.id)}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Remover
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const operationsEyebrow = isPrintingView
+    ? isAllPrintersView
+      ? "Producao em andamento"
+      : "Maquina em execucao"
+    : isAllPrintersView
+      ? "Visao da fila"
+      : "Fila dedicada";
+  const operationsTitle = isPrintingView
+    ? isAllPrintersView
+      ? "Pedidos fazendo agora"
+      : `${activePrinter?.name || "Impressora"} em producao`
+    : isAllPrintersView
+      ? "Fila pendente"
+      : activePrinter?.name || "Fila";
+  const operationsDescription = isPrintingView
+    ? isAllPrintersView
+      ? "Somente pedidos em andamento, separados da proxima fila."
+      : "Acompanhe apenas o que ja esta imprimindo nesta maquina."
+    : isAllPrintersView
+      ? "Pedidos sem impressora aparecem aqui para direcionamento rapido."
+      : activePrinter?.description ||
+        "Uma fila unica por impressora, desenhada para leitura rapida a distancia.";
+  const operationsPrimaryLabel = isPrintingView
+    ? isAllPrintersView
+      ? "Impressoras rodando"
+      : "Execucao"
+    : isAllPrintersView
+      ? "Impressoras ativas"
+      : "Ocupacao";
+  const operationsPrimaryValue = isPrintingView
+    ? isAllPrintersView
+      ? activeQueueSections
+      : activePrinterStats?.printingCount
+        ? "Imprimindo"
+        : "Livre"
+    : isAllPrintersView
+      ? activeQueueSections
+      : activePrinterLoadLabel;
+  const operationsSecondaryLabel = isPrintingView ? "Fazendo visivel" : "Fila visivel";
+  const operationsTertiaryLabel = isPrintingView
+    ? "Tempo restante"
+    : isAllPrintersView
+      ? "Tempo visivel"
+      : "Tempo total";
+  const operationalSectionTitle = isPrintingView
+    ? isAllPrintersView
+      ? `Pedidos em producao (${visibleQueueOrders.length})`
+      : `${activePrinter?.name || "Impressora"} fazendo (${visibleQueueOrders.length})`
+    : isAllPrintersView
+      ? `Fila pendente (${visibleQueueOrders.length})`
+      : `${activePrinter?.name || "Fila"} (${visibleQueueOrders.length})`;
+  const operationalSectionDescription = isPrintingView
+    ? "Pedidos em andamento separados da fila seguinte, com foco no que esta rodando agora."
+    : isAllPrintersView
+      ? "Atribua impressoras sem sair da lista principal. Cada pedido aparece uma vez so."
+      : "Fila unica por impressora, com reordenacao direta e sem cards duplicados.";
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen">
@@ -1808,7 +2673,7 @@ export default function Orders() {
   }
 
   return (
-    <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8 max-w-6xl">
+    <div className="container mx-auto max-w-7xl px-3 py-4 sm:px-4 sm:py-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold">Fila de Producao</h1>
@@ -1827,17 +2692,6 @@ export default function Orders() {
 
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
           <Dialog open={isPrinterDialogOpen} onOpenChange={setIsPrinterDialogOpen}>
-            <DialogTrigger asChild>
-              <Button
-                variant="outline"
-                className="w-full sm:w-auto"
-                disabled={!canUsePrinterFeatures}
-                title={!canUsePrinterFeatures ? FEATURE_MIGRATION_HELP : undefined}
-              >
-                <Printer className="mr-2 h-4 w-4" />
-                Gerenciar impressoras
-              </Button>
-            </DialogTrigger>
             <DialogContent className="max-w-xl">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
@@ -2041,6 +2895,14 @@ export default function Orders() {
                                 {row.variation}
                               </Badge>
                             ) : null}
+                            {getStoreBadgeLabel(row.storeName) ? (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] border-sky-400/20 bg-sky-500/10 text-sky-100"
+                              >
+                                {getStoreBadgeLabel(row.storeName)}
+                              </Badge>
+                            ) : null}
                             <Badge variant="secondary" className="text-[10px]">
                               x{row.quantity}
                             </Badge>
@@ -2070,451 +2932,319 @@ export default function Orders() {
         </DialogContent>
       </Dialog>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-6">
-        <Card>
-          <CardContent className="pt-4 pb-3 px-4">
-            <p className="text-xs text-muted-foreground">Ativos</p>
-            <p className="text-2xl font-bold">{queue.length}</p>
+      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <Card className="border-white/10 bg-[#081121] text-slate-100 shadow-[0_18px_60px_rgba(2,6,23,0.28)]">
+          <CardContent className="px-4 pb-3 pt-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Ativos</p>
+            <p className="mt-2 text-2xl font-bold">{queue.length}</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-4 pb-3 px-4">
-            <p className="text-xs text-muted-foreground">Fazendo</p>
-            <p className="text-2xl font-bold text-primary">{printingCount}</p>
+        <Card className="border-white/10 bg-[#081121] text-slate-100 shadow-[0_18px_60px_rgba(2,6,23,0.28)]">
+          <CardContent className="px-4 pb-3 pt-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Imprimindo</p>
+            <p className="mt-2 text-2xl font-bold text-primary">{printingCount}</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-4 pb-3 px-4">
-            <p className="text-xs text-muted-foreground">Tempo restante</p>
-            <p className="text-2xl font-bold">{formatTime(totalQueueMin)}</p>
+        <Card className="border-white/10 bg-[#081121] text-slate-100 shadow-[0_18px_60px_rgba(2,6,23,0.28)]">
+          <CardContent className="px-4 pb-3 pt-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Tempo restante</p>
+            <p className="mt-2 text-2xl font-bold">{formatTime(totalQueueMin)}</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-4 pb-3 px-4">
-            <p className="text-xs text-muted-foreground">Impressoras</p>
-            <p className="text-2xl font-bold">{printers.length}</p>
+        <Card className="border-white/10 bg-[#081121] text-slate-100 shadow-[0_18px_60px_rgba(2,6,23,0.28)]">
+          <CardContent className="px-4 pb-3 pt-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Impressoras</p>
+            <p className="mt-2 text-2xl font-bold">{printers.length}</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-4 pb-3 px-4">
-            <p className="text-xs text-muted-foreground">Sem impressora</p>
-            <p className="text-2xl font-bold">{unassignedQueueCount}</p>
+        <Card className="border-white/10 bg-[#081121] text-slate-100 shadow-[0_18px_60px_rgba(2,6,23,0.28)]">
+          <CardContent className="px-4 pb-3 pt-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Sem impressora</p>
+            <p className="mt-2 text-2xl font-bold">{unassignedQueueCount}</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-4 pb-3 px-4">
-            <p className="text-xs text-muted-foreground">Concluidos</p>
-            <p className="text-2xl font-bold text-primary">{done.length}</p>
+        <Card className="border-white/10 bg-[#081121] text-slate-100 shadow-[0_18px_60px_rgba(2,6,23,0.28)]">
+          <CardContent className="px-4 pb-3 pt-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Concluidos</p>
+            <p className="mt-2 text-2xl font-bold text-primary">{done.length}</p>
           </CardContent>
         </Card>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-2 mb-6">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-          <Input
-            placeholder="Buscar peca, anuncio ou no do pedido..."
-            value={filterSearch}
-            onChange={(event) => setFilterSearch(event.target.value)}
-            className="pl-9 h-9 text-sm"
-          />
-        </div>
-        <Select value={filterColor} onValueChange={setFilterColor}>
-          <SelectTrigger className="w-full sm:w-[160px] h-9 text-sm">
-            <SelectValue placeholder="Cor" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas as cores</SelectItem>
-            {uniqueColors.map((color) => (
-              <SelectItem key={color} value={color}>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`h-2.5 w-2.5 rounded-full border border-black/10 ${
-                      getColorSwatchValue(color) ? "" : "bg-muted"
-                    }`}
-                    style={
-                      getColorSwatchValue(color)
-                        ? { backgroundColor: getColorSwatchValue(color) ?? undefined }
-                        : undefined
-                    }
-                  />
-                  <span>{color}</span>
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <div className="grid grid-cols-3 gap-1 sm:flex">
-          {(["all", "queue", "done"] as const).map((status) => (
-            <Button
-              key={status}
-              variant={filterStatus === status ? "default" : "outline"}
-              size="sm"
-              className="h-9 text-xs"
-              onClick={() => setFilterStatus(status)}
-            >
-              {status === "all" ? "Todos" : status === "queue" ? "Na fila" : "Concluidos"}
-            </Button>
-          ))}
-        </div>
-      </div>
-
-      {filterStatus !== "done" && filteredQueue.length > 0 ? (
-        <div className="mb-4 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
-          <Card className="p-3">
-            <div className="text-xs text-muted-foreground">Pendentes</div>
-            <div className="text-lg font-bold">{filteredQueue.filter((order) => isOrderPending(order)).length}</div>
-          </Card>
-          <Card className="p-3">
-            <div className="text-xs text-muted-foreground">Fazendo agora</div>
-            <div className="text-lg font-bold text-primary">
-              {filteredQueue.filter((order) => isOrderPrinting(order)).length}
+      <Card className="mb-6 border-white/10 bg-[#081121] text-slate-100 shadow-[0_24px_70px_rgba(2,6,23,0.32)]">
+        <CardContent className="space-y-4 p-4 sm:p-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.28em] text-slate-500">
+                Painel de operacao
+              </p>
+              <h2 className="mt-1 text-lg font-semibold text-slate-50">
+                {isAllPrintersView ? "Todas as impressoras" : activePrinter?.name || "Fila da impressora"}
+              </h2>
+              <p className="mt-1 text-sm text-slate-400">
+                {isAllPrintersView
+                  ? "Atribua pedidos na aba geral e acompanhe a producao sem informacao duplicada."
+                  : activePrinter?.description || "Fila unica, limpa e focada na operacao desta impressora."}
+              </p>
             </div>
-          </Card>
-          <Card className="p-3">
-            <div className="text-xs text-muted-foreground">Tempo restante</div>
-            <div className="text-lg font-bold">{formatTime(filteredQueueMin)}</div>
-          </Card>
-          <Card className="p-3">
-            <div className="text-xs text-muted-foreground">Filas ativas</div>
-            <div className="text-lg font-bold">{activeQueueSections}</div>
-          </Card>
-        </div>
-      ) : null}
+
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="rounded-2xl border border-white/10 bg-black/10 px-3 py-2.5">
+                <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Visiveis</p>
+                <p className="mt-1 text-base font-semibold text-slate-100">{visibleQueueOrders.length}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/10 px-3 py-2.5">
+                <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Pendentes</p>
+                <p className="mt-1 text-base font-semibold text-slate-100">{visibleQueuePendingCount}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/10 px-3 py-2.5">
+                <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Imprimindo</p>
+                <p className="mt-1 text-base font-semibold text-primary">{visibleQueuePrintingCount}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/10 px-3 py-2.5">
+                <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">
+                  {isAllPrintersView ? "Sem impressora" : "Entrega da fila"}
+                </p>
+                <p className="mt-1 text-base font-semibold text-slate-100">
+                  {isAllPrintersView
+                    ? visibleUnassignedCount
+                    : activePrinterStats?.busyUntil
+                      ? formatHour(activePrinterStats.busyUntil)
+                      : "Livre"}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 lg:flex-row">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+              <Input
+                placeholder="Buscar produto, anuncio ou numero do pedido..."
+                value={filterSearch}
+                onChange={(event) => setFilterSearch(event.target.value)}
+                className="h-11 border-white/10 bg-[#050816] pl-9 text-sm text-slate-100 placeholder:text-slate-500"
+              />
+            </div>
+            <Select value={filterColor} onValueChange={setFilterColor}>
+              <SelectTrigger className="h-11 w-full border-white/10 bg-[#050816] text-sm text-slate-100 lg:w-[170px]">
+                <SelectValue placeholder="Cor" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as cores</SelectItem>
+                {uniqueColors.map((color) => (
+                  <SelectItem key={color} value={color}>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`${getColorDotClassName(color, "sm")} ${
+                          getColorSwatchValue(color) ? "" : "bg-muted"
+                        }`}
+                        style={
+                          getColorSwatchValue(color)
+                            ? { backgroundColor: getColorSwatchValue(color) ?? undefined }
+                            : undefined
+                        }
+                      />
+                      <span>{color}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="grid grid-cols-3 gap-1 lg:flex">
+              {(["queue", "printing", "done"] as const).map((status) => (
+                <Button
+                  key={status}
+                  variant="outline"
+                  size="sm"
+                  className={`h-11 border-white/10 text-xs ${
+                    filterStatus === status
+                      ? "bg-white/[0.10] text-slate-50 hover:bg-white/[0.10]"
+                      : "bg-[#050816] text-slate-400 hover:bg-white/[0.05] hover:text-slate-50"
+                  }`}
+                  onClick={() => setFilterStatus(status)}
+                >
+                  {status === "queue"
+                    ? "Fila"
+                    : status === "printing"
+                      ? "Fazendo"
+                      : "Concluidos"}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="mb-6 overflow-hidden border-white/10 bg-[#081121] text-slate-100 shadow-[0_24px_70px_rgba(2,6,23,0.32)]">
+        <CardContent className="p-0">
+          <div className="overflow-x-auto pb-2 pt-4">
+            <div className="flex w-max items-center gap-2 px-4 sm:px-5">
+              {printerTabs.map((tab) => {
+                const isActive = filterPrinterKey === tab.id;
+
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setFilterPrinterKey(tab.id)}
+                    className={`flex min-w-fit items-center gap-2 rounded-2xl border px-4 py-3 text-left transition-all ${
+                      isActive
+                        ? `${tab.accent.border} ${tab.accent.soft} text-slate-50 shadow-[0_14px_34px_rgba(2,6,23,0.34)]`
+                        : "border-white/10 bg-[#050816] text-slate-400 hover:border-white/20 hover:text-slate-50"
+                    }`}
+                  >
+                    {tab.id === ALL_PRINTERS_FILTER_KEY ? (
+                      <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
+                    ) : (
+                      renderPrinterDot(tab.accent, "sm")
+                    )}
+                    <span className="text-sm font-medium">{tab.label}</span>
+                    <span className="rounded-full bg-white/[0.08] px-2 py-0.5 text-[11px] text-slate-300">
+                      {tab.count}
+                    </span>
+                  </button>
+                );
+              })}
+
+              <button
+                onClick={() => setIsPrinterDialogOpen(true)}
+                className="flex min-w-fit items-center gap-2 rounded-2xl border border-dashed border-white/15 bg-[#050816] px-4 py-3 text-sm font-medium text-slate-300 transition-colors hover:border-white/30 hover:text-slate-50"
+                disabled={!canUsePrinterFeatures}
+                title={!canUsePrinterFeatures ? FEATURE_MIGRATION_HELP : undefined}
+              >
+                <Plus className="h-4 w-4" />
+                Nova impressora
+              </button>
+            </div>
+          </div>
+
+          <div className={`border-t px-4 pb-5 pt-4 sm:px-5 ${isAllPrintersView ? "border-white/10" : activePrinterAccent.border}`}>
+            <div
+              className={`rounded-[24px] border p-4 sm:p-5 ${
+                isAllPrintersView
+                  ? "border-white/10 bg-[#050816]"
+                  : `${activePrinterAccent.border} ${activePrinterAccent.soft}`
+              }`}
+            >
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    {isAllPrintersView ? (
+                      <span className="h-3 w-3 rounded-full bg-slate-300" />
+                    ) : (
+                      renderPrinterDot(activePrinterAccent, "md")
+                    )}
+                    <p className="text-[11px] uppercase tracking-[0.28em] text-slate-500">
+                      {operationsEyebrow}
+                    </p>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold text-slate-50">
+                      {operationsTitle}
+                    </h3>
+                    <p className="mt-1 text-sm text-slate-400">
+                      {operationsDescription}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="rounded-2xl border border-white/10 bg-black/10 px-3 py-2.5">
+                    <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">
+                      {operationsPrimaryLabel}
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-slate-100">
+                      {operationsPrimaryValue}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-black/10 px-3 py-2.5">
+                    <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">
+                      {operationsSecondaryLabel}
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-slate-100">{visibleQueueOrders.length}</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-black/10 px-3 py-2.5">
+                    <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">
+                      {operationsTertiaryLabel}
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-slate-100">
+                      {formatTime(visibleQueueTotalMin)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {filterStatus !== "done" ? (
         <div className="mb-8">
-          <div className="flex flex-col gap-1 mb-3">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-              <Timer className="h-5 w-5 text-primary" />
-              Fila por impressora ({filteredQueue.length})
+          <div className="mb-3 flex flex-col gap-1">
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-100">
+              {isPrintingView ? (
+                <Printer className="h-5 w-5 text-primary" />
+              ) : (
+                <Timer className="h-5 w-5 text-primary" />
+              )}
+              {operationalSectionTitle}
             </h2>
-            <p className="text-xs text-muted-foreground">
-              Arraste os cards para mudar a ordem da fila ou mover entre impressoras.
-              O seletor da linha tambem pode redirecionar o pedido e trocar entre pendente, fazendo e feito.
+            <p className="text-xs text-slate-400">
+              {operationalSectionDescription}
             </p>
-            {!canReorderQueue ? (
-              <p className="text-xs text-amber-600">
-                Limpe a busca e o filtro de cor para arrastar a fila com o mouse.
+            {!canReorderQueue && !isAllPrintersView && isQueueView ? (
+              <p className="text-xs text-amber-400">
+                Limpe a busca e o filtro de cor para reordenar esta fila com drag and drop.
               </p>
             ) : null}
           </div>
 
-          {!hasQueueVisible ? (
-            <Card>
-              <CardContent className="py-12 text-center text-muted-foreground">
-                <Package className="h-10 w-10 mx-auto mb-3 opacity-40" />
-                <p>Nenhum pedido na fila.</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {queueSections.map((section) => {
-                const printerKey = getPrinterKey(section.printerId);
-
-                return (
-                  <Card
-                    key={printerKey}
-                    className={`overflow-hidden transition-colors ${
-                      dragOverPrinterKey === printerKey && !dragOverOrderId ? "ring-2 ring-primary/50" : ""
-                    }`}
-                  >
-                    <CardHeader className="py-3 px-3 sm:px-4 bg-muted/40 border-b">
-                      <div className="flex items-start gap-2 sm:items-center">
-                        <Printer className="h-4 w-4 text-primary" />
-                        <div className="flex flex-1 flex-col gap-2 min-w-0">
-                          <span className="text-sm font-semibold">{section.title}</span>
-                          <div className="flex flex-wrap gap-1.5">
-                            <Badge variant="secondary" className="text-[10px]">
-                              {section.orders.length} {section.orders.length === 1 ? "item" : "itens"}
-                            </Badge>
-                            {section.printingCount > 0 ? (
-                              <Badge className="text-[10px]">Fazendo {section.printingCount}</Badge>
-                            ) : null}
-                            {section.pendingCount > 0 ? (
-                              <Badge variant="outline" className="text-[10px]">
-                                Pendentes {section.pendingCount}
-                              </Badge>
-                            ) : null}
-                            <Badge variant="outline" className="text-[10px]">
-                              Restante {formatTime(section.totalMin)}
-                            </Badge>
-                            {section.busyUntil ? (
-                              <Badge variant="outline" className="text-[10px]">
-                                Ocupada ate {formatHour(section.busyUntil)}
-                              </Badge>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
-                      <p className="text-xs text-muted-foreground">{section.description}</p>
-                    </CardHeader>
-
-                    <CardContent
-                      className="p-0"
-                      onDragOver={(event) => handleSectionDragOver(event, section.printerId)}
-                      onDrop={(event) => handleSectionDrop(event, section.printerId)}
-                    >
-                      {section.orders.length === 0 ? (
-                        <div className="py-8 px-4 text-center text-sm text-muted-foreground border-t border-dashed">
-                          Solte aqui os pedidos desta impressora.
-                        </div>
-                      ) : (
-                        <div className="divide-y divide-border">
-                          {section.orders.map((order) => {
-                            const times = queueTimeMap.get(order.id);
-                            const totalMin = times?.totalMin || 0;
-                            const remainingMin = times?.remainingMin || 0;
-                            const startAt = times?.startAt || now;
-                            const finishAt = times?.finishAt || now;
-                            const orderStatus = getOrderStatus(order);
-                            const isPrintingRow = orderStatus === "printing";
-                            const isPendingRow = orderStatus === "pending";
-                            const platformId = getPlatformId(order);
-                            const showSourceProductName =
-                              Boolean(order.source_product_name) &&
-                              normalizeText(order.source_product_name || "") !==
-                                normalizeText(order.pieces.name);
-
-                            return (
-                              <div
-                                key={order.id}
-                                className={`py-3 px-3 sm:px-4 transition-colors ${
-                                  dragOverOrderId === order.id
-                                    ? "bg-primary/5 border-t-2 border-primary"
-                                    : "hover:bg-accent/30"
-                                }`}
-                                onDragOver={
-                                  isPendingRow ? (event) => handleOrderDragOver(event, order) : undefined
-                                }
-                                onDrop={isPendingRow ? (event) => handleOrderDrop(event, order) : undefined}
-                              >
-                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-                                  <div className="flex items-start gap-3">
-                                    <div
-                                      draggable={canReorderQueue && isPendingRow}
-                                      onDragStart={() => handleDragStart(order)}
-                                      onDragEnd={handleDragEnd}
-                                      className={`mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-dashed ${
-                                        canReorderQueue && isPendingRow
-                                          ? "cursor-grab text-muted-foreground hover:text-foreground"
-                                          : "opacity-40 cursor-not-allowed"
-                                      }`}
-                                      title={
-                                        canReorderQueue && isPendingRow
-                                          ? "Arraste para reordenar ou mover de impressora"
-                                          : isPrintingRow
-                                            ? "Pedido em producao nao pode ser arrastado"
-                                            : "Limpe os filtros para arrastar"
-                                      }
-                                    >
-                                      <GripVertical className="h-4 w-4" />
-                                    </div>
-
-                                    {order.pieces.image_url ? (
-                                      <img
-                                        src={order.pieces.image_url}
-                                        alt={order.pieces.name}
-                                        className="h-11 w-11 rounded-lg object-cover shrink-0"
-                                      />
-                                    ) : (
-                                      <div className="h-11 w-11 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                                        <Package className="h-4 w-4 text-muted-foreground" />
-                                      </div>
-                                    )}
-
-                                    <div className="flex-1 min-w-0 space-y-2">
-                                      <div className="flex items-start justify-between gap-2">
-                                        <div className="min-w-0 space-y-2">
-                                          <span className="block font-medium text-sm leading-5 break-words">
-                                            {order.pieces.name}
-                                          </span>
-                                          {showSourceProductName ? (
-                                            <p className="text-[11px] text-muted-foreground break-words">
-                                              Anuncio: {order.source_product_name}
-                                            </p>
-                                          ) : null}
-                                          <div className="flex flex-wrap gap-1.5">
-                                            {order.quantity > 1 ? (
-                                              <Badge variant="secondary" className="text-[10px]">
-                                                x{order.quantity}
-                                              </Badge>
-                                            ) : null}
-                                            {order.color ? (
-                                              <ColorBadge color={order.color} />
-                                            ) : null}
-                                            {order.piece_price_variations ? (
-                                              <Badge variant="outline" className="text-[10px]">
-                                                {order.piece_price_variations.variation_name}
-                                              </Badge>
-                                            ) : null}
-                                            {platformId !== "sem-pedido" ? (
-                                              <Badge variant="secondary" className="text-[10px] font-mono">
-                                                {platformId}
-                                              </Badge>
-                                            ) : null}
-                                            <Badge
-                                              variant={isPrintingRow ? "default" : "outline"}
-                                              className="text-[10px]"
-                                            >
-                                              {isPrintingRow ? "Fazendo" : "Pendente"}
-                                            </Badge>
-                                          </div>
-                                        </div>
-
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive sm:hidden"
-                                          onClick={() => void handleDeleteOrder(order.id)}
-                                        >
-                                          <Trash2 className="h-3.5 w-3.5" />
-                                        </Button>
-                                      </div>
-
-                                      <div className="grid gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
-                                        <div className="flex items-center gap-1 rounded-md bg-muted/60 px-2.5 py-2 sm:bg-transparent sm:px-0 sm:py-0">
-                                          <Clock className="h-3 w-3 text-muted-foreground" />
-                                          <span className="text-[11px] font-medium">
-                                            {isPrintingRow ? `Resta ${formatTime(remainingMin)}` : formatTime(totalMin)}
-                                          </span>
-                                        </div>
-                                        {isPrintingRow ? (
-                                          <div className="flex items-center gap-1 rounded-md bg-primary/10 px-2.5 py-2 sm:bg-transparent sm:px-0 sm:py-0">
-                                            <Timer className="h-3 w-3 text-primary" />
-                                            <span className="text-[11px] text-primary font-medium">
-                                              Inicio {formatHour(startAt)}
-                                            </span>
-                                          </div>
-                                        ) : null}
-                                        <div className="flex items-center gap-1 rounded-md bg-primary/10 px-2.5 py-2 sm:bg-transparent sm:px-0 sm:py-0">
-                                          <CalendarClock className="h-3 w-3 text-primary" />
-                                          <span className="text-[11px] text-primary font-medium">
-                                            {isPrintingRow ? `Termina ${formatHour(finishAt)}` : `Prev. ${formatDateTime(finishAt)}`}
-                                          </span>
-                                        </div>
-                                      </div>
-
-                                      {isPrintingRow ? (
-                                        <div className="rounded-lg border bg-muted/20 p-2.5">
-                                          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-                                            <div className="flex-1 space-y-1">
-                                              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                                                Ajustar inicio
-                                              </p>
-                                              <Input
-                                                type="datetime-local"
-                                                step={60}
-                                                value={
-                                                  editingStartTimes[order.id] ??
-                                                  toDateTimeLocalValue(order.started_at || startAt)
-                                                }
-                                                onChange={(event) =>
-                                                  handleStartTimeDraftChange(order.id, event.target.value)
-                                                }
-                                                className="h-9 text-xs"
-                                              />
-                                            </div>
-                                            <Button
-                                              size="sm"
-                                              className="h-9 w-full gap-1.5 sm:w-auto"
-                                              disabled={savingStartOrderId === order.id}
-                                              onClick={() =>
-                                                void handleUpdateOrderStartTime(
-                                                  order,
-                                                  editingStartTimes[order.id] ??
-                                                    toDateTimeLocalValue(order.started_at || startAt),
-                                                )
-                                              }
-                                            >
-                                              <Check className="h-3.5 w-3.5" />
-                                              {savingStartOrderId === order.id ? "Salvando..." : "Salvar inicio"}
-                                            </Button>
-                                          </div>
-                                        </div>
-                                      ) : null}
-                                    </div>
-                                  </div>
-
-                                  <div className="grid gap-2 sm:ml-auto sm:min-w-[210px]">
-                                    <div className="space-y-1">
-                                      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                                        Impressora
-                                      </p>
-                                      <Select
-                                        disabled={isPrintingRow || !canUsePrinterFeatures}
-                                        value={getPrinterKey(order.printer_id)}
-                                        onValueChange={(value) => {
-                                          const nextPrinterId = fromPrinterKey(value);
-                                          if ((order.printer_id ?? null) === nextPrinterId) return;
-                                          void handleOrderPrinterChange(order.id, nextPrinterId);
-                                        }}
-                                      >
-                                        <SelectTrigger className={queuePrinterSelectClassName}>
-                                          <SelectValue placeholder="Direcionar impressora" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value={UNASSIGNED_PRINTER_KEY}>
-                                            Sem impressora
-                                          </SelectItem>
-                                          {printers.map((printer) => (
-                                            <SelectItem key={printer.id} value={printer.id}>
-                                              {printer.name}
-                                            </SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-
-                                    <div className="space-y-1">
-                                      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                                        Status
-                                      </p>
-                                      <Select
-                                        disabled={!canUseProductionFlow}
-                                        value={orderStatus}
-                                        onValueChange={(value) =>
-                                          void handleOrderStatusChange(order.id, value as OrderStatus)
-                                        }
-                                      >
-                                        <SelectTrigger className={queueStatusSelectClassName}>
-                                          <SelectValue placeholder="Status" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="pending">Pendente</SelectItem>
-                                          <SelectItem value="printing">Fazendo</SelectItem>
-                                          <SelectItem value="done">Feito</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                  </div>
-
-                                  <div className="hidden items-center gap-1 shrink-0 sm:flex">
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                      onClick={() => void handleDeleteOrder(order.id)}
-                                    >
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                    </Button>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
+          <Card className="overflow-hidden border-white/10 bg-[#081121] text-slate-100 shadow-[0_24px_70px_rgba(2,6,23,0.32)]">
+            <CardContent
+              className={`p-4 sm:p-5 ${!isAllPrintersView ? "transition-colors" : ""} ${
+                isQueueView &&
+                !isAllPrintersView &&
+                dragOverPrinterKey === getPrinterKey(activePrinter?.id || null) &&
+                !dragOverOrderId
+                  ? "ring-2 ring-primary/50"
+                  : ""
+              }`}
+              onDragOver={
+                isQueueView && !isAllPrintersView
+                  ? (event) => handleSectionDragOver(event, activePrinter?.id || null)
+                  : undefined
+              }
+              onDrop={
+                isQueueView && !isAllPrintersView
+                  ? (event) => void handleSectionDrop(event, activePrinter?.id || null)
+                  : undefined
+              }
+            >
+              {!hasQueueVisible ? (
+                <div className="flex min-h-[240px] flex-col items-center justify-center rounded-[28px] border border-dashed border-white/10 bg-[#050816] px-6 py-10 text-center text-slate-400">
+                  <Package className="mb-4 h-10 w-10 opacity-40" />
+                  <p className="text-base font-medium text-slate-200">Nenhum pedido nesta visualizacao.</p>
+                  <p className="mt-2 max-w-md text-sm text-slate-500">
+                    {isPrintingView
+                      ? isAllPrintersView
+                        ? "Nenhuma impressora esta produzindo agora com os filtros atuais."
+                        : "Esta impressora nao esta fazendo nenhum pedido neste momento."
+                      : isAllPrintersView
+                        ? "Importe novos pedidos ou ajuste os filtros para voltar a operar."
+                        : "Esta impressora esta sem fila pendente no momento."}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {visibleQueueOrders.map((order, index) => renderQueueOrderCard(order, index))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       ) : null}
 
-      {filterStatus !== "queue" && filteredDone.length > 0 ? (
+      {filterStatus === "done" && filteredDone.length > 0 ? (
         <div>
           <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
             <CheckCircle2 className="h-5 w-5 text-primary" />
@@ -2533,25 +3263,35 @@ export default function Orders() {
                 </div>
 
                 <div className="space-y-4">
-                  {section.orderGroups.map(([platformId, groupOrders]) => (
+                  {section.orderGroups.map((group) => (
                     <Card
-                      key={`${section.dateKey}-${platformId}`}
+                      key={`${section.dateKey}-${group.platformId}-${group.storeName || "sem-loja"}`}
                       className="overflow-hidden opacity-80 hover:opacity-100 transition-opacity"
                     >
                       <CardHeader className="py-2 px-3 sm:px-4 bg-muted/30 border-b">
                         <div className="flex items-center gap-2">
                           <ShoppingBag className="h-3.5 w-3.5 text-muted-foreground" />
                           <span className="text-xs font-semibold font-mono text-muted-foreground">
-                            {platformId === "sem-pedido" ? "Sem no de pedido" : platformId}
+                            {group.platformId === "sem-pedido"
+                              ? "Sem no de pedido"
+                              : group.platformId}
                           </span>
+                          {getStoreBadgeLabel(group.storeName) ? (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] border-sky-400/20 bg-sky-500/10 text-sky-100"
+                            >
+                              {getStoreBadgeLabel(group.storeName)}
+                            </Badge>
+                          ) : null}
                           <Badge variant="secondary" className="text-[10px] ml-auto">
-                            {groupOrders.length} {groupOrders.length === 1 ? "item" : "itens"}
+                            {group.orders.length} {group.orders.length === 1 ? "item" : "itens"}
                           </Badge>
                         </div>
                       </CardHeader>
                       <CardContent className="p-0">
                         <div className="divide-y divide-border">
-                          {groupOrders.map((order) => {
+                          {group.orders.map((order) => {
                             const showSourceProductName =
                               Boolean(order.source_product_name) &&
                               normalizeText(order.source_product_name || "") !==
@@ -2640,54 +3380,56 @@ export default function Orders() {
         </div>
       ) : null}
 
-      <QueueOptimizerChat
-        queueData={filteredQueue.filter((order) => isOrderPending(order)).map((order) => ({
-          id: order.id,
-          name: order.pieces.name,
-          color: order.color,
-          quantity: order.quantity,
-          tempo_min:
-            order.variation_id && order.piece_price_variations
-              ? order.piece_price_variations.tempo_impressao_min
-              : order.pieces.tempo_impressao_min,
-          variation: order.piece_price_variations?.variation_name || null,
-          platformOrderId: (order.notes || "").split(" - ")[0] || "",
-        }))}
-        isOpen={isChatOpen}
-        onToggle={() => setIsChatOpen(!isChatOpen)}
-        onReorder={async (orderedIds, explanation) => {
-          try {
-            const rankMap = new Map(orderedIds.map((id, index) => [id, index]));
-            const buckets = buildQueueBuckets(orders.filter((order) => !isOrderDone(order)));
-            const reorderedBuckets = new Map<string, Order[]>();
+      {isQueueView ? (
+        <QueueOptimizerChat
+          queueData={filteredQueue.filter((order) => isOrderPending(order)).map((order) => ({
+            id: order.id,
+            name: order.pieces.name,
+            color: order.color,
+            quantity: order.quantity,
+            tempo_min:
+              order.variation_id && order.piece_price_variations
+                ? order.piece_price_variations.tempo_impressao_min
+                : order.pieces.tempo_impressao_min,
+            variation: order.piece_price_variations?.variation_name || null,
+            platformOrderId: (order.notes || "").split(" - ")[0] || "",
+          }))}
+          isOpen={isChatOpen}
+          onToggle={() => setIsChatOpen(!isChatOpen)}
+          onReorder={async (orderedIds, explanation) => {
+            try {
+              const rankMap = new Map(orderedIds.map((id, index) => [id, index]));
+              const buckets = buildQueueBuckets(orders.filter((order) => !isOrderDone(order)));
+              const reorderedBuckets = new Map<string, Order[]>();
 
-            buckets.forEach((bucketOrders, printerKey) => {
-              const printingOrders = bucketOrders.filter((order) => isOrderPrinting(order));
-              const pendingOrders = bucketOrders
-                .filter((order) => isOrderPending(order))
-                .sort((left, right) => {
-                  const leftRank = rankMap.get(left.id) ?? Number.MAX_SAFE_INTEGER;
-                  const rightRank = rankMap.get(right.id) ?? Number.MAX_SAFE_INTEGER;
+              buckets.forEach((bucketOrders, printerKey) => {
+                const printingOrders = bucketOrders.filter((order) => isOrderPrinting(order));
+                const pendingOrders = bucketOrders
+                  .filter((order) => isOrderPending(order))
+                  .sort((left, right) => {
+                    const leftRank = rankMap.get(left.id) ?? Number.MAX_SAFE_INTEGER;
+                    const rightRank = rankMap.get(right.id) ?? Number.MAX_SAFE_INTEGER;
 
-                  if (leftRank !== rightRank) return leftRank - rightRank;
-                  return sortQueueOrders(left, right);
-                });
+                    if (leftRank !== rightRank) return leftRank - rightRank;
+                    return sortQueueOrders(left, right);
+                  });
 
-              const nextOrders = [...printingOrders, ...pendingOrders];
+                const nextOrders = [...printingOrders, ...pendingOrders];
 
-              reorderedBuckets.set(printerKey, nextOrders);
-            });
+                reorderedBuckets.set(printerKey, nextOrders);
+              });
 
-            await persistQueueBuckets(reorderedBuckets, {
-              title: "Fila reorganizada pela IA!",
-              description: explanation,
-            });
-          } catch (error) {
-            console.error("Error reordering queue with AI:", error);
-            toast({ title: "Erro ao reorganizar fila", variant: "destructive" });
-          }
-        }}
-      />
+              await persistQueueBuckets(reorderedBuckets, {
+                title: "Fila reorganizada pela IA!",
+                description: explanation,
+              });
+            } catch (error) {
+              console.error("Error reordering queue with AI:", error);
+              toast({ title: "Erro ao reorganizar fila", variant: "destructive" });
+            }
+          }}
+        />
+      ) : null}
     </div>
   );
 }
