@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Package, Cylinder, Plus, Minus, Trash2, Search, Check, ArrowLeft, Pencil } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Package, Cylinder, Plus, Minus, Trash2, Search, Check, Pencil, AlertTriangle, TrendingDown, Weight, Boxes } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -15,7 +16,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface Filament {
   id: string;
@@ -61,6 +61,8 @@ function FilamentRow({
   onDelete: (id: string) => void
 }) {
   const [localStock, setLocalStock] = useState(fil.stock_kg.toFixed(1));
+  const isLow = fil.stock_kg < 0.3 && fil.stock_kg > 0;
+  const isEmpty = fil.stock_kg <= 0;
 
   useEffect(() => {
     if (parseFloat(localStock) !== fil.stock_kg) {
@@ -82,43 +84,68 @@ function FilamentRow({
     onUpdateStock(fil.id, newVal);
   };
 
+  // Progress bar: assume 1kg is full spool
+  const progressPercent = Math.min(100, (fil.stock_kg / 1) * 100);
+
   return (
-    <Card>
-      <CardContent className="flex flex-col sm:flex-row items-start sm:items-center justify-between py-4 px-5 gap-4">
-        <div className="flex items-center gap-3 min-w-0">
-          <div
-            className="h-8 w-8 rounded-full border border-border shrink-0"
-            style={{ backgroundColor: getColorHex(fil.color) }}
-          />
-          <div className="min-w-0">
-            <p className="font-medium truncate">{fil.color || "Sem cor"} <span className="text-muted-foreground font-normal">— {fil.name}</span></p>
-            <p className="text-xs text-muted-foreground">R$ {fil.custo_kg.toFixed(2)}/kg</p>
+    <Card className={`transition-all ${isEmpty ? 'opacity-60 border-destructive/30' : isLow ? 'border-yellow-500/40' : ''}`}>
+      <CardContent className="py-4 px-5">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="relative">
+              <div
+                className="h-10 w-10 rounded-full border-2 border-border shrink-0 shadow-sm"
+                style={{ backgroundColor: getColorHex(fil.color) }}
+              />
+              {isEmpty && (
+                <div className="absolute -top-1 -right-1 h-4 w-4 bg-destructive rounded-full flex items-center justify-center">
+                  <AlertTriangle className="h-2.5 w-2.5 text-destructive-foreground" />
+                </div>
+              )}
+              {isLow && !isEmpty && (
+                <div className="absolute -top-1 -right-1 h-4 w-4 bg-yellow-500 rounded-full flex items-center justify-center">
+                  <TrendingDown className="h-2.5 w-2.5 text-white" />
+                </div>
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <p className="font-semibold truncate">{fil.color || "Sem cor"}</p>
+                <span className="text-xs text-muted-foreground font-normal">— {fil.name}</span>
+              </div>
+              <div className="flex items-center gap-3 mt-1">
+                <span className="text-xs text-muted-foreground">R$ {fil.custo_kg.toFixed(2)}/kg</span>
+                <div className="flex-1 max-w-[120px]">
+                  <Progress value={progressPercent} className="h-1.5" />
+                </div>
+                <span className={`text-xs font-medium ${isEmpty ? 'text-destructive' : isLow ? 'text-yellow-600 dark:text-yellow-400' : 'text-muted-foreground'}`}>
+                  {fil.stock_kg.toFixed(1)} kg
+                </span>
+              </div>
+            </div>
           </div>
-        </div>
-        <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2 self-end">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 self-end sm:self-auto">
             <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleAdjust(-0.1)}>
               <Minus className="h-3 w-3" />
             </Button>
             <Input
-              className="w-20 text-center h-8 text-sm"
+              className="w-16 text-center h-8 text-sm"
               value={localStock}
               onChange={e => setLocalStock(e.target.value)}
               onBlur={handleBlur}
               onKeyDown={e => { if (e.key === 'Enter') handleBlur() }}
             />
-            <span className="text-xs text-muted-foreground sm:mr-2">kg</span>
             <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleAdjust(0.1)}>
               <Plus className="h-3 w-3" />
             </Button>
-          </div>
-          <div className="flex gap-1 sm:ml-2 sm:border-l border-border sm:pl-4 mt-2 sm:mt-0">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(fil)}>
-              <Pencil className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => onDelete(fil.id)}>
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            <div className="flex gap-0.5 ml-1 border-l border-border pl-2">
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(fil)}>
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => onDelete(fil.id)}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           </div>
         </div>
       </CardContent>
@@ -168,6 +195,13 @@ export default function Inventory() {
   }
 
   useEffect(() => { fetchData(); }, []);
+
+  // Summary stats
+  const totalFilamentKg = filaments.reduce((acc, f) => acc + f.stock_kg, 0);
+  const totalFilamentValue = filaments.reduce((acc, f) => acc + f.stock_kg * f.custo_kg, 0);
+  const lowStockFilaments = filaments.filter(f => f.stock_kg > 0 && f.stock_kg < 0.3).length;
+  const emptyFilaments = filaments.filter(f => f.stock_kg <= 0).length;
+  const totalPiecesInStock = pieces.reduce((acc, p) => acc + p.stock_quantity, 0);
 
   async function updateFilamentStockDirectly(id: string, newVal: number) {
     const { error } = await supabase.from("filaments").update({ stock_kg: newVal }).eq("id", id);
@@ -262,7 +296,6 @@ export default function Inventory() {
   function openStockEdit(piece: Piece) {
     setStockEditPiece(piece);
     if (piece.stock_by_color && Array.isArray(piece.stock_by_color) && piece.stock_by_color.length > 0) {
-      // Clona profundamente os objetos para não mutar o array original da peça
       setStockEditInputs(piece.stock_by_color.map(i => ({...i})));
     } else {
       setStockEditInputs([{ color: "", quantity: piece.stock_quantity || 1 }]);
@@ -273,7 +306,6 @@ export default function Inventory() {
   async function handleSavePieceStock() {
     if (!stockEditPiece) return;
     
-    // Filter out invalid ones, handle edge case if empty
     const validInputs = stockEditInputs.filter(i => i.quantity > 0 && i.color.trim() !== "");
     
     const aggregated: Record<string, number> = {};
@@ -326,15 +358,58 @@ export default function Inventory() {
         <p className="text-sm text-muted-foreground">Controle de filamentos e peças em estoque</p>
       </div>
 
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        <Card className="border-border/50">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Weight className="h-4 w-4 text-primary" />
+              <span className="text-xs text-muted-foreground font-medium">Total Filamento</span>
+            </div>
+            <p className="text-xl font-bold">{totalFilamentKg.toFixed(1)} <span className="text-sm font-normal text-muted-foreground">kg</span></p>
+          </CardContent>
+        </Card>
+        <Card className="border-border/50">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <TrendingDown className="h-4 w-4 text-yellow-500" />
+              <span className="text-xs text-muted-foreground font-medium">Estoque Baixo</span>
+            </div>
+            <p className="text-xl font-bold">{lowStockFilaments + emptyFilaments}</p>
+            {emptyFilaments > 0 && (
+              <p className="text-[10px] text-destructive">{emptyFilaments} vazio(s)</p>
+            )}
+          </CardContent>
+        </Card>
+        <Card className="border-border/50">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Boxes className="h-4 w-4 text-primary" />
+              <span className="text-xs text-muted-foreground font-medium">Peças Prontas</span>
+            </div>
+            <p className="text-xl font-bold">{totalPiecesInStock} <span className="text-sm font-normal text-muted-foreground">un</span></p>
+          </CardContent>
+        </Card>
+        <Card className="border-border/50">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Cylinder className="h-4 w-4 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground font-medium">Valor em Material</span>
+            </div>
+            <p className="text-xl font-bold">R$ {totalFilamentValue.toFixed(0)}</p>
+          </CardContent>
+        </Card>
+      </div>
+
       <Tabs defaultValue="filaments" className="space-y-4">
         <TabsList className="w-full sm:w-auto">
           <TabsTrigger value="filaments" className="gap-2">
             <Cylinder className="h-4 w-4" />
-            Filamentos
+            Filamentos ({filaments.length})
           </TabsTrigger>
           <TabsTrigger value="stock" className="gap-2">
             <Package className="h-4 w-4" />
-            Estoque de Peças
+            Peças ({pieces.length})
           </TabsTrigger>
         </TabsList>
 
@@ -396,16 +471,27 @@ export default function Inventory() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-3">
-              {filteredFilaments.map(fil => (
-                <FilamentRow
-                  key={fil.id}
-                  fil={fil}
-                  onUpdateStock={updateFilamentStockDirectly}
-                  onEdit={openEditFilament}
-                  onDelete={handleDeleteFilament}
-                />
-              ))}
+            <div className="grid gap-2">
+              {/* Show empty/low first */}
+              {filteredFilaments
+                .sort((a, b) => {
+                  const aEmpty = a.stock_kg <= 0;
+                  const bEmpty = b.stock_kg <= 0;
+                  const aLow = a.stock_kg > 0 && a.stock_kg < 0.3;
+                  const bLow = b.stock_kg > 0 && b.stock_kg < 0.3;
+                  if (aEmpty !== bEmpty) return aEmpty ? -1 : 1;
+                  if (aLow !== bLow) return aLow ? -1 : 1;
+                  return (a.color || "").localeCompare(b.color || "");
+                })
+                .map(fil => (
+                  <FilamentRow
+                    key={fil.id}
+                    fil={fil}
+                    onUpdateStock={updateFilamentStockDirectly}
+                    onEdit={openEditFilament}
+                    onDelete={handleDeleteFilament}
+                  />
+                ))}
             </div>
           )}
         </TabsContent>
@@ -464,7 +550,7 @@ export default function Inventory() {
                           className="text-center px-1"
                         />
                       </div>
-                      <div style={{ width: '36px', flexShrink: 0, paddingBottom: idx === 0 ? '0' : '0' }}>
+                      <div style={{ width: '36px', flexShrink: 0 }}>
                         <Button 
                           variant="ghost" 
                           size="icon" 
@@ -505,7 +591,7 @@ export default function Inventory() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-3">
+            <div className="grid gap-2">
               {filteredPieces.map(piece => {
                 const isComplex = piece.stock_by_color && Array.isArray(piece.stock_by_color) && piece.stock_by_color.length > 0;
                 
@@ -528,8 +614,12 @@ export default function Inventory() {
                         <p className="font-medium truncate">{piece.name}</p>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {isComplex ? piece.stock_by_color!.map((item: any, i) => (
-                            <Badge key={i} variant="outline" className="text-[10px] py-0 px-1.5 font-normal bg-card">
-                              {item.color}: <strong className="ml-1">{item.quantity}</strong>
+                            <Badge key={i} variant="outline" className="text-[10px] py-0 px-1.5 font-normal bg-card gap-1">
+                              <span
+                                className="h-2 w-2 rounded-full border border-black/10 shrink-0"
+                                style={{ backgroundColor: getColorHex(item.color) }}
+                              />
+                              {item.color}: <strong className="ml-0.5">{item.quantity}</strong>
                             </Badge>
                           )) : (
                             <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-normal bg-card text-muted-foreground">
@@ -539,9 +629,6 @@ export default function Inventory() {
                         </div>
                       </div>
                     </div>
-                    {/* Botões rápidos apenas aparecem ou fazem sentido se não for estoque por cor. 
-                        No entanto, se tiver cores, clicar no lixo deve apenas apagar. E em vez de botões,
-                        incentivamos o clique no cartão indicando que é editável. */}
                     <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                        {!isComplex && (
                          <>
@@ -554,7 +641,6 @@ export default function Inventory() {
                           </Button>
                          </>
                        )}
-                       {/* O número total foi removido para itens fechados por cor, a pedido do usuário */}
                        <Button variant="ghost" size="icon" className="h-8 w-8 ml-2 hover:bg-muted" onClick={() => openStockEdit(piece)} title="Editar Cores">
                          <Pencil className="h-4 w-4" />
                        </Button>

@@ -26,7 +26,7 @@ interface Piece {
   reference_names?: string[] | null;
 }
 
-const STORES = ["Loja 1", "Loja 2", "Loja 3"];
+
 
 export default function Catalog() {
   const [pieces, setPieces] = useState<Piece[]>([]);
@@ -175,7 +175,7 @@ export default function Catalog() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas lojas</SelectItem>
-            {STORES.map((store) => (
+            {stores.map((store) => (
               <SelectItem key={store} value={store}>{store}</SelectItem>
             ))}
             <SelectItem value="none">Sem loja</SelectItem>
@@ -204,19 +204,6 @@ export default function Catalog() {
               </div>
             </SelectItem>
             <SelectItem value="false">Fora do Ar</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={filterStore} onValueChange={setFilterStore}>
-          <SelectTrigger className="w-full sm:w-[170px] h-9 text-sm">
-            <SelectValue placeholder="Loja / Conta" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas as lojas</SelectItem>
-            {stores.map((store) => (
-              <SelectItem key={store} value={store}>
-                {store}
-              </SelectItem>
-            ))}
           </SelectContent>
         </Select>
       </div>
@@ -314,7 +301,7 @@ export default function Catalog() {
                       </button>
                     </PopoverTrigger>
                     <PopoverContent className="w-36 p-1.5" align="start">
-                      {STORES.map((store) => {
+                      {stores.map((store) => {
                         const isActive = piece.stores?.includes(store);
                         return (
                           <button
