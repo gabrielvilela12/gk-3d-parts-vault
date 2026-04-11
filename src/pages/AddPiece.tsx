@@ -482,7 +482,7 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
       } else {
         const { data: insertedPiece, error: insertError } = await supabase.from("pieces").insert({
           ...pieceData, width: null, height: null, depth: null,
-        }).select().single();
+        } as any).select().single();
         if (insertError) throw insertError;
 
         if (priceVariations.length > 0 && insertedPiece) {
