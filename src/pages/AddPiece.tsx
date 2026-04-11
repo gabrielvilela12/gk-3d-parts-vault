@@ -460,7 +460,7 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
       }
 
       if (isEditMode && id) {
-        const { error: updateError } = await supabase.from("pieces").update(pieceData).eq("id", id);
+        const { error: updateError } = await supabase.from("pieces").update(pieceData as any).eq("id", id);
         if (updateError) throw updateError;
 
         await supabase.from("piece_price_variations" as any).delete().eq("piece_id", id);
