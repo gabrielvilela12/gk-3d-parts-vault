@@ -660,7 +660,7 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
               </datalist>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="referenceNames">Nomes de Referência para Importação</Label>
+              <Label htmlFor="referenceNames">Nomes alternativos / referências</Label>
               <Textarea
                 id="referenceNames"
                 value={formData.referenceNames}
@@ -671,7 +671,7 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
                 className="min-h-[120px]"
               />
               <p className="text-xs text-muted-foreground">
-                Use este campo para salvar títulos alternativos que chegam dos marketplaces ou das lojas.
+                Salve aqui os outros nomes da mesma peça para facilitar busca, importação e identificação nos marketplaces.
               </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

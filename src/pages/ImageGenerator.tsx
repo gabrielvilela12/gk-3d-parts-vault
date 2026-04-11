@@ -87,6 +87,36 @@ interface ShopeeText {
   keywords: string[];
 }
 
+const parseReferenceNames = (value: string) => {
+  const seen = new Set<string>();
+
+  return value
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0)
+    .filter((item) => {
+      const key = item.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+};
+
+const formatReferenceNamesDraft = (values: Array<string | null | undefined>) => {
+  const seen = new Set<string>();
+
+  return values
+    .map((value) => value?.trim() || "")
+    .filter((value) => value.length > 0)
+    .filter((value) => {
+      const key = value.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .join("\n");
+};
+
 export default function ImageGenerator() {
   const { toast } = useToast();
   const isMobile = useIsMobile();
@@ -131,6 +161,7 @@ export default function ImageGenerator() {
   const [showCatalogDialog, setShowCatalogDialog] = useState(false);
   const [isAddingToCatalog, setIsAddingToCatalog] = useState(false);
   const [selectedStores, setSelectedStores] = useState<string[]>([]);
+  const [catalogReferenceNames, setCatalogReferenceNames] = useState("");
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const startCooldown = useCallback((seconds: number) => {
@@ -459,6 +490,7 @@ export default function ImageGenerator() {
         peso_g: parseFloat(packageWeight?.replace(',', '.') || '150') * 1000,
         tempo_impressao_min: parseInt(printTimeMin || '60'),
         image_url: payloadImages[0],
+        reference_names: parseReferenceNames(catalogReferenceNames),
         stores: selectedStores.length > 0 ? selectedStores : null,
         category: "Decoração",
         user_id: userAuth.user?.id || "",
@@ -467,6 +499,8 @@ export default function ImageGenerator() {
       if (error) throw error;
 
       toast({ title: "Peça Adicionada!", description: "A peça já está disponível no seu catálogo principal." });
+      setCatalogReferenceNames("");
+      setSelectedStores([]);
       setShowCatalogDialog(false);
     } catch (e: any) {
       toast({ 
@@ -720,6 +754,14 @@ export default function ImageGenerator() {
     if (resultFilter === "all") return true;
     return img.type === resultFilter;
   });
+
+  const openCatalogDialog = () => {
+    setSelectedStores([]);
+    setCatalogReferenceNames(
+      formatReferenceNamesDraft([shopeeText?.title, productName]),
+    );
+    setShowCatalogDialog(true);
+  };
 
   const recolorResults = generatedImages.filter((i) => i.type === "recolor").length;
   const marketingResults = generatedImages.filter((i) => i.type === "marketing").length;
@@ -1377,7 +1419,7 @@ export default function ImageGenerator() {
                           size="sm"
                           variant="default"
                           className="gap-1.5"
-                          onClick={() => setShowCatalogDialog(true)}
+                          onClick={openCatalogDialog}
                         >
                           <Briefcase className="h-3.5 w-3.5" /> Adicionar ao Catálogo
                         </Button>
@@ -1575,6 +1617,19 @@ export default function ImageGenerator() {
             <p className="text-sm text-muted-foreground">
               A peça será criada com o Peso ({packageWeight}kg), Tempo ({printTimeMin} min) e a foto de ambiente principal.
             </p>
+            <div className="space-y-2">
+              <Label htmlFor="catalogReferenceNames">Nomes alternativos / referências</Label>
+              <Textarea
+                id="catalogReferenceNames"
+                value={catalogReferenceNames}
+                onChange={(e) => setCatalogReferenceNames(e.target.value)}
+                placeholder={"Um nome por linha.\nEx: Nome simples da peça\nEx: Título maior do marketplace"}
+                className="min-h-[100px]"
+              />
+              <p className="text-xs text-muted-foreground">
+                Use esse campo quando a mesma peça aparece com nomes diferentes nas lojas ou nos marketplaces.
+              </p>
+            </div>
             <div className="space-y-3">
               <Label>Marque as Lojas para Integração:</Label>
               <div className="grid grid-cols-1 gap-2">
