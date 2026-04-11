@@ -171,7 +171,7 @@ export default function Catalog() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas lojas</SelectItem>
-            {STORES.map((store) => (
+            {stores.map((store) => (
               <SelectItem key={store} value={store}>{store}</SelectItem>
             ))}
             <SelectItem value="none">Sem loja</SelectItem>
@@ -310,7 +310,7 @@ export default function Catalog() {
                       </button>
                     </PopoverTrigger>
                     <PopoverContent className="w-36 p-1.5" align="start">
-                      {STORES.map((store) => {
+                      {stores.map((store) => {
                         const isActive = piece.stores?.includes(store);
                         return (
                           <button
