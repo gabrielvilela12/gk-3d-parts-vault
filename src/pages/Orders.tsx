@@ -107,6 +107,7 @@ interface Piece {
   preco_venda: number | null;
   tempo_impressao_min: number | null;
   image_url: string | null;
+  peso_g: number | null;
 }
 
 interface PrinterItem {
