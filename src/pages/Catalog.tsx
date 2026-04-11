@@ -25,7 +25,7 @@ interface Piece {
   stores?: string[];
 }
 
-const STORES = ["Loja 1", "Loja 2", "Loja 3"];
+
 
 export default function Catalog() {
   const [pieces, setPieces] = useState<Piece[]>([]);
