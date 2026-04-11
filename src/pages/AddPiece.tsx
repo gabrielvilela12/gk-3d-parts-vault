@@ -409,8 +409,8 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não autenticado");
 
-      let stlUrl = existingFiles.stl_url;
-      let imageUrl = existingFiles.image_url;
+      let stlUrl: string | null | undefined = undefined;
+      let imageUrl: string | null | undefined = undefined;
 
       if (stlFile) {
         const stlPath = `${user.id}/${Date.now()}-${stlFile.name}`;
@@ -428,13 +428,11 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
         imageUrl = imageData.publicUrl;
       }
 
-      const pieceData = {
+      const pieceData: Record<string, any> = {
         user_id: user.id,
         name: formData.name,
         material: formData.material,
         category: formData.category || null,
-        stl_url: stlUrl,
-        image_url: imageUrl,
         notes: formData.notes,
         cost: costs.custoUnitario,
         peso_g: parseFloat(formData.pesoEstimadoG) || null,
@@ -446,7 +444,20 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
         makerworld_url: formData.makerworldUrl || null,
         custo_acessorios: costs.custoAcessorios || null,
         stores: formData.stores,
-      } as any;
+      };
+
+      // Only include file URLs if a new file was uploaded or we're creating a new piece
+      if (stlUrl !== undefined) {
+        pieceData.stl_url = stlUrl;
+      } else if (!isEditMode) {
+        pieceData.stl_url = existingFiles.stl_url;
+      }
+
+      if (imageUrl !== undefined) {
+        pieceData.image_url = imageUrl;
+      } else if (!isEditMode) {
+        pieceData.image_url = existingFiles.image_url;
+      }
 
       if (isEditMode && id) {
         const { error: updateError } = await supabase.from("pieces").update(pieceData).eq("id", id);
