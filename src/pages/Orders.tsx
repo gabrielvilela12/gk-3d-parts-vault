@@ -1184,6 +1184,9 @@ export default function Orders() {
           },
           { title: "Pedido marcado como feito" },
         );
+
+        // Auto-deduct filament stock based on piece weight and order color
+        await deductFilamentStock(order);
         return;
       }
 
