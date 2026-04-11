@@ -52,6 +52,8 @@ import { useToast } from "@/hooks/use-toast";
 
 interface ImportRow {
   platformOrderId: string;
+  platformName: string;
+  storeName: string;
   productName: string;
   variation: string;
   color: string;
@@ -100,6 +102,7 @@ interface Order {
 interface Piece {
   id: string;
   name: string;
+  reference_names?: string[] | null;
   cost: number | null;
   custo_material: number | null;
   custo_energia: number | null;
@@ -147,6 +150,22 @@ const PRINTER_MIGRATION_NAME = "20260401110000_add_printers_and_order_assignment
 const ORDER_STATUS_MIGRATION_NAME = "20260401123000_add_order_printing_status.sql";
 const ORDER_COST_SNAPSHOT_MIGRATION_NAME = "20260401170000_add_order_cost_snapshots.sql";
 const FEATURE_MIGRATION_HELP = `Aplique as migrations ${PRINTER_MIGRATION_NAME}, ${ORDER_STATUS_MIGRATION_NAME} e ${ORDER_COST_SNAPSHOT_MIGRATION_NAME} no Supabase.`;
+const ORDER_NOTE_STORE_LABEL = "Loja:";
+const ORDER_NOTE_PLATFORM_LABEL = "Canal:";
+const ORDER_NOTE_BUYER_LABEL = "Obs:";
+
+const PRINTER_COLORS = [
+  "#3b82f6",
+  "#10b981",
+  "#f59e0b",
+  "#ef4444",
+  "#8b5cf6",
+  "#06b6d4",
+  "#f97316",
+  "#ec4899",
+];
+
+const getPrinterColor = (index: number) => PRINTER_COLORS[index % PRINTER_COLORS.length];
 
 const getPrinterKey = (printerId: string | null) => printerId ?? UNASSIGNED_PRINTER_KEY;
 
@@ -321,6 +340,50 @@ const parseDateTimeLocalValue = (value: string) => {
   return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
 };
 
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const extractNoteTagValue = (notes: string | null | undefined, label: string) => {
+  if (!notes) return null;
+
+  const match = notes.match(new RegExp(`${escapeRegExp(label)}\\s*([^|]+)`, "i"));
+  return match?.[1]?.trim() || null;
+};
+
+const buildOrderNotes = ({
+  platformOrderId,
+  platformName,
+  storeName,
+  buyerNotes,
+}: {
+  platformOrderId: string;
+  platformName?: string | null;
+  storeName?: string | null;
+  buyerNotes?: string | null;
+}) => {
+  const parts = [platformOrderId.trim() || null];
+
+  if (storeName?.trim()) {
+    parts.push(`${ORDER_NOTE_STORE_LABEL} ${storeName.trim()}`);
+  }
+
+  if (platformName?.trim()) {
+    parts.push(`${ORDER_NOTE_PLATFORM_LABEL} ${platformName.trim()}`);
+  }
+
+  if (buyerNotes?.trim()) {
+    parts.push(`${ORDER_NOTE_BUYER_LABEL} ${buyerNotes.trim()}`);
+  }
+
+  const normalizedParts = parts.filter(Boolean);
+  return normalizedParts.length > 0 ? normalizedParts.join(" | ") : null;
+};
+
+const getOrderStoreName = (order: Pick<Order, "notes">) =>
+  extractNoteTagValue(order.notes, ORDER_NOTE_STORE_LABEL);
+
+const getOrderPlatformName = (order: Pick<Order, "notes">) =>
+  extractNoteTagValue(order.notes, ORDER_NOTE_PLATFORM_LABEL);
+
 const normalizeSpreadsheetHeader = (value: string) =>
   value
     .toLowerCase()
@@ -391,6 +454,7 @@ export default function Orders() {
   const [isPrinterDialogOpen, setIsPrinterDialogOpen] = useState(false);
   const [isSavingPrinter, setIsSavingPrinter] = useState(false);
   const [isPersistingQueue, setIsPersistingQueue] = useState(false);
+  const [expandedStartEditorOrderId, setExpandedStartEditorOrderId] = useState<string | null>(null);
   const [editingStartTimes, setEditingStartTimes] = useState<Record<string, string>>({});
   const [savingStartOrderId, setSavingStartOrderId] = useState<string | null>(null);
   const [newPrinter, setNewPrinter] = useState({ name: "", description: "" });
@@ -401,14 +465,13 @@ export default function Orders() {
   const [dragOverOrderId, setDragOverOrderId] = useState<string | null>(null);
   const [dragOverPrinterKey, setDragOverPrinterKey] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>("all");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isAutoCompletingRef = useRef(false);
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const canUsePrinterFeatures = printerSchemaReady;
   const canUseProductionFlow = printerSchemaReady && orderStatusSchemaReady;
-  const queuePrinterSelectClassName = isMobile ? "h-9 w-full text-xs" : "h-7 w-[190px] text-xs";
-  const queueStatusSelectClassName = isMobile ? "h-9 w-full text-xs" : "h-7 w-[150px] text-xs";
   const doneStatusSelectClassName = isMobile ? "h-9 w-full text-xs" : "h-7 w-[130px] text-xs";
   const showSchemaWarningToast = () =>
     toast({
@@ -445,9 +508,7 @@ export default function Orders() {
           .order("created_at", { ascending: true }),
         supabase
           .from("pieces")
-          .select(
-            "id, name, cost, custo_material, custo_energia, custo_acessorios, preco_venda, tempo_impressao_min, image_url",
-          )
+          .select("*")
           .eq("user_id", user.id)
           .order("name", { ascending: true }),
         supabase
@@ -542,19 +603,48 @@ export default function Orders() {
       .replace(/\s+/g, " ")
       .trim();
 
+  const getPieceReferenceNames = (piece: Piece) => {
+    const seen = new Set<string>();
+
+    return [piece.name, ...(piece.reference_names ?? [])]
+      .map((value) => value?.trim() ?? "")
+      .filter((value) => value.length > 0)
+      .filter((value) => {
+        const key = normalizeText(value);
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  };
+
   const findBestMatch = (productName: string, activePieces: Piece[] = pieces): Piece | null => {
     const normalized = normalizeText(productName);
-    const exactMatch = activePieces.find((piece) => normalizeText(piece.name) === normalized);
+    const exactMatch = activePieces.find((piece) =>
+      getPieceReferenceNames(piece).some((referenceName) => normalizeText(referenceName) === normalized),
+    );
     if (exactMatch) return exactMatch;
 
-    const containMatches = activePieces.filter((piece) => {
-      const normalizedPiece = normalizeText(piece.name);
-      return normalized.includes(normalizedPiece) || normalizedPiece.includes(normalized);
-    });
+    const containMatches = activePieces
+      .map((piece) => {
+        const matchLengths = getPieceReferenceNames(piece)
+          .map((referenceName) => normalizeText(referenceName))
+          .filter(
+            (normalizedReferenceName) =>
+              normalized.includes(normalizedReferenceName) ||
+              normalizedReferenceName.includes(normalized),
+          )
+          .map((normalizedReferenceName) => normalizedReferenceName.length);
 
-    if (containMatches.length === 1) return containMatches[0];
+        return {
+          piece,
+          bestLength: matchLengths.length > 0 ? Math.max(...matchLengths) : 0,
+        };
+      })
+      .filter((entry) => entry.bestLength > 0);
+
+    if (containMatches.length === 1) return containMatches[0].piece;
     if (containMatches.length > 1) {
-      return containMatches.sort((left, right) => right.name.length - left.name.length)[0];
+      return containMatches.sort((left, right) => right.bestLength - left.bestLength)[0].piece;
     }
 
     const words = normalized.split(/\s+/).filter((word) => word.length >= 3);
@@ -562,19 +652,27 @@ export default function Orders() {
     let bestPiece: Piece | null = null;
 
     for (const piece of activePieces) {
-      const normalizedPiece = normalizeText(piece.name);
-      const pieceWords = normalizedPiece.split(/\s+/).filter((word) => word.length >= 3);
-      const productInPiece = words.filter((word) => normalizedPiece.includes(word)).length;
-      const pieceInProduct = pieceWords.filter((word) => normalized.includes(word)).length;
-      const scoreForward = productInPiece / Math.max(words.length, 1);
-      const scoreReverse = pieceInProduct / Math.max(pieceWords.length, 1);
-      const score =
-        scoreForward + scoreReverse > 0
-          ? (2 * scoreForward * scoreReverse) / (scoreForward + scoreReverse)
-          : 0;
+      let pieceBestScore = 0;
 
-      if (score > bestScore && score >= 0.5) {
-        bestScore = score;
+      for (const referenceName of getPieceReferenceNames(piece)) {
+        const normalizedReferenceName = normalizeText(referenceName);
+        const pieceWords = normalizedReferenceName.split(/\s+/).filter((word) => word.length >= 3);
+        const productInPiece = words.filter((word) => normalizedReferenceName.includes(word)).length;
+        const pieceInProduct = pieceWords.filter((word) => normalized.includes(word)).length;
+        const scoreForward = productInPiece / Math.max(words.length, 1);
+        const scoreReverse = pieceInProduct / Math.max(pieceWords.length, 1);
+        const score =
+          scoreForward + scoreReverse > 0
+            ? (2 * scoreForward * scoreReverse) / (scoreForward + scoreReverse)
+            : 0;
+
+        if (score > pieceBestScore) {
+          pieceBestScore = score;
+        }
+      }
+
+      if (pieceBestScore > bestScore && pieceBestScore >= 0.5) {
+        bestScore = pieceBestScore;
         bestPiece = piece;
       }
     }
@@ -600,9 +698,7 @@ export default function Orders() {
       if (user) {
         const { data } = await supabase
           .from("pieces")
-          .select(
-            "id, name, cost, custo_material, custo_energia, custo_acessorios, preco_venda, tempo_impressao_min, image_url",
-          )
+          .select("*")
           .eq("user_id", user.id)
           .order("name", { ascending: true });
 
@@ -726,6 +822,10 @@ export default function Orders() {
             "Numero de Pedido da Plataforma",
           ]) || "",
         ).trim();
+        const platformName = String(getSpreadsheetCellValue(rowMap, ["Plataformas"]) || "").trim();
+        const storeName = String(
+          getSpreadsheetCellValue(rowMap, ["Nome da Loja no UpSeller", "Nome da Loja"]) || "",
+        ).trim();
         const buyerNotes = String(getSpreadsheetCellValue(rowMap, ["Notas do Comprador"]) || "");
         const shopeeImageUrl = String(
           getSpreadsheetCellValue(rowMap, ["Link da Imagem"]) || "",
@@ -733,6 +833,8 @@ export default function Orders() {
 
         parsed.push({
           platformOrderId,
+          platformName,
+          storeName,
           productName,
           variation,
           color: colorPart,
@@ -778,11 +880,15 @@ export default function Orders() {
         const platformOrderId = String(
           row["Nº de Pedido da Plataforma"] || row["N° de Pedido da Plataforma"] || "",
         );
+        const platformName = String(row["Plataformas"] || "");
+        const storeName = String(row["Nome da Loja no UpSeller"] || row["Nome da Loja"] || "");
         const buyerNotes = String(row["Notas do Comprador"] || "");
         const shopeeImageUrl = String(row["Link da Imagem"] || "").replace(/\\/g, "");
 
         parsed.push({
           platformOrderId,
+          platformName,
+          storeName,
           productName,
           variation,
           color: colorPart,
@@ -834,7 +940,13 @@ export default function Orders() {
       const consolidatedMap = new Map<string, ImportRow>();
 
       for (const row of matchedRows) {
-        const key = `${row.platformOrderId}::${row.matchedPieceId}::${row.color}`;
+        const key = [
+          row.platformOrderId,
+          row.platformName,
+          row.storeName,
+          row.matchedPieceId,
+          row.color,
+        ].join("::");
         const existing = consolidatedMap.get(key);
 
         if (existing) {
@@ -859,7 +971,33 @@ export default function Orders() {
             return false;
           }
 
-          return (order.platform_order_id || "") === orderKey || (order.notes || "").includes(orderKey);
+          const sameOrderKey =
+            (order.platform_order_id || "") === orderKey || (order.notes || "").includes(orderKey);
+
+          if (!sameOrderKey) {
+            return false;
+          }
+
+          const currentStoreName = getOrderStoreName(order);
+          const currentPlatformName = getOrderPlatformName(order);
+
+          if (
+            row.storeName &&
+            currentStoreName &&
+            normalizeText(currentStoreName) !== normalizeText(row.storeName)
+          ) {
+            return false;
+          }
+
+          if (
+            row.platformName &&
+            currentPlatformName &&
+            normalizeText(currentPlatformName) !== normalizeText(row.platformName)
+          ) {
+            return false;
+          }
+
+          return true;
         });
       });
 
@@ -886,7 +1024,12 @@ export default function Orders() {
           piece_id: row.matchedPieceId!,
           quantity: row.quantity,
           color: row.color || null,
-          notes: row.buyerNotes ? `${row.platformOrderId} - ${row.buyerNotes}` : row.platformOrderId || null,
+          notes: buildOrderNotes({
+            platformOrderId: row.platformOrderId,
+            platformName: row.platformName,
+            storeName: row.storeName,
+            buyerNotes: row.buyerNotes,
+          }),
           platform_order_id: row.platformOrderId || null,
           source_product_name: row.productName || piece?.name || null,
           snapshot_unit_cost: snapshotUnitCost,
@@ -1268,6 +1411,10 @@ export default function Orders() {
         description: `Fim recalculado para ${formatHour(expectedFinishAt)}.`,
       });
 
+      setExpandedStartEditorOrderId((currentOrderId) =>
+        currentOrderId === order.id ? null : currentOrderId,
+      );
+
       await fetchData();
     } catch (error) {
       console.error("Error updating order start time:", error);
@@ -1452,6 +1599,8 @@ export default function Orders() {
         order.pieces.name,
         order.source_product_name || "",
         order.platform_order_id || "",
+        getOrderStoreName(order) || "",
+        getOrderPlatformName(order) || "",
         order.piece_price_variations?.variation_name || "",
         order.notes || "",
       ];
@@ -1521,11 +1670,6 @@ export default function Orders() {
   const totalQueueMin = useMemo(
     () => queue.reduce((total, order) => total + getRemainingPrintTimeMin(order), 0),
     [queue],
-  );
-
-  const filteredQueueMin = useMemo(
-    () => filteredQueue.reduce((total, order) => total + getRemainingPrintTimeMin(order), 0),
-    [filteredQueue],
   );
 
   const printerStatsMap = useMemo(() => {
@@ -1695,19 +1839,22 @@ export default function Orders() {
     return timeMap;
   }, [now, queueSections]);
 
-  const hasQueueVisible = useMemo(
-    () => queueSections.some((section) => section.orders.length > 0),
-    [queueSections],
-  );
-
-  const activeQueueSections = useMemo(
-    () => queueSections.filter((section) => section.orders.length > 0).length,
-    [queueSections],
-  );
-
   const canReorderQueue =
     canUsePrinterFeatures && filterColor === "all" && !filterSearch.trim() && !isPersistingQueue;
   const unassignedQueueCount = printerStatsMap.get(UNASSIGNED_PRINTER_KEY)?.count || 0;
+
+  useEffect(() => {
+    if (activeTab === "all") return;
+    if (activeTab === UNASSIGNED_PRINTER_KEY) {
+      if (unassignedQueueCount === 0) {
+        setActiveTab("all");
+      }
+      return;
+    }
+    if (!printers.some((printer) => printer.id === activeTab)) {
+      setActiveTab("all");
+    }
+  }, [activeTab, printers, unassignedQueueCount]);
 
   const handleDragStart = (order: Order) => {
     if (!canReorderQueue || !isOrderPending(order)) return;
@@ -1837,21 +1984,25 @@ export default function Orders() {
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {printers.map((printer) => {
+                      {printers.map((printer, printerIdx) => {
                         const stats = printerStatsMap.get(printer.id) || {
                           count: 0,
                           totalMin: 0,
                           printingCount: 0,
                           busyUntil: null,
                         };
+                        const printerColor = getPrinterColor(printerIdx);
 
                         return (
                           <div
                             key={printer.id}
                             className="flex items-start gap-3 rounded-lg border bg-muted/20 p-3"
                           >
-                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">
-                              <Printer className="h-4 w-4" />
+                            <div className="flex h-10 w-10 items-center justify-center rounded-lg border bg-background shrink-0">
+                              <span
+                                className="h-3 w-3 rounded-full"
+                                style={{ backgroundColor: printerColor }}
+                              />
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
@@ -1992,6 +2143,16 @@ export default function Orders() {
                             </div>
                           )}
                           <div className="flex gap-2 flex-wrap">
+                            {row.storeName ? (
+                              <Badge variant="outline" className="text-[10px]">
+                                Loja: {row.storeName}
+                              </Badge>
+                            ) : null}
+                            {row.platformName ? (
+                              <Badge variant="secondary" className="text-[10px]">
+                                {row.platformName}
+                              </Badge>
+                            ) : null}
                             {row.color ? <ColorBadge color={row.color} /> : null}
                             {row.variation && row.variation !== row.color ? (
                               <Badge variant="outline" className="text-[10px]">
@@ -2116,360 +2277,674 @@ export default function Orders() {
         </div>
       </div>
 
-      {filterStatus !== "done" && filteredQueue.length > 0 ? (
-        <div className="mb-4 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
-          <Card className="p-3">
-            <div className="text-xs text-muted-foreground">Pendentes</div>
-            <div className="text-lg font-bold">{filteredQueue.filter((order) => isOrderPending(order)).length}</div>
-          </Card>
-          <Card className="p-3">
-            <div className="text-xs text-muted-foreground">Fazendo agora</div>
-            <div className="text-lg font-bold text-primary">
-              {filteredQueue.filter((order) => isOrderPrinting(order)).length}
-            </div>
-          </Card>
-          <Card className="p-3">
-            <div className="text-xs text-muted-foreground">Tempo restante</div>
-            <div className="text-lg font-bold">{formatTime(filteredQueueMin)}</div>
-          </Card>
-          <Card className="p-3">
-            <div className="text-xs text-muted-foreground">Filas ativas</div>
-            <div className="text-lg font-bold">{activeQueueSections}</div>
-          </Card>
-        </div>
-      ) : null}
-
       {filterStatus !== "done" ? (
         <div className="mb-8">
-          <div className="flex flex-col gap-1 mb-3">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-              <Timer className="h-5 w-5 text-primary" />
-              Fila por impressora ({filteredQueue.length})
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              Arraste os cards para mudar a ordem da fila ou mover entre impressoras.
-              O seletor da linha tambem pode redirecionar o pedido e trocar entre pendente, fazendo e feito.
-            </p>
-            {!canReorderQueue ? (
-              <p className="text-xs text-amber-600">
-                Limpe a busca e o filtro de cor para arrastar a fila com o mouse.
-              </p>
-            ) : null}
-          </div>
 
-          {!hasQueueVisible ? (
-            <Card>
-              <CardContent className="py-12 text-center text-muted-foreground">
-                <Package className="h-10 w-10 mx-auto mb-3 opacity-40" />
-                <p>Nenhum pedido na fila.</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {queueSections.map((section) => {
-                const printerKey = getPrinterKey(section.printerId);
+          {/* ── Tab navigation ─────────────────────────────────────── */}
+          <div className="mb-0 flex items-end gap-0 overflow-x-auto border-b border-border pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
 
-                return (
-                  <Card
-                    key={printerKey}
-                    className={`overflow-hidden transition-colors ${
-                      dragOverPrinterKey === printerKey && !dragOverOrderId ? "ring-2 ring-primary/50" : ""
+            {/* Todas */}
+            {(() => {
+              const isActive = activeTab === "all";
+              return (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("all")}
+                  className={`relative flex items-center gap-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors shrink-0 ${
+                    isActive
+                      ? "text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Todas
+                  <span
+                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                      isActive
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground"
                     }`}
                   >
-                    <CardHeader className="py-3 px-3 sm:px-4 bg-muted/40 border-b">
-                      <div className="flex items-start gap-2 sm:items-center">
-                        <Printer className="h-4 w-4 text-primary" />
-                        <div className="flex flex-1 flex-col gap-2 min-w-0">
-                          <span className="text-sm font-semibold">{section.title}</span>
-                          <div className="flex flex-wrap gap-1.5">
-                            <Badge variant="secondary" className="text-[10px]">
-                              {section.orders.length} {section.orders.length === 1 ? "item" : "itens"}
-                            </Badge>
-                            {section.printingCount > 0 ? (
-                              <Badge className="text-[10px]">Fazendo {section.printingCount}</Badge>
+                    {filteredQueue.length}
+                  </span>
+                  {isActive ? (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+                  ) : null}
+                </button>
+              );
+            })()}
+
+            {/* Per-printer tabs */}
+            {printers.map((printer, printerIdx) => {
+              const color = getPrinterColor(printerIdx);
+              const tabOrders = filteredQueue.filter(
+                (o) => o.printer_id === printer.id,
+              );
+              const printingNow = tabOrders.filter(isOrderPrinting).length;
+              const isActive = activeTab === printer.id;
+
+              return (
+                <button
+                  key={printer.id}
+                  type="button"
+                  onClick={() => setActiveTab(printer.id)}
+                  className={`relative flex items-center gap-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors shrink-0 ${
+                    isActive
+                      ? "text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <span
+                    className="h-2 w-2 rounded-full shrink-0"
+                    style={{ backgroundColor: color }}
+                  />
+                  {printer.name}
+                  <span
+                    className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                    style={
+                      isActive
+                        ? { backgroundColor: color, color: "#fff" }
+                        : { backgroundColor: "hsl(var(--muted))", color: "hsl(var(--muted-foreground))" }
+                    }
+                  >
+                    {tabOrders.length}
+                  </span>
+                  {printingNow > 0 ? (
+                    <span
+                      className="h-1.5 w-1.5 rounded-full animate-pulse shrink-0"
+                      style={{ backgroundColor: color }}
+                    />
+                  ) : null}
+                  {isActive ? (
+                    <span
+                      className="absolute bottom-0 left-0 right-0 h-0.5"
+                      style={{ backgroundColor: color }}
+                    />
+                  ) : null}
+                </button>
+              );
+            })}
+
+            {unassignedQueueCount > 0 ? (
+              (() => {
+                const isActive = activeTab === UNASSIGNED_PRINTER_KEY;
+                return (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab(UNASSIGNED_PRINTER_KEY)}
+                    className={`relative flex items-center gap-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors shrink-0 ${
+                      isActive
+                        ? "text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <span className="h-2 w-2 rounded-full shrink-0 bg-amber-500" />
+                    Sem impressora
+                    <span
+                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                        isActive
+                          ? "bg-amber-500 text-white"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {unassignedQueueCount}
+                    </span>
+                    {isActive ? (
+                      <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-500" />
+                    ) : null}
+                  </button>
+                );
+              })()
+            ) : null}
+
+            {/* Add printer — inline in tab bar */}
+            <button
+              type="button"
+              disabled={!canUsePrinterFeatures}
+              onClick={() => setIsPrinterDialogOpen(true)}
+              className="ml-auto flex items-center gap-1.5 rounded-md px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground shrink-0 disabled:cursor-not-allowed disabled:opacity-40"
+              title={!canUsePrinterFeatures ? FEATURE_MIGRATION_HELP : "Gerenciar impressoras"}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Nova impressora</span>
+            </button>
+          </div>
+
+          {/* ── Tab content ────────────────────────────────────────── */}
+          <div className="mt-4">
+
+            {/* Helper: render a single order row (used in all tabs) */}
+            {/* We use an IIFE-style section map instead of sub-component to keep handlers in scope */}
+
+            {(() => {
+              // Determine which orders to show for the active tab
+              const printerTabOrder = new Map(
+                printers.map((printer, index) => [printer.id, index] as const),
+              );
+              const tabOrders: Order[] =
+                activeTab === "all"
+                  ? [...filteredQueue].sort((left, right) => {
+                      const leftTabOrder =
+                        left.printer_id === null
+                          ? -1
+                          : printerTabOrder.get(left.printer_id) ?? Number.MAX_SAFE_INTEGER;
+                      const rightTabOrder =
+                        right.printer_id === null
+                          ? -1
+                          : printerTabOrder.get(right.printer_id) ?? Number.MAX_SAFE_INTEGER;
+
+                      if (leftTabOrder !== rightTabOrder) {
+                        return leftTabOrder - rightTabOrder;
+                      }
+
+                      return sortQueueOrders(left, right);
+                    })
+                  : activeTab === UNASSIGNED_PRINTER_KEY
+                    ? filteredQueue.filter((o) => o.printer_id === null)
+                  : filteredQueue.filter((o) => o.printer_id === activeTab);
+
+              // Color for active printer tab
+              const activePrinterIdx = printers.findIndex(
+                (p) => p.id === activeTab,
+              );
+              const tabColor =
+                activePrinterIdx >= 0
+                  ? getPrinterColor(activePrinterIdx)
+                  : undefined;
+
+              // Stats for active printer
+              const tabPrintingCount = tabOrders.filter(isOrderPrinting).length;
+              const tabPendingCount = tabOrders.filter(isOrderPending).length;
+              const tabUnassignedCount = tabOrders.filter((order) => order.printer_id === null).length;
+              const tabTotalMin = tabOrders.reduce(
+                (sum, o) => sum + getRemainingPrintTimeMin(o),
+                0,
+              );
+              const tabSection =
+                activeTab === "all"
+                  ? null
+                  : activeTab === UNASSIGNED_PRINTER_KEY
+                    ? queueSections.find((section) => section.printerId === null)
+                  : queueSections.find((section) => section.printerId === activeTab);
+              const tabBusyUntil = tabSection?.busyUntil ?? null;
+
+              if (tabOrders.length === 0) {
+                return (
+                  <div
+                    className="flex flex-col items-center justify-center py-16 text-muted-foreground rounded-xl border border-dashed"
+                    onDragOver={
+                      activeTab !== "all"
+                        ? (e) =>
+                            handleSectionDragOver(
+                              e,
+                              activeTab === UNASSIGNED_PRINTER_KEY ? null : activeTab,
+                            )
+                        : undefined
+                    }
+                    onDrop={
+                      activeTab !== "all"
+                        ? (e) =>
+                            handleSectionDrop(
+                              e,
+                              activeTab === UNASSIGNED_PRINTER_KEY ? null : activeTab,
+                            )
+                        : undefined
+                    }
+                  >
+                    <Package className="h-10 w-10 mb-3 opacity-30" />
+                    <p className="text-sm">
+                      {activeTab === "all"
+                        ? "Nenhum pedido na fila."
+                        : activeTab === UNASSIGNED_PRINTER_KEY
+                          ? "Nenhum pedido sem impressora."
+                        : "Nenhum pedido nesta impressora. Use a aba Todas para direcionar novos itens."}
+                    </p>
+                  </div>
+                );
+              }
+
+              return (
+                <div>
+                  {/* Tab stats bar */}
+                  <div className="flex flex-wrap items-center gap-3 mb-3 text-xs text-muted-foreground">
+                    {tabPrintingCount > 0 ? (
+                      <span className="flex items-center gap-1.5 font-medium text-primary">
+                        <span
+                          className="h-2 w-2 rounded-full animate-pulse bg-primary"
+                          style={tabColor ? { backgroundColor: tabColor } : {}}
+                        />
+                        Fazendo {tabPrintingCount}
+                      </span>
+                    ) : null}
+                    {tabPendingCount > 0 ? (
+                      <span>Pendentes: {tabPendingCount}</span>
+                    ) : null}
+                    {activeTab === "all" && tabUnassignedCount > 0 ? (
+                      <span className="text-amber-500">Sem impressora: {tabUnassignedCount}</span>
+                    ) : null}
+                    {tabTotalMin > 0 ? (
+                      <span className="flex items-center gap-1">
+                        <Timer className="h-3 w-3" />
+                        {formatTime(tabTotalMin)} restantes
+                      </span>
+                    ) : null}
+                    {tabBusyUntil ? (
+                      <span className="flex items-center gap-1">
+                        <CalendarClock className="h-3 w-3" />
+                        Livre ~{formatHour(tabBusyUntil)}
+                      </span>
+                    ) : null}
+                    {!canReorderQueue && activeTab !== "all" ? (
+                      <span className="text-amber-500">
+                        Limpe a busca e filtro de cor para arrastar.
+                      </span>
+                    ) : null}
+                  </div>
+
+                  {/* Order list */}
+                  <div
+                    className="space-y-1"
+                    onDragOver={
+                      activeTab !== "all"
+                        ? (e) =>
+                            handleSectionDragOver(
+                              e,
+                              activeTab === UNASSIGNED_PRINTER_KEY ? null : activeTab,
+                            )
+                        : undefined
+                    }
+                    onDrop={
+                      activeTab !== "all"
+                        ? (e) =>
+                            handleSectionDrop(
+                              e,
+                              activeTab === UNASSIGNED_PRINTER_KEY ? null : activeTab,
+                            )
+                        : undefined
+                    }
+                  >
+                    {tabOrders.map((order, orderIdx) => {
+                      const times = queueTimeMap.get(order.id);
+                      const totalMin = times?.totalMin ?? 0;
+                      const remainingMin = times?.remainingMin ?? 0;
+                      const startAt = times?.startAt ?? now;
+                      const finishAt = times?.finishAt ?? now;
+                      const orderStatus = getOrderStatus(order);
+                      const isPrintingRow = orderStatus === "printing";
+                      const isPendingRow = orderStatus === "pending";
+                      const platformId = getPlatformId(order);
+                      const storeName = getOrderStoreName(order);
+                      const platformName = getOrderPlatformName(order);
+                      const isStartEditorOpen = expandedStartEditorOrderId === order.id;
+                      const showSourceProductName =
+                        Boolean(order.source_product_name) &&
+                        normalizeText(order.source_product_name ?? "") !==
+                          normalizeText(order.pieces.name);
+
+                      // Printer label for "Todas" tab
+                      const assignedPrinter = printers.find(
+                        (p) => p.id === order.printer_id,
+                      );
+                      const assignedPrinterIdx = printers.findIndex(
+                        (p) => p.id === order.printer_id,
+                      );
+                      const assignedColor =
+                        assignedPrinterIdx >= 0
+                          ? getPrinterColor(assignedPrinterIdx)
+                          : "#f59e0b";
+
+                      const isBeingDragged = draggedOrderId === order.id;
+                      const isDragOver = dragOverOrderId === order.id;
+
+                      return (
+                        <div
+                          key={order.id}
+                          className={[
+                            "flex items-start gap-3 rounded-xl border px-3 py-2.5 transition-all",
+                            isPrintingRow
+                              ? "border-primary/30 bg-primary/5"
+                              : "border-border bg-card hover:bg-accent/20",
+                            isBeingDragged ? "opacity-40 scale-95" : "",
+                            isDragOver ? "border-t-2 border-primary" : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                          onDragOver={
+                            isPendingRow
+                              ? (e) => handleOrderDragOver(e, order)
+                              : undefined
+                          }
+                          onDrop={
+                            isPendingRow
+                              ? (e) => handleOrderDrop(e, order)
+                              : undefined
+                          }
+                        >
+                          {/* Drag handle — only in non-"Todas" tabs */}
+                          {activeTab !== "all" ? (
+                            <div
+                              draggable={canReorderQueue && isPendingRow}
+                              onDragStart={() => handleDragStart(order)}
+                              onDragEnd={handleDragEnd}
+                              className={`mt-0.5 flex h-8 w-5 shrink-0 items-center justify-center ${
+                                canReorderQueue && isPendingRow
+                                  ? "cursor-grab text-muted-foreground/50 hover:text-muted-foreground"
+                                  : "opacity-20 cursor-not-allowed"
+                              }`}
+                              title={
+                                canReorderQueue && isPendingRow
+                                  ? "Arraste para reordenar"
+                                  : isPrintingRow
+                                  ? "Em produção"
+                                  : "Limpe filtros para arrastar"
+                              }
+                            >
+                              <GripVertical className="h-4 w-4" />
+                            </div>
+                          ) : null}
+
+                          {/* Position number in printer tabs */}
+                          {activeTab !== "all" ? (
+                            <div className="flex h-8 w-6 shrink-0 items-center justify-center">
+                              <span className="text-[11px] font-bold text-muted-foreground/60 tabular-nums">
+                                {orderIdx + 1}
+                              </span>
+                            </div>
+                          ) : null}
+
+                          {/* Thumbnail */}
+                          {order.pieces.image_url ? (
+                            <img
+                              src={order.pieces.image_url}
+                              alt={order.pieces.name}
+                              className="h-11 w-11 rounded-lg object-cover shrink-0"
+                            />
+                          ) : (
+                            <div className="h-11 w-11 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                              <Package className="h-4 w-4 text-muted-foreground" />
+                            </div>
+                          )}
+
+                          {/* Main info */}
+                          <div className="flex-1 min-w-0 space-y-1.5">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium leading-snug break-words">
+                                  {order.pieces.name}
+                                </p>
+                                {showSourceProductName ? (
+                                  <p className="text-[11px] text-muted-foreground break-words">
+                                    {order.source_product_name}
+                                  </p>
+                                ) : null}
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                                onClick={() => void handleDeleteOrder(order.id)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2">
+                              {/* Printer badge — only in "Todas" tab */}
+                              {activeTab === "all" ? (
+                                <span
+                                  className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border"
+                                  style={
+                                    assignedColor
+                                      ? {
+                                          borderColor: assignedColor + "60",
+                                          backgroundColor: assignedColor + "15",
+                                          color: assignedColor,
+                                        }
+                                      : {}
+                                  }
+                                >
+                                  <span
+                                    className="h-1.5 w-1.5 rounded-full shrink-0"
+                                    style={{
+                                      backgroundColor:
+                                        assignedColor ?? "#9ca3af",
+                                    }}
+                                  />
+                                  {assignedPrinter?.name ?? "Sem impressora"}
+                                </span>
+                              ) : null}
+
+                              {/* Color badge */}
+                              {order.color ? (
+                                <ColorBadge
+                                  color={order.color}
+                                  className="text-[10px]"
+                                />
+                              ) : null}
+
+                              {storeName ? (
+                                <Badge variant="outline" className="text-[10px]">
+                                  Loja: {storeName}
+                                </Badge>
+                              ) : null}
+
+                              {platformName ? (
+                                <Badge variant="secondary" className="text-[10px]">
+                                  {platformName}
+                                </Badge>
+                              ) : null}
+
+                              {/* Quantity */}
+                              {order.quantity > 1 ? (
+                                <Badge
+                                  variant="secondary"
+                                  className="text-[10px]"
+                                >
+                                  ×{order.quantity}
+                                </Badge>
+                              ) : null}
+
+                              {/* Variation */}
+                              {order.piece_price_variations ? (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px]"
+                                >
+                                  {
+                                    order.piece_price_variations
+                                      .variation_name
+                                  }
+                                </Badge>
+                              ) : null}
+
+                              {/* Platform ID */}
+                              {platformId !== "sem-pedido" ? (
+                                <Badge
+                                  variant="secondary"
+                                  className="text-[10px] font-mono"
+                                >
+                                  {platformId}
+                                </Badge>
+                              ) : null}
+
+                              {/* Time */}
+                              <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                                <Clock className="h-3 w-3 shrink-0" />
+                                {isPrintingRow
+                                  ? `Resta ${formatTime(remainingMin)}`
+                                  : formatTime(totalMin)}
+                              </span>
+
+                              {/* Finish time */}
+                              <span className="flex items-center gap-1 text-[10px] text-primary">
+                                <CalendarClock className="h-3 w-3 shrink-0" />
+                                {isPrintingRow
+                                  ? `Termina ${formatHour(finishAt)}`
+                                  : `Prev. ${formatDateTime(finishAt)}`}
+                              </span>
+                            </div>
+
+                            {/* Start time editor for printing orders */}
+                            {isPrintingRow && isStartEditorOpen ? (
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-end rounded-lg border bg-muted/20 px-2.5 py-2 mt-1">
+                                <div className="flex-1 space-y-1">
+                                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                                    Ajustar início
+                                  </p>
+                                  <Input
+                                    type="datetime-local"
+                                    step={60}
+                                    value={
+                                      editingStartTimes[order.id] ??
+                                      toDateTimeLocalValue(
+                                        order.started_at || startAt,
+                                      )
+                                    }
+                                    onChange={(e) =>
+                                      handleStartTimeDraftChange(
+                                        order.id,
+                                        e.target.value,
+                                      )
+                                    }
+                                    className="h-8 text-xs"
+                                  />
+                                </div>
+                                <Button
+                                  size="sm"
+                                  className="h-8 gap-1.5"
+                                  disabled={savingStartOrderId === order.id}
+                                  onClick={() =>
+                                    void handleUpdateOrderStartTime(
+                                      order,
+                                      editingStartTimes[order.id] ??
+                                        toDateTimeLocalValue(
+                                          order.started_at || startAt,
+                                        ),
+                                    )
+                                  }
+                                >
+                                  <Check className="h-3.5 w-3.5" />
+                                  {savingStartOrderId === order.id
+                                    ? "Salvando..."
+                                    : "Salvar"}
+                                </Button>
+                              </div>
                             ) : null}
-                            {section.pendingCount > 0 ? (
-                              <Badge variant="outline" className="text-[10px]">
-                                Pendentes {section.pendingCount}
+                          </div>
+
+                          {/* Right: status + printer quick-assign */}
+                          <div className="flex flex-col items-end gap-2 shrink-0">
+
+                            {/* Quick status buttons */}
+                            {canUseProductionFlow ? (
+                              <div className="flex rounded-lg border overflow-hidden text-[10px]">
+                                {(
+                                  [
+                                    { value: "pending", label: "Pendente" },
+                                    { value: "printing", label: "Fazendo" },
+                                    { value: "done", label: "Feito" },
+                                  ] as { value: OrderStatus; label: string }[]
+                                ).map(({ value, label }) => (
+                                  <button
+                                    key={value}
+                                    type="button"
+                                    disabled={orderStatus === value}
+                                    onClick={() =>
+                                      void handleOrderStatusChange(
+                                        order.id,
+                                        value,
+                                      )
+                                    }
+                                    className={`px-2.5 py-1.5 font-medium transition-colors ${
+                                      orderStatus === value
+                                        ? value === "printing"
+                                          ? "bg-primary text-primary-foreground"
+                                          : value === "done"
+                                          ? "bg-green-600 text-white"
+                                          : "bg-muted text-foreground"
+                                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                    }`}
+                                  >
+                                    {label}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : (
+                              <Badge
+                                variant={
+                                  isPrintingRow ? "default" : "outline"
+                                }
+                                className="text-[10px]"
+                              >
+                                {isPrintingRow ? "Fazendo" : "Pendente"}
                               </Badge>
+                            )}
+
+                            {isPrintingRow ? (
+                              <Button
+                                type="button"
+                                variant={isStartEditorOpen ? "secondary" : "ghost"}
+                                size="icon"
+                                className="h-7 w-7"
+                                title={isStartEditorOpen ? "Fechar ajuste de início" : "Ajustar início"}
+                                onClick={() =>
+                                  setExpandedStartEditorOrderId((currentOrderId) =>
+                                    currentOrderId === order.id ? null : order.id,
+                                  )
+                                }
+                              >
+                                <Clock className="h-3.5 w-3.5" />
+                              </Button>
                             ) : null}
-                            <Badge variant="outline" className="text-[10px]">
-                              Restante {formatTime(section.totalMin)}
-                            </Badge>
-                            {section.busyUntil ? (
-                              <Badge variant="outline" className="text-[10px]">
-                                Ocupada ate {formatHour(section.busyUntil)}
-                              </Badge>
+
+                            {/* Printer quick-assign — in "Todas" and "Sem impressora" */}
+                            {(activeTab === "all" ||
+                              activeTab === UNASSIGNED_PRINTER_KEY) &&
+                            canUsePrinterFeatures &&
+                            !isPrintingRow ? (
+                              <Select
+                                value={getPrinterKey(order.printer_id)}
+                                onValueChange={(value) => {
+                                  const nextId = fromPrinterKey(value);
+                                  if (
+                                    (order.printer_id ?? null) === nextId
+                                  )
+                                    return;
+                                  void handleOrderPrinterChange(
+                                    order.id,
+                                    nextId,
+                                  );
+                                }}
+                              >
+                                <SelectTrigger className="h-7 w-[150px] text-[10px]">
+                                  <SelectValue placeholder="Impressora" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value={UNASSIGNED_PRINTER_KEY}>
+                                    Sem impressora
+                                  </SelectItem>
+                                  {printers.map((p) => (
+                                    <SelectItem key={p.id} value={p.id}>
+                                      {p.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             ) : null}
                           </div>
                         </div>
-                      </div>
-                      <p className="text-xs text-muted-foreground">{section.description}</p>
-                    </CardHeader>
-
-                    <CardContent
-                      className="p-0"
-                      onDragOver={(event) => handleSectionDragOver(event, section.printerId)}
-                      onDrop={(event) => handleSectionDrop(event, section.printerId)}
-                    >
-                      {section.orders.length === 0 ? (
-                        <div className="py-8 px-4 text-center text-sm text-muted-foreground border-t border-dashed">
-                          Solte aqui os pedidos desta impressora.
-                        </div>
-                      ) : (
-                        <div className="divide-y divide-border">
-                          {section.orders.map((order) => {
-                            const times = queueTimeMap.get(order.id);
-                            const totalMin = times?.totalMin || 0;
-                            const remainingMin = times?.remainingMin || 0;
-                            const startAt = times?.startAt || now;
-                            const finishAt = times?.finishAt || now;
-                            const orderStatus = getOrderStatus(order);
-                            const isPrintingRow = orderStatus === "printing";
-                            const isPendingRow = orderStatus === "pending";
-                            const platformId = getPlatformId(order);
-                            const showSourceProductName =
-                              Boolean(order.source_product_name) &&
-                              normalizeText(order.source_product_name || "") !==
-                                normalizeText(order.pieces.name);
-
-                            return (
-                              <div
-                                key={order.id}
-                                className={`py-3 px-3 sm:px-4 transition-colors ${
-                                  dragOverOrderId === order.id
-                                    ? "bg-primary/5 border-t-2 border-primary"
-                                    : "hover:bg-accent/30"
-                                }`}
-                                onDragOver={
-                                  isPendingRow ? (event) => handleOrderDragOver(event, order) : undefined
-                                }
-                                onDrop={isPendingRow ? (event) => handleOrderDrop(event, order) : undefined}
-                              >
-                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-                                  <div className="flex items-start gap-3">
-                                    <div
-                                      draggable={canReorderQueue && isPendingRow}
-                                      onDragStart={() => handleDragStart(order)}
-                                      onDragEnd={handleDragEnd}
-                                      className={`mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-dashed ${
-                                        canReorderQueue && isPendingRow
-                                          ? "cursor-grab text-muted-foreground hover:text-foreground"
-                                          : "opacity-40 cursor-not-allowed"
-                                      }`}
-                                      title={
-                                        canReorderQueue && isPendingRow
-                                          ? "Arraste para reordenar ou mover de impressora"
-                                          : isPrintingRow
-                                            ? "Pedido em producao nao pode ser arrastado"
-                                            : "Limpe os filtros para arrastar"
-                                      }
-                                    >
-                                      <GripVertical className="h-4 w-4" />
-                                    </div>
-
-                                    {order.pieces.image_url ? (
-                                      <img
-                                        src={order.pieces.image_url}
-                                        alt={order.pieces.name}
-                                        className="h-11 w-11 rounded-lg object-cover shrink-0"
-                                      />
-                                    ) : (
-                                      <div className="h-11 w-11 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                                        <Package className="h-4 w-4 text-muted-foreground" />
-                                      </div>
-                                    )}
-
-                                    <div className="flex-1 min-w-0 space-y-2">
-                                      <div className="flex items-start justify-between gap-2">
-                                        <div className="min-w-0 space-y-2">
-                                          <span className="block font-medium text-sm leading-5 break-words">
-                                            {order.pieces.name}
-                                          </span>
-                                          {showSourceProductName ? (
-                                            <p className="text-[11px] text-muted-foreground break-words">
-                                              Anuncio: {order.source_product_name}
-                                            </p>
-                                          ) : null}
-                                          <div className="flex flex-wrap gap-1.5">
-                                            {order.quantity > 1 ? (
-                                              <Badge variant="secondary" className="text-[10px]">
-                                                x{order.quantity}
-                                              </Badge>
-                                            ) : null}
-                                            {order.color ? (
-                                              <ColorBadge color={order.color} />
-                                            ) : null}
-                                            {order.piece_price_variations ? (
-                                              <Badge variant="outline" className="text-[10px]">
-                                                {order.piece_price_variations.variation_name}
-                                              </Badge>
-                                            ) : null}
-                                            {platformId !== "sem-pedido" ? (
-                                              <Badge variant="secondary" className="text-[10px] font-mono">
-                                                {platformId}
-                                              </Badge>
-                                            ) : null}
-                                            <Badge
-                                              variant={isPrintingRow ? "default" : "outline"}
-                                              className="text-[10px]"
-                                            >
-                                              {isPrintingRow ? "Fazendo" : "Pendente"}
-                                            </Badge>
-                                          </div>
-                                        </div>
-
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive sm:hidden"
-                                          onClick={() => void handleDeleteOrder(order.id)}
-                                        >
-                                          <Trash2 className="h-3.5 w-3.5" />
-                                        </Button>
-                                      </div>
-
-                                      <div className="grid gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
-                                        <div className="flex items-center gap-1 rounded-md bg-muted/60 px-2.5 py-2 sm:bg-transparent sm:px-0 sm:py-0">
-                                          <Clock className="h-3 w-3 text-muted-foreground" />
-                                          <span className="text-[11px] font-medium">
-                                            {isPrintingRow ? `Resta ${formatTime(remainingMin)}` : formatTime(totalMin)}
-                                          </span>
-                                        </div>
-                                        {isPrintingRow ? (
-                                          <div className="flex items-center gap-1 rounded-md bg-primary/10 px-2.5 py-2 sm:bg-transparent sm:px-0 sm:py-0">
-                                            <Timer className="h-3 w-3 text-primary" />
-                                            <span className="text-[11px] text-primary font-medium">
-                                              Inicio {formatHour(startAt)}
-                                            </span>
-                                          </div>
-                                        ) : null}
-                                        <div className="flex items-center gap-1 rounded-md bg-primary/10 px-2.5 py-2 sm:bg-transparent sm:px-0 sm:py-0">
-                                          <CalendarClock className="h-3 w-3 text-primary" />
-                                          <span className="text-[11px] text-primary font-medium">
-                                            {isPrintingRow ? `Termina ${formatHour(finishAt)}` : `Prev. ${formatDateTime(finishAt)}`}
-                                          </span>
-                                        </div>
-                                      </div>
-
-                                      {isPrintingRow ? (
-                                        <div className="rounded-lg border bg-muted/20 p-2.5">
-                                          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-                                            <div className="flex-1 space-y-1">
-                                              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                                                Ajustar inicio
-                                              </p>
-                                              <Input
-                                                type="datetime-local"
-                                                step={60}
-                                                value={
-                                                  editingStartTimes[order.id] ??
-                                                  toDateTimeLocalValue(order.started_at || startAt)
-                                                }
-                                                onChange={(event) =>
-                                                  handleStartTimeDraftChange(order.id, event.target.value)
-                                                }
-                                                className="h-9 text-xs"
-                                              />
-                                            </div>
-                                            <Button
-                                              size="sm"
-                                              className="h-9 w-full gap-1.5 sm:w-auto"
-                                              disabled={savingStartOrderId === order.id}
-                                              onClick={() =>
-                                                void handleUpdateOrderStartTime(
-                                                  order,
-                                                  editingStartTimes[order.id] ??
-                                                    toDateTimeLocalValue(order.started_at || startAt),
-                                                )
-                                              }
-                                            >
-                                              <Check className="h-3.5 w-3.5" />
-                                              {savingStartOrderId === order.id ? "Salvando..." : "Salvar inicio"}
-                                            </Button>
-                                          </div>
-                                        </div>
-                                      ) : null}
-                                    </div>
-                                  </div>
-
-                                  <div className="grid gap-2 sm:ml-auto sm:min-w-[210px]">
-                                    <div className="space-y-1">
-                                      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                                        Impressora
-                                      </p>
-                                      <Select
-                                        disabled={isPrintingRow || !canUsePrinterFeatures}
-                                        value={getPrinterKey(order.printer_id)}
-                                        onValueChange={(value) => {
-                                          const nextPrinterId = fromPrinterKey(value);
-                                          if ((order.printer_id ?? null) === nextPrinterId) return;
-                                          void handleOrderPrinterChange(order.id, nextPrinterId);
-                                        }}
-                                      >
-                                        <SelectTrigger className={queuePrinterSelectClassName}>
-                                          <SelectValue placeholder="Direcionar impressora" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value={UNASSIGNED_PRINTER_KEY}>
-                                            Sem impressora
-                                          </SelectItem>
-                                          {printers.map((printer) => (
-                                            <SelectItem key={printer.id} value={printer.id}>
-                                              {printer.name}
-                                            </SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-
-                                    <div className="space-y-1">
-                                      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                                        Status
-                                      </p>
-                                      <Select
-                                        disabled={!canUseProductionFlow}
-                                        value={orderStatus}
-                                        onValueChange={(value) =>
-                                          void handleOrderStatusChange(order.id, value as OrderStatus)
-                                        }
-                                      >
-                                        <SelectTrigger className={queueStatusSelectClassName}>
-                                          <SelectValue placeholder="Status" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="pending">Pendente</SelectItem>
-                                          <SelectItem value="printing">Fazendo</SelectItem>
-                                          <SelectItem value="done">Feito</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                  </div>
-
-                                  <div className="hidden items-center gap-1 shrink-0 sm:flex">
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                      onClick={() => void handleDeleteOrder(order.id)}
-                                    >
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                    </Button>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
         </div>
       ) : null}
+
+
+
+
 
       {filterStatus !== "queue" && filteredDone.length > 0 ? (
         <div>
@@ -2509,6 +2984,8 @@ export default function Orders() {
                       <CardContent className="p-0">
                         <div className="divide-y divide-border">
                           {groupOrders.map((order) => {
+                            const storeName = getOrderStoreName(order);
+                            const platformName = getOrderPlatformName(order);
                             const showSourceProductName =
                               Boolean(order.source_product_name) &&
                               normalizeText(order.source_product_name || "") !==
@@ -2544,6 +3021,16 @@ export default function Orders() {
                                       {order.printers?.name ? (
                                         <Badge variant="outline" className="text-xs">
                                           {order.printers.name}
+                                        </Badge>
+                                      ) : null}
+                                      {storeName ? (
+                                        <Badge variant="outline" className="text-xs">
+                                          Loja: {storeName}
+                                        </Badge>
+                                      ) : null}
+                                      {platformName ? (
+                                        <Badge variant="secondary" className="text-xs">
+                                          {platformName}
                                         </Badge>
                                       ) : null}
                                     </div>
@@ -2608,7 +3095,7 @@ export default function Orders() {
               ? order.piece_price_variations.tempo_impressao_min
               : order.pieces.tempo_impressao_min,
           variation: order.piece_price_variations?.variation_name || null,
-          platformOrderId: (order.notes || "").split(" - ")[0] || "",
+          platformOrderId: getPlatformId(order),
         }))}
         isOpen={isChatOpen}
         onToggle={() => setIsChatOpen(!isChatOpen)}

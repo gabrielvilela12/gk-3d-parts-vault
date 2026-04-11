@@ -30,6 +30,7 @@ interface Piece {
   custo_material: number | null; custo_energia: number | null;
   custo_acessorios: number | null; makerworld_url: string | null;
   stores: string[] | null;
+  reference_names: string[] | null;
 }
 
 interface Filament {
@@ -315,6 +316,23 @@ export default function PieceDetail() {
               <Card className="card-gradient border-border/50">
                 <CardContent className="pt-4">
                   <p className="text-sm text-muted-foreground whitespace-pre-wrap">{piece.notes}</p>
+                </CardContent>
+              </Card>
+            )}
+
+            {piece.reference_names && piece.reference_names.length > 0 && (
+              <Card className="card-gradient border-border/50">
+                <CardHeader>
+                  <CardTitle className="text-base">Nomes de Referência</CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="flex flex-wrap gap-2">
+                    {piece.reference_names.map((referenceName) => (
+                      <Badge key={referenceName} variant="outline" className="text-xs">
+                        {referenceName}
+                      </Badge>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             )}

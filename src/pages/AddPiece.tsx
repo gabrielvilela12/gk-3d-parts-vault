@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
@@ -13,6 +14,7 @@ import { Save, Box, ChevronDown, Edit, Plus, Trash, Palette, Package } from "luc
 // Interface para os inputs do formulário
 interface FormData {
   name: string;
+  referenceNames: string;
   quantidade: number;
   tempoImpressaoHoras: string;
   tempoImpressaoMinutos: string;
@@ -60,6 +62,24 @@ interface ExistingFiles {
   stl_url: string | null;
   image_url: string | null;
 }
+
+const parseReferenceNames = (value: string) => {
+  const seen = new Set<string>();
+
+  return value
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0)
+    .filter((item) => {
+      const key = item.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+};
+
+const formatReferenceNames = (referenceNames: string[] | null | undefined) =>
+  (referenceNames ?? []).join("\n");
 
 interface MiningProduct {
   id: string;
@@ -147,6 +167,7 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
 
   const [formData, setFormData] = useState<FormData>({
     name: "",
+    referenceNames: "",
     quantidade: 1,
     tempoImpressaoHoras: "",
     tempoImpressaoMinutos: "",
@@ -244,7 +265,8 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
             const totalMinutes = (data as any).tempo_impressao_min || 0;
             setFormData(prev => ({
               ...prev,
-              name: data.name || "", material: data.material || "PETG",
+              name: data.name || "", referenceNames: formatReferenceNames((data as any).reference_names),
+              material: data.material || "PETG",
               category: (data as any).category || "",
               pesoEstimadoG: (data as any).peso_g?.toString() || "",
               tempoImpressaoHoras: Math.floor(totalMinutes / 60) > 0 ? Math.floor(totalMinutes / 60).toString() : "",
@@ -431,6 +453,7 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
       const pieceData = {
         user_id: user.id,
         name: formData.name,
+        reference_names: parseReferenceNames(formData.referenceNames),
         material: formData.material,
         category: formData.category || null,
         stl_url: stlUrl,
@@ -624,6 +647,21 @@ export default function AddPiece({ isEditMode = false }: AddPieceProps) {
               <datalist id="mining-products-list">
                 {miningProducts.map((product) => (<option key={product.id} value={product.name} />))}
               </datalist>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="referenceNames">Nomes de Referência para Importação</Label>
+              <Textarea
+                id="referenceNames"
+                value={formData.referenceNames}
+                onChange={handleInputChange}
+                placeholder={
+                  "Um nome por linha.\nEx: Fruteira Para Centro de Mesa – Design Moderno...\nEx: Fruteira Centro de Mesa Aramada Preta Moderna..."
+                }
+                className="min-h-[120px]"
+              />
+              <p className="text-xs text-muted-foreground">
+                Use este campo para salvar títulos alternativos que chegam dos marketplaces ou das lojas.
+              </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">

@@ -23,6 +23,7 @@ interface Piece {
   cost: number | null;
   preco_venda: number | null;
   stores?: string[];
+  reference_names?: string[] | null;
 }
 
 const STORES = ["Loja 1", "Loja 2", "Loja 3"];
@@ -46,11 +47,14 @@ export default function Catalog() {
   useEffect(() => {
     let filtered = [...pieces];
     if (searchTerm) {
-      filtered = filtered.filter(
-        (piece) =>
-          piece.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          piece.material?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          piece.category?.toLowerCase().includes(searchTerm.toLowerCase())
+        filtered = filtered.filter(
+          (piece) =>
+            piece.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            piece.reference_names?.some((referenceName) =>
+              referenceName.toLowerCase().includes(searchTerm.toLowerCase()),
+            ) ||
+            piece.material?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            piece.category?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
     if (filterStatus !== "all") {
