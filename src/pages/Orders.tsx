@@ -2369,8 +2369,8 @@ export default function Orders() {
           <div className="pointer-events-none absolute inset-0" style={productAtmosphereStyle} />
         ) : null}
 
-        <div className="relative z-10 flex flex-col gap-4 xl:flex-row xl:items-start">
-          <div className="flex flex-1 min-w-0 items-start gap-3">
+        <div className="production-order-card-layout relative z-10">
+          <div className="production-order-head">
             {isAllPrintersView ? (
               <div
                 className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-[#0b1628] text-[11px] font-semibold ${
@@ -2387,7 +2387,7 @@ export default function Orders() {
                   draggable={canDragCard}
                   onDragStart={() => handleDragStart(order)}
                   onDragEnd={handleDragEnd}
-                  className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-dashed ${
+                  className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-dashed ${
                     canDragCard
                       ? "cursor-grab border-white/15 text-slate-400 hover:border-white/30 hover:text-slate-100"
                       : "cursor-not-allowed border-white/10 text-slate-600"
@@ -2401,14 +2401,14 @@ export default function Orders() {
                   <GripVertical className="h-4 w-4" />
                 </div>
                 <div
-                  className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border bg-[#0b1628] text-sm font-semibold ${accent.border} ${accent.strongText}`}
+                  className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-[#0b1628] text-sm font-semibold ${accent.border} ${accent.strongText}`}
                 >
                   {String((queueIndex || 0) + 1).padStart(2, "0")}
                 </div>
               </div>
             ) : (
               <div
-                className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border bg-[#0b1628] text-[11px] font-semibold ${accent.border} ${accent.strongText}`}
+                className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-[#0b1628] text-[11px] font-semibold ${accent.border} ${accent.strongText}`}
               >
                 {currentPrinterName.slice(0, 2).toUpperCase()}
               </div>
@@ -2418,18 +2418,18 @@ export default function Orders() {
               <img
                 src={order.pieces.image_url}
                 alt={order.pieces.name}
-                className="h-16 w-16 shrink-0 rounded-2xl object-cover ring-1 ring-white/10 shadow-[0_10px_30px_rgba(2,6,23,0.35)]"
+                className="h-14 w-14 shrink-0 rounded-2xl object-cover ring-1 ring-white/10 shadow-[0_10px_30px_rgba(2,6,23,0.35)] sm:h-16 sm:w-16"
               />
             ) : (
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03]">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] sm:h-16 sm:w-16">
                 <Package className="h-5 w-5 text-slate-500" />
               </div>
             )}
 
-            <div className="min-w-0 flex-1 space-y-3">
+            <div className="production-order-summary space-y-3">
               <div className="space-y-2">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-sm sm:text-base font-semibold text-slate-50 break-words">
+                  <p className="production-order-title text-sm font-semibold text-slate-50 sm:text-base">
                     {order.pieces.name}
                   </p>
                   <Badge
@@ -2481,13 +2481,13 @@ export default function Orders() {
                 </div>
 
                 {showSourceProductName ? (
-                  <p className="text-xs text-slate-400 break-words">
+                  <p className="production-order-secondary text-xs text-slate-400">
                     Anuncio: {order.source_product_name}
                   </p>
                 ) : null}
               </div>
 
-              <div className="grid gap-2 sm:grid-cols-3">
+              <div className="production-order-stats">
                 <div className="rounded-xl border border-white/10 bg-[#050816]/70 px-3 py-2">
                   <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Tempo</p>
                   <p className="mt-1 text-sm font-medium text-slate-100">
@@ -2529,12 +2529,12 @@ export default function Orders() {
                         onChange={(event) =>
                           handleStartTimeDraftChange(order.id, event.target.value)
                         }
-                        className="h-10 border-white/10 bg-[#050816] text-xs text-slate-100"
+                        className="production-control border-white/10 bg-[#050816] text-xs text-slate-100"
                       />
                     </div>
                     <Button
                       size="sm"
-                      className="h-10 w-full gap-1.5 sm:w-auto"
+                      className="production-action-button gap-1.5 sm:w-auto"
                       disabled={savingStartOrderId === order.id}
                       onClick={() =>
                         void handleUpdateOrderStartTime(
@@ -2553,7 +2553,7 @@ export default function Orders() {
             </div>
           </div>
 
-          <div className="grid gap-2 xl:min-w-[230px]">
+          <div className="production-order-actions">
             {isAllPrintersView ? (
               isPrintingView ? (
                 <div className="rounded-2xl border border-white/10 bg-black/10 p-3">
@@ -2585,7 +2585,7 @@ export default function Orders() {
                       void handleOrderPrinterChange(order.id, nextPrinterId);
                     }}
                   >
-                    <SelectTrigger className="mt-2 h-10 border-white/10 bg-[#050816] text-xs text-slate-100">
+                    <SelectTrigger className="production-control mt-2 border-white/10 bg-[#050816] text-xs text-slate-100">
                       <SelectValue placeholder="Direcionar impressora" />
                     </SelectTrigger>
                     <SelectContent>
@@ -2632,15 +2632,15 @@ export default function Orders() {
               </p>
               <Select
                 disabled={!canUseProductionFlow}
-                value={orderStatus}
-                onValueChange={(value) =>
-                  void handleOrderStatusChange(order.id, value as OrderStatus)
-                }
-              >
-                <SelectTrigger className="mt-2 h-10 border-white/10 bg-[#050816] text-xs text-slate-100">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
+              value={orderStatus}
+              onValueChange={(value) =>
+                void handleOrderStatusChange(order.id, value as OrderStatus)
+              }
+            >
+              <SelectTrigger className="production-control mt-2 border-white/10 bg-[#050816] text-xs text-slate-100">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
                   <SelectItem value="pending">Pendente</SelectItem>
                   <SelectItem value="printing">Fazendo</SelectItem>
                   <SelectItem value="done">Feito</SelectItem>
@@ -2650,7 +2650,7 @@ export default function Orders() {
 
             <Button
               variant="ghost"
-              className="h-10 justify-center rounded-2xl border border-white/10 text-slate-400 hover:bg-destructive/10 hover:text-destructive"
+              className="production-action-button justify-center rounded-2xl border border-white/10 text-slate-400 hover:bg-destructive/10 hover:text-destructive"
               onClick={() => void handleDeleteOrder(order.id)}
             >
               <Trash2 className="mr-2 h-4 w-4" />
@@ -2728,8 +2728,8 @@ export default function Orders() {
   }
 
   return (
-    <div className="container mx-auto max-w-7xl px-3 py-4 sm:px-4 sm:py-8">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+    <div className="production-queue-page">
+      <div className="production-queue-header">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold">Fila de Producao</h1>
           <p className="text-xs sm:text-sm text-muted-foreground mt-1">
@@ -2745,7 +2745,7 @@ export default function Orders() {
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+        <div className="production-queue-header-actions">
           <Dialog open={isPrinterDialogOpen} onOpenChange={setIsPrinterDialogOpen}>
             <DialogContent className="max-w-xl">
               <DialogHeader>
@@ -2776,7 +2776,11 @@ export default function Orders() {
                       }
                     />
                   </div>
-                  <Button onClick={handleCreatePrinter} disabled={isSavingPrinter || !canUsePrinterFeatures}>
+                  <Button
+                    onClick={handleCreatePrinter}
+                    disabled={isSavingPrinter || !canUsePrinterFeatures}
+                    className="production-touch-target"
+                  >
                     <Plus className="mr-2 h-4 w-4" />
                     {isSavingPrinter ? "Salvando..." : "Adicionar impressora"}
                   </Button>
@@ -2854,7 +2858,10 @@ export default function Orders() {
             onChange={handleOrderSpreadsheetUpload}
             className="hidden"
           />
-          <Button className="w-full sm:w-auto" onClick={() => fileInputRef.current?.click()}>
+          <Button
+            className="production-touch-target w-full lg:w-auto"
+            onClick={() => fileInputRef.current?.click()}
+          >
             <Upload className="mr-2 h-4 w-4" />
             Importar Excel
           </Button>
@@ -2987,7 +2994,7 @@ export default function Orders() {
         </DialogContent>
       </Dialog>
 
-      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="production-metrics-grid mb-6">
         <Card className="border-white/10 bg-[#081121] text-slate-100 shadow-[0_18px_60px_rgba(2,6,23,0.28)]">
           <CardContent className="px-4 pb-3 pt-4">
             <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Ativos</p>
@@ -3028,7 +3035,7 @@ export default function Orders() {
 
       <Card className="mb-6 border-white/10 bg-[#081121] text-slate-100 shadow-[0_24px_70px_rgba(2,6,23,0.32)]">
         <CardContent className="space-y-4 p-4 sm:p-5">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="production-panel-layout lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
             <div>
               <p className="text-[11px] uppercase tracking-[0.28em] text-slate-500">
                 Painel de operacao
@@ -3043,7 +3050,7 @@ export default function Orders() {
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="production-panel-stats">
               <div className="rounded-2xl border border-white/10 bg-black/10 px-3 py-2.5">
                 <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Visiveis</p>
                 <p className="mt-1 text-base font-semibold text-slate-100">{visibleQueueOrders.length}</p>
@@ -3071,100 +3078,98 @@ export default function Orders() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 xl:flex-row">
-            <div className="relative flex-1">
+          <div className="production-filter-grid">
+            <div className="production-filter-search relative">
               <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
               <Input
                 placeholder="Buscar produto, anuncio ou numero do pedido..."
                 value={filterSearch}
                 onChange={(event) => setFilterSearch(event.target.value)}
-                className="h-11 border-white/10 bg-[#050816] pl-9 text-sm text-slate-100 placeholder:text-slate-500"
+                className="production-control border-white/10 bg-[#050816] pl-9 text-sm text-slate-100 placeholder:text-slate-500"
               />
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:flex xl:flex-wrap">
-              <Select value={filterColor} onValueChange={setFilterColor}>
-                <SelectTrigger className="h-11 w-full border-white/10 bg-[#050816] text-sm text-slate-100 xl:w-[170px]">
-                  <SelectValue placeholder="Cor" />
+            <Select value={filterColor} onValueChange={setFilterColor}>
+              <SelectTrigger className="production-control border-white/10 bg-[#050816] text-sm text-slate-100">
+                <SelectValue placeholder="Cor" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as cores</SelectItem>
+                {uniqueColors.map((color) => (
+                  <SelectItem key={color} value={color}>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`${getColorDotClassName(color, "sm")} ${
+                          getColorSwatchValue(color) ? "" : "bg-muted"
+                        }`}
+                        style={
+                          getColorSwatchValue(color)
+                            ? { backgroundColor: getColorSwatchValue(color) ?? undefined }
+                            : undefined
+                        }
+                      />
+                      <span>{color}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {isQueueView ? (
+              <Select
+                value={queueTimeSort}
+                onValueChange={(value) => setQueueTimeSort(value as QueueTimeSort)}
+              >
+                <SelectTrigger className="production-control border-white/10 bg-[#050816] text-sm text-slate-100">
+                  <SelectValue placeholder="Ordenar" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todas as cores</SelectItem>
-                  {uniqueColors.map((color) => (
-                    <SelectItem key={color} value={color}>
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`${getColorDotClassName(color, "sm")} ${
-                            getColorSwatchValue(color) ? "" : "bg-muted"
-                          }`}
-                          style={
-                            getColorSwatchValue(color)
-                              ? { backgroundColor: getColorSwatchValue(color) ?? undefined }
-                              : undefined
-                          }
-                        />
-                        <span>{color}</span>
-                      </div>
+                  {QUEUE_TIME_SORT_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+            ) : null}
 
-              {isQueueView ? (
-                <Select
-                  value={queueTimeSort}
-                  onValueChange={(value) => setQueueTimeSort(value as QueueTimeSort)}
+            {isQueueView ? (
+              <Select
+                value={queueMaxTimeFilter}
+                onValueChange={(value) => setQueueMaxTimeFilter(value as QueueMaxTimeFilter)}
+              >
+                <SelectTrigger className="production-control border-white/10 bg-[#050816] text-sm text-slate-100">
+                  <SelectValue placeholder="Tempo maximo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {QUEUE_MAX_TIME_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
+
+            <div className="production-status-tabs">
+              {(["queue", "printing", "done"] as const).map((status) => (
+                <Button
+                  key={status}
+                  variant="outline"
+                  size="sm"
+                  className={`production-touch-target border-white/10 px-2 text-xs ${
+                    filterStatus === status
+                      ? "bg-white/[0.10] text-slate-50 hover:bg-white/[0.10]"
+                      : "bg-[#050816] text-slate-400 hover:bg-white/[0.05] hover:text-slate-50"
+                  }`}
+                  onClick={() => setFilterStatus(status)}
                 >
-                  <SelectTrigger className="h-11 w-full border-white/10 bg-[#050816] text-sm text-slate-100 xl:w-[220px]">
-                    <SelectValue placeholder="Ordenar" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {QUEUE_TIME_SORT_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : null}
-
-              {isQueueView ? (
-                <Select
-                  value={queueMaxTimeFilter}
-                  onValueChange={(value) => setQueueMaxTimeFilter(value as QueueMaxTimeFilter)}
-                >
-                  <SelectTrigger className="h-11 w-full border-white/10 bg-[#050816] text-sm text-slate-100 xl:w-[180px]">
-                    <SelectValue placeholder="Tempo maximo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {QUEUE_MAX_TIME_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : null}
-
-              <div className="grid grid-cols-3 gap-1 xl:flex">
-                {(["queue", "printing", "done"] as const).map((status) => (
-                  <Button
-                    key={status}
-                    variant="outline"
-                    size="sm"
-                    className={`h-11 border-white/10 text-xs ${
-                      filterStatus === status
-                        ? "bg-white/[0.10] text-slate-50 hover:bg-white/[0.10]"
-                        : "bg-[#050816] text-slate-400 hover:bg-white/[0.05] hover:text-slate-50"
-                    }`}
-                    onClick={() => setFilterStatus(status)}
-                  >
-                    {status === "queue"
-                      ? "Fila"
-                      : status === "printing"
-                        ? "Fazendo"
-                        : "Concluidos"}
-                  </Button>
-                ))}
-              </div>
+                  {status === "queue"
+                    ? "Fila"
+                    : status === "printing"
+                      ? "Fazendo"
+                      : "Concluidos"}
+                </Button>
+              ))}
             </div>
           </div>
         </CardContent>
@@ -3181,7 +3186,7 @@ export default function Orders() {
                   <button
                     key={tab.id}
                     onClick={() => setFilterPrinterKey(tab.id)}
-                    className={`flex min-w-fit items-center gap-2 rounded-2xl border px-4 py-3 text-left transition-all ${
+                    className={`flex min-h-[44px] min-w-fit items-center gap-2 rounded-2xl border px-4 py-3 text-left transition-all ${
                       isActive
                         ? `${tab.accent.border} ${tab.accent.soft} text-slate-50 shadow-[0_14px_34px_rgba(2,6,23,0.34)]`
                         : "border-white/10 bg-[#050816] text-slate-400 hover:border-white/20 hover:text-slate-50"
@@ -3202,7 +3207,7 @@ export default function Orders() {
 
               <button
                 onClick={() => setIsPrinterDialogOpen(true)}
-                className="flex min-w-fit items-center gap-2 rounded-2xl border border-dashed border-white/15 bg-[#050816] px-4 py-3 text-sm font-medium text-slate-300 transition-colors hover:border-white/30 hover:text-slate-50"
+                className="flex min-h-[44px] min-w-fit items-center gap-2 rounded-2xl border border-dashed border-white/15 bg-[#050816] px-4 py-3 text-sm font-medium text-slate-300 transition-colors hover:border-white/30 hover:text-slate-50"
                 disabled={!canUsePrinterFeatures}
                 title={!canUsePrinterFeatures ? FEATURE_MIGRATION_HELP : undefined}
               >
@@ -3242,7 +3247,7 @@ export default function Orders() {
                   </div>
                 </div>
 
-                <div className="grid gap-2 sm:grid-cols-3">
+                <div className="production-order-stats">
                   <div className="rounded-2xl border border-white/10 bg-black/10 px-3 py-2.5">
                     <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">
                       {operationsPrimaryLabel}

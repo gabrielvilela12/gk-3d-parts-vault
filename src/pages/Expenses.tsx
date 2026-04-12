@@ -113,6 +113,63 @@ interface Expense {
   created_at: string;
 }
 
+interface DayGroup {
+  key: string;
+  dayKey: string;
+  dayLabel: string;
+  dayNumber: number;
+  expenses: Expense[];
+  totalAmount: number;
+  paidCount: number;
+  pendingCount: number;
+}
+
+const ISO_DATE_PREFIX_REGEX = /^(\d{4})-(\d{2})-(\d{2})/;
+const BR_DATE_REGEX = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+
+const normalizeDateKey = (value?: string | null): string | null => {
+  if (!value) return null;
+
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  const isoMatch = raw.match(ISO_DATE_PREFIX_REGEX);
+  if (isoMatch) {
+    return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+  }
+
+  const brMatch = raw.match(BR_DATE_REGEX);
+  if (brMatch) {
+    return `${brMatch[3]}-${brMatch[2]}-${brMatch[1]}`;
+  }
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  return format(parsed, "yyyy-MM-dd");
+};
+
+const dateKeyToSafeDate = (dateKey: string) => new Date(`${dateKey}T12:00:00`);
+const dateKeyToStorageValue = (dateKey: string) => `${dateKey}T12:00:00.000Z`;
+
+const getExpenseDateKey = (expense: Pick<Expense, "order_date" | "created_at">) =>
+  normalizeDateKey(expense.order_date) ??
+  normalizeDateKey(expense.created_at) ??
+  format(new Date(), "yyyy-MM-dd");
+
+const getExpenseDisplayDate = (expense: Pick<Expense, "order_date" | "created_at">) =>
+  format(dateKeyToSafeDate(getExpenseDateKey(expense)), "dd/MM/yyyy");
+
+const sortExpensesByDate = (left: Expense, right: Expense) => {
+  const dateDiff = getExpenseDateKey(left).localeCompare(getExpenseDateKey(right));
+  if (dateDiff !== 0) return dateDiff;
+
+  const createdAtDiff = (left.created_at || "").localeCompare(right.created_at || "");
+  if (createdAtDiff !== 0) return createdAtDiff;
+
+  return left.id.localeCompare(right.id);
+};
+
 // Shopee Income Report Format
 interface ExcelRow extends Record<string, any> {
   "Número da sequência": number;
@@ -166,6 +223,7 @@ interface MonthGroup {
   year: number;
   month: number;
   expenses: Expense[];
+  dayGroups: DayGroup[];
   totalAmount: number;
   paidCount: number;
   pendingCount: number;
@@ -186,7 +244,7 @@ export default function Expenses() {
   const [importData, setImportData] = useState<ExcelRow[]>([]);
   const [deletingAll, setDeletingAll] = useState(false);
   const [detailExpense, setDetailExpense] = useState<Expense | null>(null);
-  const [selectedMonth, setSelectedMonth] = useState<MonthGroup | null>(null);
+  const [selectedMonthKey, setSelectedMonthKey] = useState<string | null>(null);
   const { toast } = useToast();
 
   // View mode: pedidos vs despesas
@@ -290,7 +348,9 @@ export default function Expenses() {
         query = query.or(`product_name.ilike.%${filterSearch.trim()}%,description.ilike.%${filterSearch.trim()}%`);
       }
 
-      const { data, error } = await query.order("order_date", { ascending: true });
+      const { data, error } = await query
+        .order("order_date", { ascending: true, nullsFirst: false })
+        .order("created_at", { ascending: true });
 
       if (error) throw error;
       setAllExpenses((data || []) as Expense[]);
@@ -310,10 +370,11 @@ export default function Expenses() {
     const now = new Date();
     const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-    const groups = new Map<string, MonthGroup>();
+    const groups = new Map<string, MonthGroup & { dayMap: Map<string, DayGroup> }>();
 
-    for (const expense of allExpenses) {
-      const date = expense.order_date ? new Date(expense.order_date) : new Date(expense.created_at);
+    for (const expense of [...allExpenses].sort(sortExpensesByDate)) {
+      const dayKey = getExpenseDateKey(expense);
+      const date = dateKeyToSafeDate(dayKey);
       const year = date.getFullYear();
       const month = date.getMonth();
       const key = `${year}-${String(month + 1).padStart(2, "0")}`;
@@ -326,6 +387,8 @@ export default function Expenses() {
           year,
           month,
           expenses: [],
+          dayGroups: [],
+          dayMap: new Map<string, DayGroup>(),
           totalAmount: 0,
           paidCount: 0,
           pendingCount: 0,
@@ -335,26 +398,43 @@ export default function Expenses() {
       }
 
       const group = groups.get(key)!;
+
+      if (!group.dayMap.has(dayKey)) {
+        group.dayMap.set(dayKey, {
+          key: `${key}-${dayKey}`,
+          dayKey,
+          dayLabel: format(date, "dd/MM/yyyy"),
+          dayNumber: Number(dayKey.slice(8, 10)),
+          expenses: [],
+          totalAmount: 0,
+          paidCount: 0,
+          pendingCount: 0,
+        });
+      }
+
+      const dayGroup = group.dayMap.get(dayKey)!;
+
       group.expenses.push(expense);
       group.totalAmount += expense.amount || 0;
+      dayGroup.expenses.push(expense);
+      dayGroup.totalAmount += expense.amount || 0;
+
       if (expense.order_status === "pago") {
         group.paidCount++;
+        dayGroup.paidCount++;
       } else {
         group.pendingCount++;
+        dayGroup.pendingCount++;
       }
     }
 
     // Find the global next installment
     const nextInstallment = allExpenses
       .filter(e => e.expense_type === "installment" && e.order_status !== "pago")
-      .sort((a, b) => {
-        const da = a.order_date ? new Date(a.order_date).getTime() : 0;
-        const db = b.order_date ? new Date(b.order_date).getTime() : 0;
-        return da - db;
-      })[0];
+      .sort(sortExpensesByDate)[0];
 
     if (nextInstallment) {
-      const date = nextInstallment.order_date ? new Date(nextInstallment.order_date) : new Date(nextInstallment.created_at);
+      const date = dateKeyToSafeDate(getExpenseDateKey(nextInstallment));
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
       const group = groups.get(key);
       if (group) {
@@ -363,11 +443,27 @@ export default function Expenses() {
       }
     }
 
-    return Array.from(groups.values()).sort((a, b) => {
-      if (a.year !== b.year) return a.year - b.year;
-      return a.month - b.month;
-    });
+    return Array.from(groups.values())
+      .map(({ dayMap, ...group }) => ({
+        ...group,
+        expenses: [...group.expenses].sort(sortExpensesByDate),
+        dayGroups: Array.from(dayMap.values())
+          .map((dayGroup) => ({
+            ...dayGroup,
+            expenses: [...dayGroup.expenses].sort(sortExpensesByDate),
+          }))
+          .sort((a, b) => a.dayKey.localeCompare(b.dayKey)),
+      }))
+      .sort((a, b) => {
+        if (a.year !== b.year) return a.year - b.year;
+        return a.month - b.month;
+      });
   }, [allExpenses]);
+
+  const selectedMonth = useMemo(
+    () => monthGroups.find((group) => group.key === selectedMonthKey) || null,
+    [monthGroups, selectedMonthKey],
+  );
 
   const fetchGlobalTotals = async () => {
     try {
@@ -488,13 +584,11 @@ export default function Expenses() {
     }
   };
 
-  const parseExcelDate = (dateStr: string): string | undefined => {
-    if (!dateStr || dateStr === "-") return undefined;
-    try {
-      return dateStr;
-    } catch {
-      return undefined;
-    }
+  const parseExcelDate = (value: unknown): string | undefined => {
+    if (value === undefined || value === null || value === "" || value === "-") return undefined;
+
+    const normalizedKey = normalizeDateKey(String(value));
+    return normalizedKey ? dateKeyToStorageValue(normalizedKey) : undefined;
   };
 
   const handleConfirmImport = async () => {
@@ -635,8 +729,8 @@ export default function Expenses() {
             internal_order_id: matchedOrder?.id || null,
             platform: "Shopee",
             order_status: "Concluído",
-            order_date: parseExcelDate(String(row["Data de criação do pedido"] || "")),
-            payment_date: parseExcelDate(String(row["Data de conclusão do pagamento"] || "")),
+            order_date: parseExcelDate(row["Data de criação do pedido"]),
+            payment_date: parseExcelDate(row["Data de conclusão do pagamento"]),
             order_value: totalReleased,
             product_value: productPrice > 0 ? productPrice : null,
             product_price: unitPrice > 0 ? unitPrice : null,
@@ -713,9 +807,9 @@ export default function Expenses() {
             category: manualForm.category,
             amount: installmentAmount,
             notes: manualForm.notes,
-            order_date: dueDate.toISOString(),
+            order_date: dateKeyToStorageValue(format(dueDate, "yyyy-MM-dd")),
             order_status: isPast ? "pago" : "pendente",
-            payment_date: isPast ? dueDate.toISOString() : null,
+            payment_date: isPast ? dateKeyToStorageValue(format(dueDate, "yyyy-MM-dd")) : null,
           });
         }
       } else {
@@ -730,7 +824,7 @@ export default function Expenses() {
           category: manualForm.category,
           amount: installmentAmount,
           notes: manualForm.notes,
-          order_date: nextDue.toISOString(),
+          order_date: dateKeyToStorageValue(format(nextDue, "yyyy-MM-dd")),
           order_status: "pendente",
           payment_date: null,
         });
@@ -809,7 +903,7 @@ export default function Expenses() {
         title: "Mês pago! ✓",
         description: `${unpaidIds.length} item(s) marcado(s) como pago.`,
       });
-      setSelectedMonth(null);
+      setSelectedMonthKey(null);
       fetchExpenses();
       fetchAllExpenses();
       fetchGlobalTotals();
@@ -827,7 +921,7 @@ export default function Expenses() {
 
       toast({ title: "Itens excluídos!", description: `${ids.length} despesa(s) removida(s).` });
       setSelectedExpenseIds(new Set());
-      setSelectedMonth(null);
+      setSelectedMonthKey(null);
       fetchExpenses();
       fetchAllExpenses();
       fetchGlobalTotals();
@@ -845,12 +939,6 @@ export default function Expenses() {
       fetchExpenses();
       fetchAllExpenses();
       fetchGlobalTotals();
-      if (selectedMonth) {
-        setSelectedMonth(prev => prev ? {
-          ...prev,
-          expenses: prev.expenses.filter(e => e.id !== id),
-        } : null);
-      }
     } catch (error: any) {
       toast({
         title: "Erro ao excluir",
@@ -1327,7 +1415,7 @@ export default function Expenses() {
                               R$ {profit.toFixed(2)}
                             </TableCell>
                             <TableCell className="text-sm text-muted-foreground">
-                              {expense.order_date ? new Date(expense.order_date).toLocaleDateString("pt-BR") : new Date(expense.created_at).toLocaleDateString("pt-BR")}
+                              {getExpenseDisplayDate(expense)}
                             </TableCell>
                             <TableCell>
                               <Button variant="ghost" size="sm" onClick={() => handleDeleteExpense(expense.id)}>
@@ -1395,7 +1483,7 @@ export default function Expenses() {
                         "card-gradient border-border/50 cursor-pointer transition-all hover:border-border",
                         group.hasNextInstallment && "border-border",
                       )}
-                      onClick={() => { setSelectedMonth(group); setSelectedExpenseIds(new Set()); }}
+                      onClick={() => { setSelectedMonthKey(group.key); setSelectedExpenseIds(new Set()); }}
                     >
                       <CardHeader className="pb-3">
                         <div className="flex items-center justify-between">
@@ -1465,7 +1553,7 @@ export default function Expenses() {
         )}
 
         {/* Month Detail Dialog */}
-        <Dialog open={!!selectedMonth} onOpenChange={(open) => !open && setSelectedMonth(null)}>
+        <Dialog open={!!selectedMonth} onOpenChange={(open) => !open && setSelectedMonthKey(null)}>
           <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
@@ -1480,11 +1568,8 @@ export default function Expenses() {
               const unpaidCount = selectedMonth.expenses.filter(e => e.order_status !== "pago").length;
               const nextInstallmentId = selectedMonth.expenses
                 .filter(e => e.expense_type === "installment" && e.order_status !== "pago")
-                .sort((a, b) => {
-                  const da = a.order_date ? new Date(a.order_date).getTime() : 0;
-                  const db = b.order_date ? new Date(b.order_date).getTime() : 0;
-                  return da - db;
-                })[0]?.id;
+                .sort(sortExpensesByDate)[0]?.id;
+              const today = startOfDay(new Date());
 
               return (
                 <div className="space-y-3">
@@ -1526,34 +1611,43 @@ export default function Expenses() {
                       </AlertDialog>
                     )}
                   </div>
-                  {selectedMonth.expenses.map((expense) => {
+                  {selectedMonth.expenses.map((expense, index) => {
+                    const currentDayKey = getExpenseDateKey(expense);
+                    const previousDayKey = index > 0 ? getExpenseDateKey(selectedMonth.expenses[index - 1]) : null;
+                    const showDayHeader = currentDayKey !== previousDayKey;
                     const isPaid = expense.order_status === "pago";
                     const isInstallment = expense.expense_type === "installment";
-                    const dueDate = expense.order_date ? new Date(expense.order_date) : null;
+                    const dueDate = dateKeyToSafeDate(getExpenseDateKey(expense));
                     const isNext = expense.id === nextInstallmentId;
-                    const isOverdue = dueDate && !isPaid && !isNext && dueDate <= new Date();
-                    const daysUntil = dueDate ? differenceInDays(dueDate, new Date()) : null;
+                    const isOverdue = !isPaid && !isNext && startOfDay(dueDate) < today;
+                    const daysUntil = differenceInDays(startOfDay(dueDate), today);
 
                     const isSelected = selectedExpenseIds.has(expense.id);
                     return (
-                      <Card
-                        key={expense.id}
-                        className={cn(
-                          "border-border/50 cursor-pointer transition-all",
-                          isNext && "border-border",
-                          isOverdue && "border-muted-foreground/30",
-                          isPaid && "opacity-70",
-                          isSelected && "ring-2 ring-destructive border-destructive/60",
-                        )}
-                        onClick={() => {
-                          setSelectedExpenseIds(prev => {
-                            const next = new Set(prev);
-                            if (next.has(expense.id)) next.delete(expense.id);
-                            else next.add(expense.id);
-                            return next;
-                          });
-                        }}
-                      >
+                      <div key={expense.id} className="space-y-3">
+                        {showDayHeader ? (
+                          <div className="flex items-center gap-2 px-1">
+                            <CalendarIconLucide className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm font-medium">{getExpenseDisplayDate(expense)}</span>
+                          </div>
+                        ) : null}
+                        <Card
+                          className={cn(
+                            "border-border/50 cursor-pointer transition-all",
+                            isNext && "border-border",
+                            isOverdue && "border-muted-foreground/30",
+                            isPaid && "opacity-70",
+                            isSelected && "ring-2 ring-destructive border-destructive/60",
+                          )}
+                          onClick={() => {
+                            setSelectedExpenseIds(prev => {
+                              const next = new Set(prev);
+                              if (next.has(expense.id)) next.delete(expense.id);
+                              else next.add(expense.id);
+                              return next;
+                            });
+                          }}
+                        >
                         <CardContent className="p-4">
                           <div className="flex items-center justify-between gap-4">
                             {/* Checkbox */}
@@ -1593,11 +1687,11 @@ export default function Expenses() {
                               {expense.notes && <p className="text-xs text-muted-foreground truncate mt-0.5">{expense.notes}</p>}
                               <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
                                 <span>
-                                  Vence: {dueDate ? dueDate.toLocaleDateString("pt-BR") : "—"}
+                                  Vence: {getExpenseDisplayDate(expense)}
                                 </span>
                                 {daysUntil !== null && !isPaid && (
                                    <span className="text-muted-foreground">
-                                    {daysUntil <= 0 ? "Vencida!" : daysUntil === 1 ? "Amanhã" : `em ${daysUntil} dias`}
+                                    {daysUntil < 0 ? "Vencida!" : daysUntil === 0 ? "Hoje" : daysUntil === 1 ? "Amanhã" : `em ${daysUntil} dias`}
                                   </span>
                                 )}
                               </div>
@@ -1636,6 +1730,7 @@ export default function Expenses() {
                           </div>
                         </CardContent>
                       </Card>
+                      </div>
                     );
                   })}
                 </div>
@@ -1655,9 +1750,9 @@ export default function Expenses() {
               <DialogDescription>Detalhes da parcela a ser paga</DialogDescription>
             </DialogHeader>
             {detailExpense && (() => {
-              const dueDate = detailExpense.order_date ? new Date(detailExpense.order_date) : null;
-              const today = new Date();
-              const daysUntil = dueDate ? Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)) : null;
+              const dueDate = dateKeyToSafeDate(getExpenseDateKey(detailExpense));
+              const today = startOfDay(new Date());
+              const daysUntil = differenceInDays(startOfDay(dueDate), today);
 
               const baseName = detailExpense.description?.replace(/\s*\(\d+\/\d+\)$/, "") || "";
               const allRelated = allExpenses.filter(e =>
@@ -1679,13 +1774,13 @@ export default function Expenses() {
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Vencimento</span>
-                      <span className="font-medium">{dueDate?.toLocaleDateString("pt-BR")}</span>
+                      <span className="font-medium">{getExpenseDisplayDate(detailExpense)}</span>
                     </div>
                     {daysUntil !== null && (
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-muted-foreground">Tempo restante</span>
-                        <Badge variant={daysUntil <= 0 ? "destructive" : daysUntil <= 3 ? "secondary" : "outline"}>
-                          {daysUntil <= 0 ? "Vencida!" : daysUntil === 1 ? "Amanhã" : `${daysUntil} dias`}
+                        <Badge variant={daysUntil < 0 ? "destructive" : daysUntil <= 3 ? "secondary" : "outline"}>
+                          {daysUntil < 0 ? "Vencida!" : daysUntil === 0 ? "Hoje" : daysUntil === 1 ? "Amanhã" : `${daysUntil} dias`}
                         </Badge>
                       </div>
                     )}

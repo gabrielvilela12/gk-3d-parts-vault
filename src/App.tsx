@@ -72,7 +72,7 @@ function AppContent() {
         className={cn(
           "flex-1 min-h-screen transition-all duration-300",
           user && !isMobile ? "ml-[220px]" : "",
-          user && isMobile ? "pt-[calc(env(safe-area-inset-top)+3.5rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)]" : ""
+          user && isMobile ? "pt-[calc(env(safe-area-inset-top)+4.5rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)]" : ""
         )}
       >
         <Routes>
