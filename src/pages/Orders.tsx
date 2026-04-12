@@ -342,6 +342,26 @@ const sortQueueOrders = (left: Order, right: Order) => {
   return new Date(left.created_at).getTime() - new Date(right.created_at).getTime();
 };
 
+const QUEUE_TIME_SORT_OPTIONS = [
+  { value: "queue", label: "Posicao da fila" },
+  { value: "fastest", label: "Mais rapido primeiro" },
+  { value: "slowest", label: "Mais demorado primeiro" },
+] as const;
+
+type QueueTimeSort = (typeof QUEUE_TIME_SORT_OPTIONS)[number]["value"];
+
+const QUEUE_MAX_TIME_OPTIONS = [
+  { value: "all", label: "Sem limite", minutes: null },
+  { value: "30", label: "Ate 30min", minutes: 30 },
+  { value: "60", label: "Ate 1h", minutes: 60 },
+  { value: "120", label: "Ate 2h", minutes: 120 },
+  { value: "240", label: "Ate 4h", minutes: 240 },
+  { value: "480", label: "Ate 8h", minutes: 480 },
+  { value: "720", label: "Ate 12h", minutes: 720 },
+] as const;
+
+type QueueMaxTimeFilter = (typeof QUEUE_MAX_TIME_OPTIONS)[number]["value"];
+
 const formatTime = (minutes: number | null): string => {
   if (minutes === null) return "N/A";
   if (minutes === 0) return "0min";
@@ -654,6 +674,8 @@ export default function Orders() {
   const [filterSearch, setFilterSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"queue" | "printing" | "done">("queue");
   const [filterPrinterKey, setFilterPrinterKey] = useState(ALL_PRINTERS_FILTER_KEY);
+  const [queueTimeSort, setQueueTimeSort] = useState<QueueTimeSort>("queue");
+  const [queueMaxTimeFilter, setQueueMaxTimeFilter] = useState<QueueMaxTimeFilter>("all");
   const [draggedOrderId, setDraggedOrderId] = useState<string | null>(null);
   const [dragOverOrderId, setDragOverOrderId] = useState<string | null>(null);
   const [dragOverPrinterKey, setDragOverPrinterKey] = useState<string | null>(null);
@@ -2166,13 +2188,41 @@ export default function Orders() {
       }),
     [filteredQueue, printerNameById],
   );
-  const visibleQueueOrders = useMemo(
+  const queueMaxTimeMinutes = useMemo(() => {
+    const option = QUEUE_MAX_TIME_OPTIONS.find((item) => item.value === queueMaxTimeFilter);
+    return option?.minutes ?? null;
+  }, [queueMaxTimeFilter]);
+  const baseVisibleQueueOrders = useMemo(
     () =>
       (isAllPrintersView ? allQueueOrders : activeQueueSection?.orders || []).filter((order) =>
         isPrintingView ? isOrderPrinting(order) : isOrderPending(order),
       ),
     [activeQueueSection, allQueueOrders, isAllPrintersView, isPrintingView],
   );
+  const visibleQueueOrders = useMemo(() => {
+    if (!isQueueView) return baseVisibleQueueOrders;
+
+    const timeFilteredOrders =
+      queueMaxTimeMinutes === null
+        ? baseVisibleQueueOrders
+        : baseVisibleQueueOrders.filter((order) => getPrintTimeMin(order) <= queueMaxTimeMinutes);
+
+    if (queueTimeSort === "fastest") {
+      return [...timeFilteredOrders].sort((left, right) => {
+        const diff = getPrintTimeMin(left) - getPrintTimeMin(right);
+        return diff !== 0 ? diff : sortQueueOrders(left, right);
+      });
+    }
+
+    if (queueTimeSort === "slowest") {
+      return [...timeFilteredOrders].sort((left, right) => {
+        const diff = getPrintTimeMin(right) - getPrintTimeMin(left);
+        return diff !== 0 ? diff : sortQueueOrders(left, right);
+      });
+    }
+
+    return timeFilteredOrders;
+  }, [baseVisibleQueueOrders, isQueueView, queueMaxTimeMinutes, queueTimeSort]);
   const visibleQueueTotalMin = useMemo(
     () => visibleQueueOrders.reduce((total, order) => total + getRemainingPrintTimeMin(order, now), 0),
     [now, visibleQueueOrders],
@@ -2223,6 +2273,8 @@ export default function Orders() {
     !isAllPrintersView &&
     filterColor === "all" &&
     !filterSearch.trim() &&
+    queueTimeSort === "queue" &&
+    queueMaxTimeFilter === "all" &&
     !isPersistingQueue;
   const unassignedQueueCount = useMemo(
     () => queue.filter((order) => !order.printer_id && isOrderPending(order)).length,
@@ -2343,7 +2395,7 @@ export default function Orders() {
                   title={
                     canDragCard
                       ? "Arraste para reorganizar a fila"
-                      : "Reordenacao disponivel apenas para pedidos pendentes"
+                      : "Reordenacao disponivel apenas sem busca, cor e filtros de tempo"
                   }
                 >
                   <GripVertical className="h-4 w-4" />
@@ -2550,13 +2602,16 @@ export default function Orders() {
             ) : isQueueView ? (
               <div className="rounded-2xl border border-white/10 bg-black/10 p-3">
                 <p className="text-[10px] font-medium uppercase tracking-[0.24em] text-slate-500">
-                  Fila
+                  {queueTimeSort === "queue" && queueMaxTimeFilter === "all" ? "Fila" : "Ordem visual"}
                 </p>
                 <p className="mt-1 text-sm font-medium text-slate-100">
-                  Posicao {String((queueIndex || 0) + 1).padStart(2, "0")}
+                  {queueTimeSort === "queue" && queueMaxTimeFilter === "all" ? "Posicao" : "Item"}{" "}
+                  {String((queueIndex || 0) + 1).padStart(2, "0")}
                 </p>
                 <p className="mt-1 text-xs text-slate-400">
-                  {canDragCard ? "Arraste para reordenar." : "Fila bloqueada durante busca ou filtros."}
+                  {canDragCard
+                    ? "Arraste para reordenar."
+                    : "Fila bloqueada durante busca, cor ou filtros de tempo."}
                 </p>
               </div>
             ) : (
@@ -3016,7 +3071,7 @@ export default function Orders() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 lg:flex-row">
+          <div className="flex flex-col gap-3 xl:flex-row">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
               <Input
@@ -3026,51 +3081,90 @@ export default function Orders() {
                 className="h-11 border-white/10 bg-[#050816] pl-9 text-sm text-slate-100 placeholder:text-slate-500"
               />
             </div>
-            <Select value={filterColor} onValueChange={setFilterColor}>
-              <SelectTrigger className="h-11 w-full border-white/10 bg-[#050816] text-sm text-slate-100 lg:w-[170px]">
-                <SelectValue placeholder="Cor" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas as cores</SelectItem>
-                {uniqueColors.map((color) => (
-                  <SelectItem key={color} value={color}>
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`${getColorDotClassName(color, "sm")} ${
-                          getColorSwatchValue(color) ? "" : "bg-muted"
-                        }`}
-                        style={
-                          getColorSwatchValue(color)
-                            ? { backgroundColor: getColorSwatchValue(color) ?? undefined }
-                            : undefined
-                        }
-                      />
-                      <span>{color}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <div className="grid grid-cols-3 gap-1 lg:flex">
-              {(["queue", "printing", "done"] as const).map((status) => (
-                <Button
-                  key={status}
-                  variant="outline"
-                  size="sm"
-                  className={`h-11 border-white/10 text-xs ${
-                    filterStatus === status
-                      ? "bg-white/[0.10] text-slate-50 hover:bg-white/[0.10]"
-                      : "bg-[#050816] text-slate-400 hover:bg-white/[0.05] hover:text-slate-50"
-                  }`}
-                  onClick={() => setFilterStatus(status)}
+            <div className="grid gap-3 sm:grid-cols-2 xl:flex xl:flex-wrap">
+              <Select value={filterColor} onValueChange={setFilterColor}>
+                <SelectTrigger className="h-11 w-full border-white/10 bg-[#050816] text-sm text-slate-100 xl:w-[170px]">
+                  <SelectValue placeholder="Cor" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as cores</SelectItem>
+                  {uniqueColors.map((color) => (
+                    <SelectItem key={color} value={color}>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`${getColorDotClassName(color, "sm")} ${
+                            getColorSwatchValue(color) ? "" : "bg-muted"
+                          }`}
+                          style={
+                            getColorSwatchValue(color)
+                              ? { backgroundColor: getColorSwatchValue(color) ?? undefined }
+                              : undefined
+                          }
+                        />
+                        <span>{color}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {isQueueView ? (
+                <Select
+                  value={queueTimeSort}
+                  onValueChange={(value) => setQueueTimeSort(value as QueueTimeSort)}
                 >
-                  {status === "queue"
-                    ? "Fila"
-                    : status === "printing"
-                      ? "Fazendo"
-                      : "Concluidos"}
-                </Button>
-              ))}
+                  <SelectTrigger className="h-11 w-full border-white/10 bg-[#050816] text-sm text-slate-100 xl:w-[220px]">
+                    <SelectValue placeholder="Ordenar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {QUEUE_TIME_SORT_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : null}
+
+              {isQueueView ? (
+                <Select
+                  value={queueMaxTimeFilter}
+                  onValueChange={(value) => setQueueMaxTimeFilter(value as QueueMaxTimeFilter)}
+                >
+                  <SelectTrigger className="h-11 w-full border-white/10 bg-[#050816] text-sm text-slate-100 xl:w-[180px]">
+                    <SelectValue placeholder="Tempo maximo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {QUEUE_MAX_TIME_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : null}
+
+              <div className="grid grid-cols-3 gap-1 xl:flex">
+                {(["queue", "printing", "done"] as const).map((status) => (
+                  <Button
+                    key={status}
+                    variant="outline"
+                    size="sm"
+                    className={`h-11 border-white/10 text-xs ${
+                      filterStatus === status
+                        ? "bg-white/[0.10] text-slate-50 hover:bg-white/[0.10]"
+                        : "bg-[#050816] text-slate-400 hover:bg-white/[0.05] hover:text-slate-50"
+                    }`}
+                    onClick={() => setFilterStatus(status)}
+                  >
+                    {status === "queue"
+                      ? "Fila"
+                      : status === "printing"
+                        ? "Fazendo"
+                        : "Concluidos"}
+                  </Button>
+                ))}
+              </div>
             </div>
           </div>
         </CardContent>
@@ -3194,7 +3288,7 @@ export default function Orders() {
             </p>
             {!canReorderQueue && !isAllPrintersView && isQueueView ? (
               <p className="text-xs text-amber-400">
-                Limpe a busca e o filtro de cor para reordenar esta fila com drag and drop.
+                Limpe a busca, o filtro de cor e os filtros de tempo para reordenar esta fila com drag and drop.
               </p>
             ) : null}
           </div>
