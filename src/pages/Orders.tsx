@@ -117,6 +117,7 @@ interface PrinterItem {
   description: string | null;
   created_at: string;
   updated_at: string;
+  position: number;
 }
 
 type OrderStatus = "pending" | "printing" | "done";
@@ -781,7 +782,9 @@ export default function Orders() {
       const orderStatusAvailable = !orderFeatureProbeRes.error;
       const orderCostSnapshotAvailable = !orderCostProbeRes.error;
       const orderStoreAvailable = !orderStoreProbeRes.error;
-      const printersData = printersAvailable ? ((printersRes.data as PrinterItem[]) || []) : [];
+      const printersData = printersAvailable
+        ? ((printersRes.data as PrinterItem[]) || []).sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+        : [];
       const printersById = new Map(printersData.map((printer) => [printer.id, printer]));
       const warnings: string[] = [];
 
@@ -1695,6 +1698,7 @@ export default function Orders() {
           user_id: user.id,
           name: newPrinter.name.trim(),
           description: newPrinter.description.trim() || null,
+          position: printers.length,
         })
         .select("id")
         .single();
