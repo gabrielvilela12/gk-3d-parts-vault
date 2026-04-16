@@ -1764,12 +1764,12 @@ export default function Orders() {
     });
   }, []);
 
-  const toggleSelectAll = useCallback(() => {
+  const toggleSelectAll = useCallback((allIds: string[]) => {
     setSelectedOrderIds((prev) => {
       if (prev.size > 0) return new Set();
-      return new Set(visibleQueueOrders.map((o) => o.id));
+      return new Set(allIds);
     });
-  }, [visibleQueueOrders]);
+  }, []);
 
   const handleBatchStartPrinting = async () => {
     if (selectedOrderIds.size === 0) return;
