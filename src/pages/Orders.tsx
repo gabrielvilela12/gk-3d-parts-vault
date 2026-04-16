@@ -324,6 +324,10 @@ const getPieceSnapshotUnitCost = (
   return piece.cost ?? null;
 };
 
+const getBaseName = (name: string): string => {
+  return name.replace(/\s*-\s*\d+\s*$/, "").trim();
+};
+
 const sortQueueOrders = (left: Order, right: Order) => {
   const leftPrinting = isOrderPrinting(left);
   const rightPrinting = isOrderPrinting(right);
@@ -337,6 +341,20 @@ const sortQueueOrders = (left: Order, right: Order) => {
 
   if (leftPosition !== rightPosition) {
     return leftPosition - rightPosition;
+  }
+
+  // Group orders with similar names together (e.g. "Item - 1", "Item - 2")
+  const leftBase = getBaseName(left.pieces.name);
+  const rightBase = getBaseName(right.pieces.name);
+  const nameCompare = leftBase.localeCompare(rightBase, "pt-BR");
+  if (nameCompare !== 0) {
+    return nameCompare;
+  }
+
+  // Within the same base name, sort by the full name naturally
+  const fullNameCompare = left.pieces.name.localeCompare(right.pieces.name, "pt-BR", { numeric: true });
+  if (fullNameCompare !== 0) {
+    return fullNameCompare;
   }
 
   return new Date(left.created_at).getTime() - new Date(right.created_at).getTime();
