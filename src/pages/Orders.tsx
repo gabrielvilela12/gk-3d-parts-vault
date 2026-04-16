@@ -705,6 +705,8 @@ export default function Orders() {
   const [dragOverOrderId, setDragOverOrderId] = useState<string | null>(null);
   const [dragOverPrinterKey, setDragOverPrinterKey] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isAutoCompletingRef = useRef(false);
   const { toast } = useToast();
