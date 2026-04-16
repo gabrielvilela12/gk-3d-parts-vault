@@ -117,6 +117,7 @@ interface PrinterItem {
   description: string | null;
   created_at: string;
   updated_at: string;
+  position: number;
 }
 
 type OrderStatus = "pending" | "printing" | "done";
@@ -688,6 +689,7 @@ export default function Orders() {
   const [editingStartTimes, setEditingStartTimes] = useState<Record<string, string>>({});
   const [savingStartOrderId, setSavingStartOrderId] = useState<string | null>(null);
   const [newPrinter, setNewPrinter] = useState({ name: "", description: "" });
+  const [draggingPrinterTabId, setDraggingPrinterTabId] = useState<string | null>(null);
   const [filterColor, setFilterColor] = useState("all");
   const [filterSearch, setFilterSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"queue" | "printing" | "done">("queue");
@@ -781,7 +783,9 @@ export default function Orders() {
       const orderStatusAvailable = !orderFeatureProbeRes.error;
       const orderCostSnapshotAvailable = !orderCostProbeRes.error;
       const orderStoreAvailable = !orderStoreProbeRes.error;
-      const printersData = printersAvailable ? ((printersRes.data as PrinterItem[]) || []) : [];
+      const printersData = printersAvailable
+        ? ((printersRes.data as PrinterItem[]) || []).sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+        : [];
       const printersById = new Map(printersData.map((printer) => [printer.id, printer]));
       const warnings: string[] = [];
 
@@ -1695,6 +1699,7 @@ export default function Orders() {
           user_id: user.id,
           name: newPrinter.name.trim(),
           description: newPrinter.description.trim() || null,
+          position: printers.length,
         })
         .select("id")
         .single();
@@ -1713,6 +1718,33 @@ export default function Orders() {
       toast({ title: "Erro ao adicionar impressora", variant: "destructive" });
     } finally {
       setIsSavingPrinter(false);
+    }
+  };
+
+  const handleReorderPrinter = async (draggedId: string, targetId: string) => {
+    if (draggedId === targetId) return;
+    const oldIndex = printers.findIndex((p) => p.id === draggedId);
+    const newIndex = printers.findIndex((p) => p.id === targetId);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reordered = [...printers];
+    const [moved] = reordered.splice(oldIndex, 1);
+    reordered.splice(newIndex, 0, moved);
+
+    // Optimistic update
+    setPrinters(reordered.map((p, i) => ({ ...p, position: i })));
+
+    // Persist
+    try {
+      await Promise.all(
+        reordered.map((p, i) =>
+          supabase.from("printers").update({ position: i }).eq("id", p.id)
+        )
+      );
+    } catch (err) {
+      console.error("Error reordering printers:", err);
+      toast({ title: "Erro ao reordenar impressoras", variant: "destructive" });
+      await fetchData();
     }
   };
 
@@ -3204,7 +3236,27 @@ export default function Orders() {
                   <button
                     key={tab.id}
                     onClick={() => setFilterPrinterKey(tab.id)}
-                    className={`flex min-h-[44px] min-w-fit items-center gap-2 rounded-2xl border px-4 py-3 text-left transition-all ${
+                    draggable={tab.id !== ALL_PRINTERS_FILTER_KEY}
+                    onDragStart={(e) => {
+                      if (tab.id === ALL_PRINTERS_FILTER_KEY) return;
+                      setDraggingPrinterTabId(tab.id);
+                      e.dataTransfer.effectAllowed = "move";
+                    }}
+                    onDragOver={(e) => {
+                      if (tab.id === ALL_PRINTERS_FILTER_KEY || !draggingPrinterTabId) return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (tab.id === ALL_PRINTERS_FILTER_KEY || !draggingPrinterTabId) return;
+                      handleReorderPrinter(draggingPrinterTabId, tab.id);
+                      setDraggingPrinterTabId(null);
+                    }}
+                    onDragEnd={() => setDraggingPrinterTabId(null)}
+                    className={`flex min-h-[44px] min-w-fit cursor-grab items-center gap-2 rounded-2xl border px-4 py-3 text-left transition-all ${
+                      draggingPrinterTabId === tab.id ? "opacity-50" : ""
+                    } ${
                       isActive
                         ? `${tab.accent.border} ${tab.accent.soft} text-slate-50 shadow-[0_14px_34px_rgba(2,6,23,0.34)]`
                         : "border-white/10 bg-[#050816] text-slate-400 hover:border-white/20 hover:text-slate-50"
