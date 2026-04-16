@@ -1721,7 +1721,33 @@ export default function Orders() {
     }
   };
 
-  const handleDeletePrinter = async (printerId: string) => {
+  const handleReorderPrinter = async (draggedId: string, targetId: string) => {
+    if (draggedId === targetId) return;
+    const oldIndex = printers.findIndex((p) => p.id === draggedId);
+    const newIndex = printers.findIndex((p) => p.id === targetId);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reordered = [...printers];
+    const [moved] = reordered.splice(oldIndex, 1);
+    reordered.splice(newIndex, 0, moved);
+
+    // Optimistic update
+    setPrinters(reordered.map((p, i) => ({ ...p, position: i })));
+
+    // Persist
+    try {
+      await Promise.all(
+        reordered.map((p, i) =>
+          supabase.from("printers").update({ position: i }).eq("id", p.id)
+        )
+      );
+    } catch (err) {
+      console.error("Error reordering printers:", err);
+      toast({ title: "Erro ao reordenar impressoras", variant: "destructive" });
+      await fetchData();
+    }
+  };
+
     if (!canUsePrinterFeatures) {
       showSchemaWarningToast();
       return;
