@@ -3726,6 +3726,79 @@ export default function Orders() {
                 </div>
               ) : (
                 <div className="space-y-3">
+                  {/* Batch action bar */}
+                  {isQueueView && visibleQueueOrders.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-[#050816] p-3">
+                      <button
+                        onClick={() => toggleSelectAll(visibleQueueOrders.map((o) => o.id))}
+                        className="flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs text-slate-300 transition-colors hover:border-white/20 hover:text-slate-50"
+                      >
+                        {selectedOrderIds.size > 0 && selectedOrderIds.size >= visibleQueueOrders.length ? (
+                          <CheckSquare className="h-4 w-4 text-primary" />
+                        ) : (
+                          <Square className="h-4 w-4" />
+                        )}
+                        {selectedOrderIds.size > 0 ? `${selectedOrderIds.size} selecionado(s)` : "Selecionar todos"}
+                      </button>
+
+                      {selectedOrderIds.size > 0 && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5 border-white/10 bg-transparent text-xs text-slate-300 hover:border-primary/50 hover:text-primary"
+                            onClick={() => void handleBatchStartPrinting()}
+                          >
+                            <Printer className="h-3.5 w-3.5" />
+                            Imprimir
+                          </Button>
+
+                          <Select onValueChange={(v) => void handleBatchAssignPrinter(fromPrinterKey(v))}>
+                            <SelectTrigger className="h-8 w-[160px] border-white/10 bg-transparent text-xs text-slate-300">
+                              <SelectValue placeholder="Atribuir impressora" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={UNASSIGNED_PRINTER_KEY}>Sem impressora</SelectItem>
+                              {printers.map((p) => (
+                                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5 border-white/10 bg-transparent text-xs text-slate-300 hover:border-emerald-500/50 hover:text-emerald-400"
+                            onClick={() => void handleBatchMarkDone()}
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            Marcar feito
+                          </Button>
+
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="ml-auto text-xs text-slate-500 hover:text-slate-300"
+                            onClick={() => setSelectedOrderIds(new Set())}
+                          >
+                            Limpar
+                          </Button>
+                        </>
+                      )}
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="ml-auto gap-1.5 border-white/10 bg-transparent text-xs text-slate-300 hover:border-white/20 hover:text-slate-50"
+                        onClick={() => void handleExportPdf()}
+                        disabled={isExportingPdf}
+                      >
+                        <FileDown className="h-3.5 w-3.5" />
+                        {isExportingPdf ? "Gerando..." : "Exportar PDF"}
+                      </Button>
+                    </div>
+                  )}
+
                   {visibleQueueOrders.map((order, index) => renderQueueOrderCard(order, index))}
                 </div>
               )}
