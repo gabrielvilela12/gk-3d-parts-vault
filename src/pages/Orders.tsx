@@ -2723,14 +2723,17 @@ export default function Orders() {
       : "border-white/10 bg-[#081121]";
     const printerStripeClass = isUnassignedCard ? "bg-amber-300" : accent.dot;
     const canDragCard = isQueueView && canReorderQueue && isOrderPending(order);
+    const isSelected = selectedOrderIds.has(order.id);
 
     return (
       <div
         key={order.id}
         className={`relative overflow-hidden rounded-2xl border p-3 sm:p-4 backdrop-blur-sm transition-all ${
-          dragOverOrderId === order.id
-            ? "ring-2 ring-primary/60 border-primary/40"
-            : "hover:border-white/15 hover:shadow-[0_18px_40px_rgba(2,6,23,0.28)]"
+          isSelected
+            ? "ring-2 ring-primary/50 border-primary/30"
+            : dragOverOrderId === order.id
+              ? "ring-2 ring-primary/60 border-primary/40"
+              : "hover:border-white/15 hover:shadow-[0_18px_40px_rgba(2,6,23,0.28)]"
         } ${cardTone}`}
         onDragOver={canDragCard ? (event) => handleOrderDragOver(event, order) : undefined}
         onDrop={canDragCard ? (event) => void handleOrderDrop(event, order) : undefined}
@@ -2742,6 +2745,18 @@ export default function Orders() {
 
         <div className="production-order-card-layout relative z-10">
           <div className="production-order-head">
+            {/* Checkbox for batch selection */}
+            <button
+              onClick={(e) => { e.stopPropagation(); toggleOrderSelection(order.id); }}
+              className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors ${
+                isSelected
+                  ? "border-primary/50 bg-primary/20 text-primary"
+                  : "border-white/10 bg-transparent text-slate-500 hover:border-white/20 hover:text-slate-300"
+              }`}
+            >
+              {isSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+            </button>
+
             {isAllPrintersView ? (
               <div
                 className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-[#0b1628] text-[11px] font-semibold ${
