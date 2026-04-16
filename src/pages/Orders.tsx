@@ -689,6 +689,7 @@ export default function Orders() {
   const [editingStartTimes, setEditingStartTimes] = useState<Record<string, string>>({});
   const [savingStartOrderId, setSavingStartOrderId] = useState<string | null>(null);
   const [newPrinter, setNewPrinter] = useState({ name: "", description: "" });
+  const [draggingPrinterTabId, setDraggingPrinterTabId] = useState<string | null>(null);
   const [filterColor, setFilterColor] = useState("all");
   const [filterSearch, setFilterSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"queue" | "printing" | "done">("queue");
