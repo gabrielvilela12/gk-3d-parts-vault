@@ -2067,7 +2067,7 @@ export default function Orders() {
       setIsExportingPdf(false);
     }
   };
-
+    const isSelected = selectedOrderIds.has(order.id);
 
   const handleDeletePrinter = async (printerId: string) => {
     if (!canUsePrinterFeatures) {
