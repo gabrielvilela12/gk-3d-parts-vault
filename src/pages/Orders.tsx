@@ -1755,7 +1755,320 @@ export default function Orders() {
     }
   };
 
-  const handleDeletePrinter = async (printerId: string) => {
+  const toggleOrderSelection = useCallback((orderId: string) => {
+    setSelectedOrderIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(orderId)) next.delete(orderId);
+      else next.add(orderId);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedOrderIds((prev) => {
+      if (prev.size > 0) return new Set();
+      return new Set(visibleQueueOrders.map((o) => o.id));
+    });
+  }, [visibleQueueOrders]);
+
+  const handleBatchStartPrinting = async () => {
+    if (selectedOrderIds.size === 0) return;
+    const selected = orders.filter((o) => selectedOrderIds.has(o.id));
+    
+    // Group by printer_id
+    const byPrinter = new Map<string | null, Order[]>();
+    for (const order of selected) {
+      const key = order.printer_id ?? null;
+      if (!byPrinter.has(key)) byPrinter.set(key, []);
+      byPrinter.get(key)!.push(order);
+    }
+
+    let started = 0;
+    let skipped = 0;
+
+    for (const [printerId, group] of byPrinter) {
+      if (!printerId) { skipped += group.length; continue; }
+      
+      // Check if printer already has a printing order
+      const alreadyPrinting = orders.some(
+        (o) => o.printer_id === printerId && isOrderPrinting(o) && !selectedOrderIds.has(o.id)
+      );
+      
+      // Only start the first pending one per printer
+      const pending = group.filter((o) => isOrderPending(o));
+      if (pending.length === 0) { skipped += group.length; continue; }
+      
+      if (alreadyPrinting) {
+        skipped += group.length;
+        continue;
+      }
+
+      const order = pending[0];
+      await handleOrderStatusChange(order.id, "printing");
+      started++;
+      skipped += group.length - 1;
+    }
+
+    setSelectedOrderIds(new Set());
+    toast({
+      title: `${started} pedido(s) iniciado(s)`,
+      description: skipped > 0 ? `${skipped} ignorado(s) (sem impressora, já imprimindo, ou impressora ocupada)` : undefined,
+    });
+  };
+
+  const handleBatchAssignPrinter = async (printerId: string | null) => {
+    if (selectedOrderIds.size === 0) return;
+    const updates = [...selectedOrderIds].map((id) =>
+      supabase.from("orders").update({ printer_id: printerId }).eq("id", id)
+    );
+    await Promise.all(updates);
+    setSelectedOrderIds(new Set());
+    toast({ title: `${updates.length} pedido(s) direcionado(s)` });
+    await fetchData();
+  };
+
+  const handleBatchMarkDone = async () => {
+    if (selectedOrderIds.size === 0) return;
+    let count = 0;
+    for (const id of selectedOrderIds) {
+      await handleOrderStatusChange(id, "done");
+      count++;
+    }
+    setSelectedOrderIds(new Set());
+    toast({ title: `${count} pedido(s) finalizado(s)` });
+  };
+
+  const handleExportPdf = async () => {
+    setIsExportingPdf(true);
+    try {
+      const { default: jsPDF } = await import("jspdf");
+      const autoTable = (await import("jspdf-autotable")).default;
+
+      const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 15;
+      const now = new Date();
+
+      // ── Header ──
+      doc.setFillColor(15, 23, 42);
+      doc.rect(0, 0, pageWidth, 28, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(18);
+      doc.setFont("helvetica", "bold");
+      doc.text("Relatorio de Producao", margin, 18);
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Gerado em ${now.toLocaleDateString("pt-BR")} as ${now.toLocaleTimeString("pt-BR")}`, pageWidth - margin, 18, { align: "right" });
+
+      let y = 38;
+
+      // ── Data ──
+      const queueOrders = orders.filter((o) => !isOrderDone(o));
+      const pendingOrders = queueOrders.filter((o) => isOrderPending(o));
+      const printingOrders = queueOrders.filter((o) => isOrderPrinting(o));
+      const totalQueueMin = queueOrders.reduce((sum, o) => sum + getPrintTimeMin(o), 0);
+      
+      // Summary cards
+      const summaryCards = [
+        { label: "Total na Fila", value: String(queueOrders.length) },
+        { label: "Pendentes", value: String(pendingOrders.length) },
+        { label: "Imprimindo", value: String(printingOrders.length) },
+        { label: "Tempo Total", value: formatTime(totalQueueMin) },
+      ];
+
+      const cardWidth = (pageWidth - margin * 2 - 12) / 4;
+      summaryCards.forEach((card, i) => {
+        const x = margin + i * (cardWidth + 4);
+        doc.setFillColor(241, 245, 249);
+        doc.roundedRect(x, y, cardWidth, 18, 3, 3, "F");
+        doc.setTextColor(100, 116, 139);
+        doc.setFontSize(8);
+        doc.text(card.label, x + cardWidth / 2, y + 6, { align: "center" });
+        doc.setTextColor(15, 23, 42);
+        doc.setFontSize(14);
+        doc.setFont("helvetica", "bold");
+        doc.text(card.value, x + cardWidth / 2, y + 14, { align: "center" });
+        doc.setFont("helvetica", "normal");
+      });
+      y += 26;
+
+      // ── By Printer ──
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(15, 23, 42);
+      doc.text("Distribuicao por Impressora", margin, y);
+      y += 6;
+
+      const printerStats: { name: string; count: number; totalMin: number }[] = [];
+      const unassigned = queueOrders.filter((o) => !o.printer_id);
+      if (unassigned.length > 0) {
+        printerStats.push({
+          name: "Sem impressora",
+          count: unassigned.length,
+          totalMin: unassigned.reduce((s, o) => s + getPrintTimeMin(o), 0),
+        });
+      }
+      for (const printer of printers) {
+        const pOrders = queueOrders.filter((o) => o.printer_id === printer.id);
+        if (pOrders.length > 0) {
+          printerStats.push({
+            name: printer.name,
+            count: pOrders.length,
+            totalMin: pOrders.reduce((s, o) => s + getPrintTimeMin(o), 0),
+          });
+        }
+      }
+
+      const maxCount = Math.max(...printerStats.map((p) => p.count), 1);
+      const barMaxWidth = pageWidth - margin * 2 - 90;
+      const barColors = [[59, 130, 246], [16, 185, 129], [249, 115, 22], [168, 85, 247], [236, 72, 153]];
+
+      printerStats.forEach((stat, i) => {
+        const barWidth = (stat.count / maxCount) * barMaxWidth;
+        const color = barColors[i % barColors.length];
+        doc.setFillColor(color[0], color[1], color[2]);
+        doc.roundedRect(margin, y, Math.max(barWidth, 2), 7, 2, 2, "F");
+        doc.setFontSize(8);
+        doc.setTextColor(15, 23, 42);
+        doc.text(`${stat.name} — ${stat.count} itens — ${formatTime(stat.totalMin)}`, margin + barWidth + 4, y + 5);
+        y += 10;
+      });
+      y += 4;
+
+      // ── Rankings ──
+      const sortedByTime = [...queueOrders].sort((a, b) => getPrintTimeMin(b) - getPrintTimeMin(a));
+      const top5Slowest = sortedByTime.slice(0, 5);
+      const top5Fastest = [...queueOrders].sort((a, b) => getPrintTimeMin(a) - getPrintTimeMin(b)).slice(0, 5);
+
+      // Duplicates
+      const nameCount = new Map<string, number>();
+      queueOrders.forEach((o) => {
+        const name = o.pieces.name;
+        nameCount.set(name, (nameCount.get(name) || 0) + o.quantity);
+      });
+      const duplicates = [...nameCount.entries()].filter(([, count]) => count > 1).sort((a, b) => b[1] - a[1]);
+
+      // Slowest
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text("Top 5 Mais Demorados", margin, y);
+      y += 2;
+
+      autoTable(doc, {
+        startY: y,
+        margin: { left: margin, right: margin },
+        head: [["#", "Peca", "Tempo", "Impressora"]],
+        body: top5Slowest.map((o, i) => [
+          String(i + 1),
+          o.pieces.name,
+          formatTime(getPrintTimeMin(o)),
+          o.printers?.name || printerNameById.get(o.printer_id || "") || "Sem impressora",
+        ]),
+        theme: "grid",
+        headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontSize: 8 },
+        bodyStyles: { fontSize: 8 },
+        columnStyles: { 0: { cellWidth: 10 }, 2: { cellWidth: 25 }, 3: { cellWidth: 40 } },
+      });
+
+      y = (doc as any).lastAutoTable.finalY + 8;
+
+      // Fastest
+      if (y > pageHeight - 60) { doc.addPage(); y = 20; }
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(15, 23, 42);
+      doc.text("Top 5 Mais Rapidos", margin, y);
+      y += 2;
+
+      autoTable(doc, {
+        startY: y,
+        margin: { left: margin, right: margin },
+        head: [["#", "Peca", "Tempo", "Impressora"]],
+        body: top5Fastest.map((o, i) => [
+          String(i + 1),
+          o.pieces.name,
+          formatTime(getPrintTimeMin(o)),
+          o.printers?.name || printerNameById.get(o.printer_id || "") || "Sem impressora",
+        ]),
+        theme: "grid",
+        headStyles: { fillColor: [16, 185, 129], textColor: [255, 255, 255], fontSize: 8 },
+        bodyStyles: { fontSize: 8 },
+        columnStyles: { 0: { cellWidth: 10 }, 2: { cellWidth: 25 }, 3: { cellWidth: 40 } },
+      });
+
+      y = (doc as any).lastAutoTable.finalY + 8;
+
+      // Duplicates
+      if (duplicates.length > 0) {
+        if (y > pageHeight - 60) { doc.addPage(); y = 20; }
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(15, 23, 42);
+        doc.text("Itens Repetidos (agrupados)", margin, y);
+        y += 2;
+
+        autoTable(doc, {
+          startY: y,
+          margin: { left: margin, right: margin },
+          head: [["Peca", "Quantidade Total"]],
+          body: duplicates.map(([name, count]) => [name, String(count)]),
+          theme: "grid",
+          headStyles: { fillColor: [249, 115, 22], textColor: [255, 255, 255], fontSize: 8 },
+          bodyStyles: { fontSize: 8 },
+        });
+
+        y = (doc as any).lastAutoTable.finalY + 8;
+      }
+
+      // ── Full list ──
+      doc.addPage();
+      y = 20;
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(15, 23, 42);
+      doc.text("Lista Completa da Fila", margin, y);
+      y += 2;
+
+      autoTable(doc, {
+        startY: y,
+        margin: { left: margin, right: margin },
+        head: [["#", "Peca", "Cor", "Qtd", "Tempo", "Impressora", "Status"]],
+        body: queueOrders.map((o, i) => [
+          String(i + 1),
+          o.pieces.name,
+          o.color || "-",
+          String(o.quantity),
+          formatTime(getPrintTimeMin(o)),
+          o.printers?.name || printerNameById.get(o.printer_id || "") || "Sem",
+          isOrderPrinting(o) ? "Imprimindo" : "Pendente",
+        ]),
+        theme: "striped",
+        headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontSize: 7 },
+        bodyStyles: { fontSize: 7 },
+        columnStyles: { 0: { cellWidth: 8 }, 3: { cellWidth: 10 }, 4: { cellWidth: 20 }, 6: { cellWidth: 22 } },
+      });
+
+      // Footer on all pages
+      const totalPages = doc.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFontSize(7);
+        doc.setTextColor(148, 163, 184);
+        doc.text(`Pagina ${i} de ${totalPages}`, pageWidth - margin, pageHeight - 8, { align: "right" });
+      }
+
+      doc.save(`relatorio-producao-${now.toISOString().slice(0, 10)}.pdf`);
+      toast({ title: "PDF exportado com sucesso!" });
+    } catch (err) {
+      console.error("Error exporting PDF:", err);
+      toast({ title: "Erro ao exportar PDF", variant: "destructive" });
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
+
     if (!canUsePrinterFeatures) {
       showSchemaWarningToast();
       return;
