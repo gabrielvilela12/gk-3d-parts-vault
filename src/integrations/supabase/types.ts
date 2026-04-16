@@ -554,7 +554,7 @@ export type Database = {
           peso_g: number | null
           preco_venda: number | null
           print_status: string | null
-          reference_names: string[] | null
+          reference_names: string[]
           stl_url: string | null
           stock_by_color: Json | null
           stock_quantity: number
@@ -584,7 +584,7 @@ export type Database = {
           peso_g?: number | null
           preco_venda?: number | null
           print_status?: string | null
-          reference_names?: string[] | null
+          reference_names?: string[]
           stl_url?: string | null
           stock_by_color?: Json | null
           stock_quantity?: number
@@ -614,7 +614,7 @@ export type Database = {
           peso_g?: number | null
           preco_venda?: number | null
           print_status?: string | null
-          reference_names?: string[] | null
+          reference_names?: string[]
           stl_url?: string | null
           stock_by_color?: Json | null
           stock_quantity?: number
