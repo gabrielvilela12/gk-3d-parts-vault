@@ -1748,6 +1748,7 @@ export default function Orders() {
     }
   };
 
+  const handleDeletePrinter = async (printerId: string) => {
     if (!canUsePrinterFeatures) {
       showSchemaWarningToast();
       return;
