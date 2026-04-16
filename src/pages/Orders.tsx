@@ -3236,7 +3236,27 @@ export default function Orders() {
                   <button
                     key={tab.id}
                     onClick={() => setFilterPrinterKey(tab.id)}
-                    className={`flex min-h-[44px] min-w-fit items-center gap-2 rounded-2xl border px-4 py-3 text-left transition-all ${
+                    draggable={tab.id !== ALL_PRINTERS_FILTER_KEY}
+                    onDragStart={(e) => {
+                      if (tab.id === ALL_PRINTERS_FILTER_KEY) return;
+                      setDraggingPrinterTabId(tab.id);
+                      e.dataTransfer.effectAllowed = "move";
+                    }}
+                    onDragOver={(e) => {
+                      if (tab.id === ALL_PRINTERS_FILTER_KEY || !draggingPrinterTabId) return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (tab.id === ALL_PRINTERS_FILTER_KEY || !draggingPrinterTabId) return;
+                      handleReorderPrinter(draggingPrinterTabId, tab.id);
+                      setDraggingPrinterTabId(null);
+                    }}
+                    onDragEnd={() => setDraggingPrinterTabId(null)}
+                    className={`flex min-h-[44px] min-w-fit cursor-grab items-center gap-2 rounded-2xl border px-4 py-3 text-left transition-all ${
+                      draggingPrinterTabId === tab.id ? "opacity-50" : ""
+                    } ${
                       isActive
                         ? `${tab.accent.border} ${tab.accent.soft} text-slate-50 shadow-[0_14px_34px_rgba(2,6,23,0.34)]`
                         : "border-white/10 bg-[#050816] text-slate-400 hover:border-white/20 hover:text-slate-50"
