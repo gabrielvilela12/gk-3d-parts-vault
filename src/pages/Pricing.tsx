@@ -27,17 +27,28 @@ interface Piece {
   preco_venda: number | null;
 }
 
-const SHOPEE_FIXED_FEE = 7;
 const SHOPEE_COMMISSION = 0.2;
+const TAXA_FIXA_PADRAO = 4.0;
+const TAXA_FIXA_MINIMA = 2.0;
+const LIMITE_PRECO_TAXA_MINIMA = 8.0;
 
-// Base Shopee price formula: (cost + fixed) / (1 - commission)
-function calcShopeeBase(cost: number) {
-  return (cost + SHOPEE_FIXED_FEE) / (1 - SHOPEE_COMMISSION);
+// Mirror of PieceDetail.calcShopeePrice (markup=1 → preço base no zero)
+function calcShopee(custoUnitario: number, markup: number) {
+  const precoBase = custoUnitario * markup;
+  let taxaFixa = TAXA_FIXA_PADRAO;
+  let preco = (precoBase + taxaFixa) / (1 - SHOPEE_COMMISSION);
+  if (preco < LIMITE_PRECO_TAXA_MINIMA) {
+    taxaFixa = TAXA_FIXA_MINIMA;
+    preco = (precoBase + taxaFixa) / (1 - SHOPEE_COMMISSION);
+  }
+  const comissao = preco * SHOPEE_COMMISSION;
+  const lucro = preco - custoUnitario - comissao - taxaFixa;
+  return { preco, taxaFixa, comissao, lucro };
 }
 
-// Net profit after Shopee fees on a given selling price
 function calcNetProfit(price: number, cost: number) {
-  return price - price * SHOPEE_COMMISSION - SHOPEE_FIXED_FEE - cost;
+  const taxa = price < LIMITE_PRECO_TAXA_MINIMA ? TAXA_FIXA_MINIMA : TAXA_FIXA_PADRAO;
+  return price - price * SHOPEE_COMMISSION - taxa - cost;
 }
 
 const formatBRL = (v: number) =>
@@ -92,12 +103,12 @@ export default function Pricing() {
   const rows = useMemo(() => {
     return filtered.map((p) => {
       const cost = Number(p.cost ?? 0);
-      const baseShopee = calcShopeeBase(cost);
-      // Apply markup on top of base (markup 0 = base, 1 = +100%)
-      const targetWithMargin = baseShopee * (1 + markup);
+      const baseShopee = calcShopee(cost, 1).preco;
+      // Use saved preco_venda when available; otherwise derive from markup
+      const targetWithMargin = p.preco_venda && p.preco_venda > 0
+        ? Number(p.preco_venda)
+        : calcShopee(cost, 1 + markup).preco;
 
-      // Buffer the listed price so that after applying combined discounts the
-      // user still receives at least the base shopee price.
       const buffer = totalDiscount > 0 ? 1 / (1 - totalDiscount / 100) : 1;
       const listedPrice = Math.max(targetWithMargin, baseShopee * buffer);
 
