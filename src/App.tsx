@@ -25,6 +25,7 @@ import ImageGenerator from "./pages/ImageGenerator";
 import Assistant from "./pages/Assistant";
 import Inventory from "./pages/Inventory";
 import BulkAddStock from "./pages/BulkAddStock";
+import Pricing from "./pages/Pricing";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { MobileInstallBanner } from "@/components/MobileInstallBanner";
