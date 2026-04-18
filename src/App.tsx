@@ -140,6 +140,10 @@ function AppContent() {
             path="/inventory/add-stock"
             element={user ? <BulkAddStock /> : <Navigate to="/auth" replace />}
           />
+          <Route
+            path="/pricing"
+            element={user ? <Pricing /> : <Navigate to="/auth" replace />}
+          />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
