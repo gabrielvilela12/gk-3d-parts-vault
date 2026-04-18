@@ -269,16 +269,16 @@ export default function Pricing() {
               <TableRow>
                 <TableHead>Peça</TableHead>
                 <TableHead className="text-right">Custo</TableHead>
-                <TableHead className="text-right">Preço no zero</TableHead>
-                <TableHead className="text-right">Preço de venda</TableHead>
+                <TableHead className="text-right">Preço base (zero)</TableHead>
+                <TableHead className="text-right">→ Preço de venda</TableHead>
                 <TableHead className="text-right">
                   <span className="inline-flex items-center gap-1">
-                    <Zap className="h-3 w-3 text-yellow-500" /> Relâmpago
+                    → <Zap className="h-3 w-3 text-yellow-500" /> Relâmpago {flashEnabled ? `-${flashDiscount}%` : ""}
                   </span>
                 </TableHead>
                 <TableHead className="text-right">
                   <span className="inline-flex items-center gap-1">
-                    <Gift className="h-3 w-3 text-green-500" /> + Cupom 5%
+                    → <Gift className="h-3 w-3 text-green-500" /> Cupom {couponEnabled ? `-${couponDiscount}%` : ""}
                   </span>
                 </TableHead>
                 <TableHead className="text-right">Lucro final</TableHead>
