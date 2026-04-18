@@ -269,6 +269,7 @@ export default function Pricing() {
               <TableRow>
                 <TableHead>Peça</TableHead>
                 <TableHead className="text-right">Custo</TableHead>
+                <TableHead className="text-right">Preço no zero</TableHead>
                 <TableHead className="text-right">Preço de venda</TableHead>
                 <TableHead className="text-right">
                   <span className="inline-flex items-center gap-1">
@@ -286,7 +287,7 @@ export default function Pricing() {
             <TableBody>
               {rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                     Nenhuma peça encontrada
                   </TableCell>
                 </TableRow>
@@ -310,6 +311,9 @@ export default function Pricing() {
                   </TableCell>
                   <TableCell className="text-right text-muted-foreground">
                     {r.cost > 0 ? formatBRL(r.cost) : "—"}
+                  </TableCell>
+                  <TableCell className="text-right text-muted-foreground">
+                    {r.cost > 0 ? formatBRL(r.baseShopee) : "—"}
                   </TableCell>
                   <TableCell className="text-right font-semibold">
                     {formatBRL(r.listedPrice)}
