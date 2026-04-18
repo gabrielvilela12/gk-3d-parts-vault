@@ -17,6 +17,7 @@ import {
     Plus,
     Receipt,
     Settings,
+    Tag,
     Warehouse,
     X,
 } from "lucide-react";
@@ -42,6 +43,7 @@ const managementNav = [
     { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { path: "/inventory", label: "Estoque", icon: Warehouse },
     { path: "/orders", label: "Pedidos", icon: ClipboardList },
+    { path: "/pricing", label: "Precificação", icon: Tag },
     { path: "/expenses", label: "Despesas", icon: Receipt },
     { path: "/assistant", label: "Assistente IA", icon: MessageCircle },
     { path: "/image-generator", label: "Gerador de imagens", icon: ImagePlus },
