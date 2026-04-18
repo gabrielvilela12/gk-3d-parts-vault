@@ -17,6 +17,7 @@ import {
     Plus,
     Receipt,
     Settings,
+    Tag,
     Warehouse,
     X,
 } from "lucide-react";
