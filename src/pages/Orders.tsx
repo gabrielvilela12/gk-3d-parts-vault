@@ -3856,7 +3856,52 @@ export default function Orders() {
                     </div>
                   )}
 
-                  {visibleQueueOrders.map((order, index) => renderQueueOrderCard(order, index))}
+                  {groupByPiece && isQueueView
+                    ? (() => {
+                        const groups = new Map<
+                          string,
+                          { key: string; pieceName: string; color: string | null; orders: Order[] }
+                        >();
+                        visibleQueueOrders.forEach((order) => {
+                          const key = `${order.piece_id}::${order.color || ""}`;
+                          if (!groups.has(key)) {
+                            groups.set(key, {
+                              key,
+                              pieceName: order.pieces.name,
+                              color: order.color,
+                              orders: [],
+                            });
+                          }
+                          groups.get(key)!.orders.push(order);
+                        });
+                        let runningIndex = 0;
+                        return Array.from(groups.values()).map((group) => {
+                          const totalQty = group.orders.reduce((sum, o) => sum + (o.quantity || 1), 0);
+                          const swatch = getColorSwatchValue(group.color);
+                          return (
+                            <div key={group.key} className="space-y-2">
+                              <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200">
+                                <Package className="h-3.5 w-3.5 text-primary" />
+                                <span className="font-semibold">{group.pieceName}</span>
+                                {group.color ? (
+                                  <span className="flex items-center gap-1.5 text-slate-400">
+                                    <span
+                                      className={`${getColorDotClassName(group.color, "sm")} ${swatch ? "" : "bg-muted"}`}
+                                      style={swatch ? { backgroundColor: swatch } : undefined}
+                                    />
+                                    {group.color}
+                                  </span>
+                                ) : null}
+                                <Badge variant="secondary" className="ml-auto text-[10px]">
+                                  {group.orders.length} pedido{group.orders.length > 1 ? "s" : ""} · {totalQty} un
+                                </Badge>
+                              </div>
+                              {group.orders.map((order) => renderQueueOrderCard(order, runningIndex++))}
+                            </div>
+                          );
+                        });
+                      })()
+                    : visibleQueueOrders.map((order, index) => renderQueueOrderCard(order, index))}
                 </div>
               )}
             </CardContent>
