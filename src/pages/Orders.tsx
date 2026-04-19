@@ -2207,8 +2207,21 @@ export default function Orders() {
     return Array.from(colors).sort();
   }, [orders]);
 
+  const uniquePieces = useMemo(() => {
+    const map = new Map<string, string>();
+    orders.forEach((order) => {
+      if (order.piece_id && order.pieces?.name) {
+        map.set(order.piece_id, order.pieces.name);
+      }
+    });
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [orders]);
+
   const filterOrder = (order: Order) => {
     if (filterColor !== "all" && order.color !== filterColor) return false;
+    if (filterPieceId !== "all" && order.piece_id !== filterPieceId) return false;
     if (
       filterPrinterKey !== ALL_PRINTERS_FILTER_KEY &&
       getPrinterKey(order.printer_id) !== filterPrinterKey
@@ -2238,11 +2251,11 @@ export default function Orders() {
 
   const filteredQueue = useMemo(
     () => queue.filter(filterOrder),
-    [queue, filterColor, filterPrinterKey, filterSearch],
+    [queue, filterColor, filterPieceId, filterPrinterKey, filterSearch],
   );
   const filteredDone = useMemo(
     () => done.filter(filterOrder),
-    [done, filterColor, filterPrinterKey, filterSearch],
+    [done, filterColor, filterPieceId, filterPrinterKey, filterSearch],
   );
 
   const getPlatformId = (order: Order) => {
