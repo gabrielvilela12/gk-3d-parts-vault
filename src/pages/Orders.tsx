@@ -1516,21 +1516,8 @@ export default function Orders() {
           return;
         }
 
-        const hasAnotherPrintingOrder = orders.some(
-          (candidate) =>
-            candidate.id !== order.id &&
-            (candidate.printer_id ?? null) === order.printer_id &&
-            isOrderPrinting(candidate),
-        );
-
-        if (hasAnotherPrintingOrder) {
-          toast({
-            title: "Essa impressora ja esta fazendo um pedido",
-            description: "Finalize o atual ou volte ele para pendente antes de iniciar outro.",
-            variant: "destructive",
-          });
-          return;
-        }
+        // Multiplos pedidos podem estar "fazendo" na mesma impressora simultaneamente
+        // (ex: varias pecas no mesmo plate)
 
         const startedAt = new Date();
         const expectedFinishAt = new Date(startedAt.getTime() + getPrintTimeMin(order) * 60_000);
@@ -1776,45 +1763,33 @@ export default function Orders() {
   const handleBatchStartPrinting = async () => {
     if (selectedOrderIds.size === 0) return;
     const selected = orders.filter((o) => selectedOrderIds.has(o.id));
-    
-    // Group by printer_id
-    const byPrinter = new Map<string | null, Order[]>();
-    for (const order of selected) {
-      const key = order.printer_id ?? null;
-      if (!byPrinter.has(key)) byPrinter.set(key, []);
-      byPrinter.get(key)!.push(order);
-    }
 
     let started = 0;
     let skipped = 0;
+    const skippedReasons: string[] = [];
 
-    for (const [printerId, group] of byPrinter) {
-      if (!printerId) { skipped += group.length; continue; }
-      
-      // Check if printer already has a printing order
-      const alreadyPrinting = orders.some(
-        (o) => o.printer_id === printerId && isOrderPrinting(o) && !selectedOrderIds.has(o.id)
-      );
-      
-      // Only start the first pending one per printer
-      const pending = group.filter((o) => isOrderPending(o));
-      if (pending.length === 0) { skipped += group.length; continue; }
-      
-      if (alreadyPrinting) {
-        skipped += group.length;
+    for (const order of selected) {
+      if (!order.printer_id) {
+        skipped++;
         continue;
       }
-
-      const order = pending[0];
-      await handleOrderStatusChange(order.id, "printing");
-      started++;
-      skipped += group.length - 1;
+      if (!isOrderPending(order)) {
+        skipped++;
+        continue;
+      }
+      try {
+        await handleOrderStatusChange(order.id, "printing");
+        started++;
+      } catch (e) {
+        skipped++;
+        skippedReasons.push((e as Error).message);
+      }
     }
 
     setSelectedOrderIds(new Set());
     toast({
-      title: `${started} pedido(s) iniciado(s)`,
-      description: skipped > 0 ? `${skipped} ignorado(s) (sem impressora, já imprimindo, ou impressora ocupada)` : undefined,
+      title: `${started} pedido(s) marcado(s) como fazendo`,
+      description: skipped > 0 ? `${skipped} ignorado(s) (sem impressora ou já em produção/concluído)` : undefined,
     });
   };
 
