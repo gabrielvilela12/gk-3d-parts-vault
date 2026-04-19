@@ -696,6 +696,8 @@ export default function Orders() {
   const [newPrinter, setNewPrinter] = useState({ name: "", description: "" });
   const [draggingPrinterTabId, setDraggingPrinterTabId] = useState<string | null>(null);
   const [filterColor, setFilterColor] = useState("all");
+  const [filterPieceId, setFilterPieceId] = useState("all");
+  const [groupByPiece, setGroupByPiece] = useState(false);
   const [filterSearch, setFilterSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"queue" | "printing" | "done">("queue");
   const [filterPrinterKey, setFilterPrinterKey] = useState(ALL_PRINTERS_FILTER_KEY);
@@ -2205,8 +2207,21 @@ export default function Orders() {
     return Array.from(colors).sort();
   }, [orders]);
 
+  const uniquePieces = useMemo(() => {
+    const map = new Map<string, string>();
+    orders.forEach((order) => {
+      if (order.piece_id && order.pieces?.name) {
+        map.set(order.piece_id, order.pieces.name);
+      }
+    });
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [orders]);
+
   const filterOrder = (order: Order) => {
     if (filterColor !== "all" && order.color !== filterColor) return false;
+    if (filterPieceId !== "all" && order.piece_id !== filterPieceId) return false;
     if (
       filterPrinterKey !== ALL_PRINTERS_FILTER_KEY &&
       getPrinterKey(order.printer_id) !== filterPrinterKey
@@ -2236,11 +2251,11 @@ export default function Orders() {
 
   const filteredQueue = useMemo(
     () => queue.filter(filterOrder),
-    [queue, filterColor, filterPrinterKey, filterSearch],
+    [queue, filterColor, filterPieceId, filterPrinterKey, filterSearch],
   );
   const filteredDone = useMemo(
     () => done.filter(filterOrder),
-    [done, filterColor, filterPrinterKey, filterSearch],
+    [done, filterColor, filterPieceId, filterPrinterKey, filterSearch],
   );
 
   const getPlatformId = (order: Order) => {
@@ -3500,6 +3515,33 @@ export default function Orders() {
               </SelectContent>
             </Select>
 
+            <Select value={filterPieceId} onValueChange={setFilterPieceId}>
+              <SelectTrigger className="production-control border-white/10 bg-[#050816] text-sm text-slate-100">
+                <SelectValue placeholder="Peça" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as peças</SelectItem>
+                {uniquePieces.map((piece) => (
+                  <SelectItem key={piece.id} value={piece.id}>
+                    {piece.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {isQueueView ? (
+              <Button
+                variant={groupByPiece ? "default" : "outline"}
+                size="sm"
+                onClick={() => setGroupByPiece((prev) => !prev)}
+                className="production-control gap-1.5 border-white/10 bg-[#050816] text-sm text-slate-100 hover:text-slate-50"
+                title="Agrupar pedidos pela mesma peça"
+              >
+                <Package className="h-3.5 w-3.5" />
+                {groupByPiece ? "Agrupado" : "Agrupar"}
+              </Button>
+            ) : null}
+
             {isQueueView ? (
               <Select
                 value={queueTimeSort}
@@ -3814,7 +3856,52 @@ export default function Orders() {
                     </div>
                   )}
 
-                  {visibleQueueOrders.map((order, index) => renderQueueOrderCard(order, index))}
+                  {groupByPiece && isQueueView
+                    ? (() => {
+                        const groups = new Map<
+                          string,
+                          { key: string; pieceName: string; color: string | null; orders: Order[] }
+                        >();
+                        visibleQueueOrders.forEach((order) => {
+                          const key = `${order.piece_id}::${order.color || ""}`;
+                          if (!groups.has(key)) {
+                            groups.set(key, {
+                              key,
+                              pieceName: order.pieces.name,
+                              color: order.color,
+                              orders: [],
+                            });
+                          }
+                          groups.get(key)!.orders.push(order);
+                        });
+                        let runningIndex = 0;
+                        return Array.from(groups.values()).map((group) => {
+                          const totalQty = group.orders.reduce((sum, o) => sum + (o.quantity || 1), 0);
+                          const swatch = getColorSwatchValue(group.color);
+                          return (
+                            <div key={group.key} className="space-y-2">
+                              <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200">
+                                <Package className="h-3.5 w-3.5 text-primary" />
+                                <span className="font-semibold">{group.pieceName}</span>
+                                {group.color ? (
+                                  <span className="flex items-center gap-1.5 text-slate-400">
+                                    <span
+                                      className={`${getColorDotClassName(group.color, "sm")} ${swatch ? "" : "bg-muted"}`}
+                                      style={swatch ? { backgroundColor: swatch } : undefined}
+                                    />
+                                    {group.color}
+                                  </span>
+                                ) : null}
+                                <Badge variant="secondary" className="ml-auto text-[10px]">
+                                  {group.orders.length} pedido{group.orders.length > 1 ? "s" : ""} · {totalQty} un
+                                </Badge>
+                              </div>
+                              {group.orders.map((order) => renderQueueOrderCard(order, runningIndex++))}
+                            </div>
+                          );
+                        });
+                      })()
+                    : visibleQueueOrders.map((order, index) => renderQueueOrderCard(order, index))}
                 </div>
               )}
             </CardContent>
