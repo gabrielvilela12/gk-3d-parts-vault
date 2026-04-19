@@ -1516,21 +1516,8 @@ export default function Orders() {
           return;
         }
 
-        const hasAnotherPrintingOrder = orders.some(
-          (candidate) =>
-            candidate.id !== order.id &&
-            (candidate.printer_id ?? null) === order.printer_id &&
-            isOrderPrinting(candidate),
-        );
-
-        if (hasAnotherPrintingOrder) {
-          toast({
-            title: "Essa impressora ja esta fazendo um pedido",
-            description: "Finalize o atual ou volte ele para pendente antes de iniciar outro.",
-            variant: "destructive",
-          });
-          return;
-        }
+        // Multiplos pedidos podem estar "fazendo" na mesma impressora simultaneamente
+        // (ex: varias pecas no mesmo plate)
 
         const startedAt = new Date();
         const expectedFinishAt = new Date(startedAt.getTime() + getPrintTimeMin(order) * 60_000);
