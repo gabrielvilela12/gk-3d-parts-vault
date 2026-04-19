@@ -3515,6 +3515,33 @@ export default function Orders() {
               </SelectContent>
             </Select>
 
+            <Select value={filterPieceId} onValueChange={setFilterPieceId}>
+              <SelectTrigger className="production-control border-white/10 bg-[#050816] text-sm text-slate-100">
+                <SelectValue placeholder="Peça" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as peças</SelectItem>
+                {uniquePieces.map((piece) => (
+                  <SelectItem key={piece.id} value={piece.id}>
+                    {piece.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {isQueueView ? (
+              <Button
+                variant={groupByPiece ? "default" : "outline"}
+                size="sm"
+                onClick={() => setGroupByPiece((prev) => !prev)}
+                className="production-control gap-1.5 border-white/10 bg-[#050816] text-sm text-slate-100 hover:text-slate-50"
+                title="Agrupar pedidos pela mesma peça"
+              >
+                <Package className="h-3.5 w-3.5" />
+                {groupByPiece ? "Agrupado" : "Agrupar"}
+              </Button>
+            ) : null}
+
             {isQueueView ? (
               <Select
                 value={queueTimeSort}
