@@ -4114,7 +4114,7 @@ export default function Orders() {
                                           Sem pedidos
                                         </div>
                                       ) : (
-                                        colOrders.map((order, idx) => renderQueueOrderCard(order, idx))
+                                        colOrders.map((order, idx) => renderCompactQueueCard(order, idx))
                                       )}
                                     </div>
                                   </div>
