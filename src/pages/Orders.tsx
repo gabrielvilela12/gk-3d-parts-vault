@@ -2701,11 +2701,35 @@ export default function Orders() {
     const isPrintingRow = orderStatus === "printing";
     const platformId = getPlatformId(order);
     const accent = getPrinterAccent(order.printer_id);
-    const isUnassignedCard = !order.printer_id;
-    const printerStripeClass = isUnassignedCard ? "bg-amber-300" : accent.dot;
-    const canDragCard = isQueueView && canReorderQueue && isOrderPending(order);
+    const canDragCard = isQueueView && isOrderPending(order);
     const isSelected = selectedOrderIds.has(order.id);
     const storeBadgeLabel = getStoreBadgeLabel(order.store_name);
+
+    // Color theming
+    const swatch = getColorSwatchValue(order.color);
+    const luminance = getProductLuminance(order.color);
+    const hasColor = swatch !== null && luminance !== null;
+    const isLightColor = hasColor && luminance! > 0.6;
+    // Text colors based on background luminance
+    const textPrimary = hasColor
+      ? isLightColor ? "text-slate-900" : "text-slate-50"
+      : "text-slate-50";
+    const textSecondary = hasColor
+      ? isLightColor ? "text-slate-700" : "text-slate-200"
+      : "text-slate-300";
+    const textMuted = hasColor
+      ? isLightColor ? "text-slate-600" : "text-slate-400"
+      : "text-slate-500";
+    const subtleBorder = hasColor
+      ? isLightColor ? "border-black/10" : "border-white/15"
+      : "border-white/10";
+    const subtleBg = hasColor
+      ? isLightColor ? "bg-black/5" : "bg-white/10"
+      : "bg-[#050816]/70";
+    const cardBgStyle = hasColor
+      ? { backgroundColor: swatch!, borderColor: isLightColor ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.15)" }
+      : undefined;
+    const cardBgClass = hasColor ? "" : "bg-[#081121] border-white/10";
 
     return (
       <div
@@ -2715,95 +2739,95 @@ export default function Orders() {
         onDragEnd={canDragCard ? handleDragEnd : undefined}
         onDragOver={canDragCard ? (e) => handleOrderDragOver(e, order) : undefined}
         onDrop={canDragCard ? (e) => void handleOrderDrop(e, order) : undefined}
-        className={`relative overflow-hidden rounded-xl border p-2.5 transition-all ${
+        style={cardBgStyle}
+        className={`relative overflow-hidden rounded-xl border p-2.5 transition-all ${cardBgClass} ${
           isSelected
-            ? "ring-2 ring-primary/50 border-primary/30"
+            ? "ring-2 ring-primary/60"
             : dragOverOrderId === order.id
-              ? "ring-2 ring-primary/60 border-primary/40"
-              : "hover:border-white/15"
-        } border-white/10 bg-[#081121]`}
+              ? "ring-2 ring-primary/70"
+              : "hover:ring-1 hover:ring-white/20"
+        } ${canDragCard ? "cursor-grab active:cursor-grabbing" : ""}`}
       >
-        <div className={`absolute inset-y-2 left-0 w-0.5 rounded-r-full ${printerStripeClass}`} />
-
-        <div className="relative z-10 flex flex-col gap-2 pl-1.5">
-          {/* Header: checkbox + position + image + name */}
-          <div className="flex items-start gap-2">
+        <div className="relative z-10 flex flex-col gap-2">
+          {/* Top row: position + checkbox + status */}
+          <div className="flex items-center gap-2">
+            <div className={`flex h-7 min-w-[32px] items-center justify-center rounded-md border ${subtleBorder} ${subtleBg} px-1.5 text-xs font-bold ${textPrimary}`}>
+              {String((queueIndex || 0) + 1).padStart(2, "0")}
+            </div>
             <button
               onClick={(e) => { e.stopPropagation(); toggleOrderSelection(order.id); }}
-              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border transition-colors ${
-                isSelected
-                  ? "border-primary/50 bg-primary/20 text-primary"
-                  : "border-white/10 text-slate-500 hover:text-slate-300"
+              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md border transition-colors ${subtleBorder} ${
+                isSelected ? "bg-primary/30 text-primary" : `${subtleBg} ${textMuted} hover:${textSecondary}`
               }`}
             >
               {isSelected ? <CheckSquare className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
             </button>
+            <Badge
+              variant="outline"
+              className={`ml-auto px-1.5 py-0 text-[9px] uppercase tracking-wider ${subtleBorder} ${subtleBg} ${textPrimary}`}
+            >
+              {isPrintingRow ? "Imprimindo" : "Pendente"}
+            </Badge>
+          </div>
 
-            <div className={`flex h-6 min-w-[26px] shrink-0 items-center justify-center rounded-md border bg-[#0b1628] px-1 text-[10px] font-semibold ${accent.border} ${accent.strongText}`}>
-              {String((queueIndex || 0) + 1).padStart(2, "0")}
-            </div>
-
+          {/* Image + name */}
+          <div className="flex items-start gap-2">
             {order.pieces.image_url ? (
               <img
                 src={order.pieces.image_url}
                 alt={order.pieces.name}
-                className="h-10 w-10 shrink-0 rounded-lg object-cover ring-1 ring-white/10"
+                className={`h-12 w-12 shrink-0 rounded-lg object-cover ring-1 ${isLightColor ? "ring-black/15" : "ring-white/20"}`}
               />
             ) : (
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03]">
-                <Package className="h-4 w-4 text-slate-500" />
+              <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border ${subtleBorder} ${subtleBg}`}>
+                <Package className={`h-4 w-4 ${textMuted}`} />
               </div>
             )}
-
             <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-semibold text-slate-50" title={order.pieces.name}>
+              <p className={`text-xs font-semibold leading-tight line-clamp-2 ${textPrimary}`} title={order.pieces.name}>
                 {order.pieces.name}
               </p>
-              <div className="mt-0.5 flex items-center gap-1 flex-wrap">
+              <div className="mt-1 flex items-center gap-1 flex-wrap">
                 {order.quantity > 1 ? (
-                  <Badge variant="secondary" className="px-1 py-0 text-[9px]">x{order.quantity}</Badge>
+                  <span className={`rounded px-1 py-0 text-[9px] font-semibold ${subtleBorder} border ${subtleBg} ${textPrimary}`}>
+                    x{order.quantity}
+                  </span>
                 ) : null}
-                {order.color ? <ColorBadge color={order.color} className="px-1 py-0 text-[9px]" /> : null}
+                {order.color ? (
+                  <span className={`rounded px-1 py-0 text-[9px] font-medium ${subtleBorder} border ${subtleBg} ${textPrimary}`}>
+                    {order.color}
+                  </span>
+                ) : null}
               </div>
             </div>
           </div>
 
-          {/* Meta row */}
-          <div className="flex items-center gap-1 flex-wrap text-[9px]">
-            <Badge
-              variant="outline"
-              className={`px-1 py-0 text-[9px] uppercase tracking-wider ${
-                isPrintingRow
-                  ? "border-primary/30 bg-primary/15 text-primary"
-                  : "border-white/10 bg-white/[0.05] text-slate-300"
-              }`}
-            >
-              {isPrintingRow ? "Imprimindo" : "Pendente"}
-            </Badge>
+          {/* Meta */}
+          <div className="flex items-center gap-1 flex-wrap">
             {platformId !== "sem-pedido" ? (
-              <Badge variant="outline" className="px-1 py-0 text-[9px] font-mono border-white/10 bg-white/[0.04] text-slate-300">
+              <span className={`rounded px-1 py-0.5 text-[9px] font-mono ${subtleBorder} border ${subtleBg} ${textSecondary}`}>
                 #{platformId}
-              </Badge>
+              </span>
             ) : null}
             {storeBadgeLabel ? (
-              <Badge variant="outline" className="px-1 py-0 text-[9px] border-sky-400/20 bg-sky-500/10 text-sky-100">
+              <span className={`rounded px-1 py-0.5 text-[9px] ${subtleBorder} border ${subtleBg} ${textSecondary}`}>
                 {storeBadgeLabel}
-              </Badge>
+              </span>
             ) : null}
           </div>
 
-          {/* Time */}
-          <div className="flex items-center justify-between rounded-md border border-white/10 bg-[#050816]/70 px-2 py-1 text-[10px]">
-            <span className="text-slate-500 uppercase tracking-wider">
+          {/* Time + termino */}
+          <div className={`flex items-center justify-between rounded-md border ${subtleBorder} ${subtleBg} px-2 py-1 text-[10px]`}>
+            <span className={`uppercase tracking-wider ${textMuted}`}>
               {isPrintingRow ? "Restam" : "Tempo"}
             </span>
-            <span className="font-medium text-slate-100">
+            <span className={`font-medium ${textPrimary}`}>
               {isPrintingRow ? formatTime(remainingMin) : formatTime(totalMin)}
             </span>
           </div>
-          <div className="flex items-center justify-between rounded-md border border-white/10 bg-[#050816]/70 px-2 py-1 text-[10px]">
-            <span className="text-slate-500 uppercase tracking-wider">Termino</span>
-            <span className="font-medium text-slate-100">{formatHour(finishAt)}</span>
+          <div className={`flex items-center justify-between rounded-md border ${subtleBorder} ${subtleBg} px-2 py-1 text-[10px]`}>
+            <span className={`uppercase tracking-wider ${textMuted}`}>Termino</span>
+            <span className={`font-medium ${textPrimary}`}>{formatHour(finishAt)}</span>
           </div>
 
           {/* Printer selector */}
@@ -2816,7 +2840,7 @@ export default function Orders() {
               void handleOrderPrinterChange(order.id, nextPrinterId);
             }}
           >
-            <SelectTrigger className="h-7 border-white/10 bg-[#050816] text-[10px] text-slate-100">
+            <SelectTrigger className={`h-7 border text-[10px] ${subtleBorder} ${subtleBg} ${textPrimary}`}>
               <SelectValue placeholder="Impressora" />
             </SelectTrigger>
             <SelectContent>
@@ -2827,13 +2851,13 @@ export default function Orders() {
             </SelectContent>
           </Select>
 
-          {/* Status selector */}
+          {/* Status */}
           <Select
             disabled={!canUseProductionFlow}
             value={orderStatus}
             onValueChange={(value) => void handleOrderStatusChange(order.id, value as OrderStatus)}
           >
-            <SelectTrigger className="h-7 border-white/10 bg-[#050816] text-[10px] text-slate-100">
+            <SelectTrigger className={`h-7 border text-[10px] ${subtleBorder} ${subtleBg} ${textPrimary}`}>
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -2847,7 +2871,7 @@ export default function Orders() {
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 w-full justify-center rounded-md border border-white/10 text-[10px] text-slate-400 hover:bg-destructive/10 hover:text-destructive"
+            className={`h-7 w-full justify-center rounded-md border text-[10px] ${subtleBorder} ${textMuted} hover:bg-destructive/20 hover:text-destructive`}
             onClick={() => void handleDeleteOrder(order.id)}
           >
             <Trash2 className="mr-1 h-3 w-3" />
