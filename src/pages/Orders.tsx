@@ -2634,7 +2634,7 @@ export default function Orders() {
   const canReorderQueue =
     isQueueView &&
     canUsePrinterFeatures &&
-    !isAllPrintersView &&
+    (!isAllPrintersView || queueViewMode === "columns") &&
     filterColor === "all" &&
     !filterSearch.trim() &&
     queueTimeSort === "queue" &&
