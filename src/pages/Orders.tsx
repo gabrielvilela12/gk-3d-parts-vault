@@ -3764,7 +3764,7 @@ export default function Orders() {
                   : undefined
               }
             >
-              {!hasQueueVisible ? (
+              {!hasQueueVisible && !(queueViewMode === "columns" && isQueueView) ? (
                 <div className="flex min-h-[240px] flex-col items-center justify-center rounded-[28px] border border-dashed border-white/10 bg-[#050816] px-6 py-10 text-center text-slate-400">
                   <Package className="mb-4 h-10 w-10 opacity-40" />
                   <p className="text-base font-medium text-slate-200">Nenhum pedido nesta visualizacao.</p>
