@@ -14,9 +14,11 @@ import {
   Check,
   CheckCircle2,
   CheckSquare,
+  Columns3,
   FileDown,
   FileSpreadsheet,
   GripVertical,
+  LayoutList,
   Package,
   Plus,
   Printer,
@@ -698,6 +700,7 @@ export default function Orders() {
   const [filterColor, setFilterColor] = useState("all");
   const [filterPieceId, setFilterPieceId] = useState("all");
   const [groupByPiece, setGroupByPiece] = useState(false);
+  const [queueViewMode, setQueueViewMode] = useState<"list" | "columns">("list");
   const [filterSearch, setFilterSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"queue" | "printing" | "done">("queue");
   const [filterPrinterKey, setFilterPrinterKey] = useState(ALL_PRINTERS_FILTER_KEY);
@@ -3518,6 +3521,25 @@ export default function Orders() {
             ) : null}
 
             {isQueueView ? (
+              <Button
+                variant={queueViewMode === "columns" ? "default" : "outline"}
+                size="sm"
+                onClick={() =>
+                  setQueueViewMode((prev) => (prev === "columns" ? "list" : "columns"))
+                }
+                className="production-control gap-1.5 border-white/10 bg-[#050816] text-sm text-slate-100 hover:text-slate-50"
+                title="Visualizar todas as impressoras lado a lado"
+              >
+                {queueViewMode === "columns" ? (
+                  <LayoutList className="h-3.5 w-3.5" />
+                ) : (
+                  <Columns3 className="h-3.5 w-3.5" />
+                )}
+                {queueViewMode === "columns" ? "Lista" : "Colunas"}
+              </Button>
+            ) : null}
+
+            {isQueueView ? (
               <Select
                 value={queueTimeSort}
                 onValueChange={(value) => setQueueTimeSort(value as QueueTimeSort)}
@@ -3742,7 +3764,7 @@ export default function Orders() {
                   : undefined
               }
             >
-              {!hasQueueVisible ? (
+              {!hasQueueVisible && !(queueViewMode === "columns" && isQueueView) ? (
                 <div className="flex min-h-[240px] flex-col items-center justify-center rounded-[28px] border border-dashed border-white/10 bg-[#050816] px-6 py-10 text-center text-slate-400">
                   <Package className="mb-4 h-10 w-10 opacity-40" />
                   <p className="text-base font-medium text-slate-200">Nenhum pedido nesta visualizacao.</p>
@@ -3831,7 +3853,112 @@ export default function Orders() {
                     </div>
                   )}
 
-                  {groupByPiece && isQueueView
+                  {queueViewMode === "columns" && isQueueView
+                    ? (() => {
+                        // Build columns: one per printer + "sem impressora", ignoring printer filter
+                        const columnsSource = queue.filter((order) => {
+                          if (filterColor !== "all" && order.color !== filterColor) return false;
+                          if (filterPieceId !== "all" && order.piece_id !== filterPieceId) return false;
+                          const normalizedSearch = filterSearch.trim().toLowerCase();
+                          if (normalizedSearch) {
+                            const searchableValues = [
+                              order.pieces.name,
+                              order.source_product_name || "",
+                              order.platform_order_id || "",
+                              order.store_name || "",
+                              order.piece_price_variations?.variation_name || "",
+                              order.notes || "",
+                            ];
+                            if (!searchableValues.some((v) => v.toLowerCase().includes(normalizedSearch))) return false;
+                          }
+                          return true;
+                        });
+
+                        const columnDefs: Array<{
+                          key: string;
+                          label: string;
+                          accent: PrinterAccent;
+                          printerId: string | null;
+                        }> = [
+                          {
+                            key: UNASSIGNED_PRINTER_KEY,
+                            label: "Sem impressora",
+                            accent: NEUTRAL_PRINTER_ACCENT,
+                            printerId: null,
+                          },
+                          ...printers.map((p) => ({
+                            key: p.id,
+                            label: p.name,
+                            accent: getPrinterAccent(p.id),
+                            printerId: p.id,
+                          })),
+                        ];
+
+                        const buckets = new Map<string, Order[]>();
+                        columnDefs.forEach((c) => buckets.set(c.key, []));
+                        columnsSource.forEach((order) => {
+                          const k = getPrinterKey(order.printer_id);
+                          (buckets.get(k) || buckets.get(UNASSIGNED_PRINTER_KEY))?.push(order);
+                        });
+                        // Sort each bucket by position
+                        buckets.forEach((arr) =>
+                          arr.sort((a, b) => (a.position ?? 0) - (b.position ?? 0)),
+                        );
+
+                        return (
+                          <div className="overflow-x-auto">
+                            <div className="flex gap-3 pb-2" style={{ minWidth: "100%" }}>
+                              {columnDefs.map((col) => {
+                                const colOrders = buckets.get(col.key) || [];
+                                const totalQty = colOrders.reduce(
+                                  (s, o) => s + (o.quantity || 1),
+                                  0,
+                                );
+                                const totalMin = colOrders.reduce((s, o) => {
+                                  const t = queueTimeMap.get(o.id);
+                                  return s + (t?.totalMin || 0);
+                                }, 0);
+                                return (
+                                  <div
+                                    key={col.key}
+                                    className={`flex w-[300px] shrink-0 flex-col gap-2 rounded-2xl border ${col.accent.border} ${col.accent.soft} p-3`}
+                                    onDragOver={(e) => handleSectionDragOver(e, col.printerId)}
+                                    onDrop={(e) => void handleSectionDrop(e, col.printerId)}
+                                  >
+                                    <div className="flex items-center gap-2 border-b border-white/10 pb-2">
+                                      {col.printerId ? (
+                                        renderPrinterDot(col.accent, "sm")
+                                      ) : (
+                                        <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
+                                      )}
+                                      <span className="text-sm font-semibold text-slate-100">
+                                        {col.label}
+                                      </span>
+                                      <Badge variant="secondary" className="ml-auto text-[10px]">
+                                        {colOrders.length}
+                                      </Badge>
+                                    </div>
+                                    <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-slate-500">
+                                      <span>{totalQty} un</span>
+                                      <span>{formatTime(totalMin)}</span>
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                      {colOrders.length === 0 ? (
+                                        <div className="rounded-xl border border-dashed border-white/10 bg-black/10 px-3 py-6 text-center text-xs text-slate-500">
+                                          Sem pedidos
+                                        </div>
+                                      ) : (
+                                        colOrders.map((order, idx) => renderQueueOrderCard(order, idx))
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })()
+                    : groupByPiece && isQueueView
                     ? (() => {
                         const groups = new Map<
                           string,
