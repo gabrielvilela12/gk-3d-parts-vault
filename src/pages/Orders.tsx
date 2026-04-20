@@ -2692,6 +2692,172 @@ export default function Orders() {
     await moveOrderInQueue(draggedOrderId, order.printer_id, order.id);
   };
 
+  const renderCompactQueueCard = (order: Order, queueIndex?: number) => {
+    const times = queueTimeMap.get(order.id);
+    const totalMin = times?.totalMin || 0;
+    const remainingMin = times?.remainingMin || 0;
+    const finishAt = times?.finishAt || now;
+    const orderStatus = getOrderStatus(order);
+    const isPrintingRow = orderStatus === "printing";
+    const platformId = getPlatformId(order);
+    const accent = getPrinterAccent(order.printer_id);
+    const isUnassignedCard = !order.printer_id;
+    const printerStripeClass = isUnassignedCard ? "bg-amber-300" : accent.dot;
+    const canDragCard = isQueueView && canReorderQueue && isOrderPending(order);
+    const isSelected = selectedOrderIds.has(order.id);
+    const storeBadgeLabel = getStoreBadgeLabel(order.store_name);
+
+    return (
+      <div
+        key={order.id}
+        draggable={canDragCard}
+        onDragStart={canDragCard ? () => handleDragStart(order) : undefined}
+        onDragEnd={canDragCard ? handleDragEnd : undefined}
+        onDragOver={canDragCard ? (e) => handleOrderDragOver(e, order) : undefined}
+        onDrop={canDragCard ? (e) => void handleOrderDrop(e, order) : undefined}
+        className={`relative overflow-hidden rounded-xl border p-2.5 transition-all ${
+          isSelected
+            ? "ring-2 ring-primary/50 border-primary/30"
+            : dragOverOrderId === order.id
+              ? "ring-2 ring-primary/60 border-primary/40"
+              : "hover:border-white/15"
+        } border-white/10 bg-[#081121]`}
+      >
+        <div className={`absolute inset-y-2 left-0 w-0.5 rounded-r-full ${printerStripeClass}`} />
+
+        <div className="relative z-10 flex flex-col gap-2 pl-1.5">
+          {/* Header: checkbox + position + image + name */}
+          <div className="flex items-start gap-2">
+            <button
+              onClick={(e) => { e.stopPropagation(); toggleOrderSelection(order.id); }}
+              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border transition-colors ${
+                isSelected
+                  ? "border-primary/50 bg-primary/20 text-primary"
+                  : "border-white/10 text-slate-500 hover:text-slate-300"
+              }`}
+            >
+              {isSelected ? <CheckSquare className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
+            </button>
+
+            <div className={`flex h-6 min-w-[26px] shrink-0 items-center justify-center rounded-md border bg-[#0b1628] px-1 text-[10px] font-semibold ${accent.border} ${accent.strongText}`}>
+              {String((queueIndex || 0) + 1).padStart(2, "0")}
+            </div>
+
+            {order.pieces.image_url ? (
+              <img
+                src={order.pieces.image_url}
+                alt={order.pieces.name}
+                className="h-10 w-10 shrink-0 rounded-lg object-cover ring-1 ring-white/10"
+              />
+            ) : (
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03]">
+                <Package className="h-4 w-4 text-slate-500" />
+              </div>
+            )}
+
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-semibold text-slate-50" title={order.pieces.name}>
+                {order.pieces.name}
+              </p>
+              <div className="mt-0.5 flex items-center gap-1 flex-wrap">
+                {order.quantity > 1 ? (
+                  <Badge variant="secondary" className="px-1 py-0 text-[9px]">x{order.quantity}</Badge>
+                ) : null}
+                {order.color ? <ColorBadge color={order.color} className="px-1 py-0 text-[9px]" /> : null}
+              </div>
+            </div>
+          </div>
+
+          {/* Meta row */}
+          <div className="flex items-center gap-1 flex-wrap text-[9px]">
+            <Badge
+              variant="outline"
+              className={`px-1 py-0 text-[9px] uppercase tracking-wider ${
+                isPrintingRow
+                  ? "border-primary/30 bg-primary/15 text-primary"
+                  : "border-white/10 bg-white/[0.05] text-slate-300"
+              }`}
+            >
+              {isPrintingRow ? "Imprimindo" : "Pendente"}
+            </Badge>
+            {platformId !== "sem-pedido" ? (
+              <Badge variant="outline" className="px-1 py-0 text-[9px] font-mono border-white/10 bg-white/[0.04] text-slate-300">
+                #{platformId}
+              </Badge>
+            ) : null}
+            {storeBadgeLabel ? (
+              <Badge variant="outline" className="px-1 py-0 text-[9px] border-sky-400/20 bg-sky-500/10 text-sky-100">
+                {storeBadgeLabel}
+              </Badge>
+            ) : null}
+          </div>
+
+          {/* Time */}
+          <div className="flex items-center justify-between rounded-md border border-white/10 bg-[#050816]/70 px-2 py-1 text-[10px]">
+            <span className="text-slate-500 uppercase tracking-wider">
+              {isPrintingRow ? "Restam" : "Tempo"}
+            </span>
+            <span className="font-medium text-slate-100">
+              {isPrintingRow ? formatTime(remainingMin) : formatTime(totalMin)}
+            </span>
+          </div>
+          <div className="flex items-center justify-between rounded-md border border-white/10 bg-[#050816]/70 px-2 py-1 text-[10px]">
+            <span className="text-slate-500 uppercase tracking-wider">Termino</span>
+            <span className="font-medium text-slate-100">{formatHour(finishAt)}</span>
+          </div>
+
+          {/* Printer selector */}
+          <Select
+            disabled={isPrintingRow || !canUsePrinterFeatures}
+            value={getPrinterKey(order.printer_id)}
+            onValueChange={(value) => {
+              const nextPrinterId = fromPrinterKey(value);
+              if ((order.printer_id ?? null) === nextPrinterId) return;
+              void handleOrderPrinterChange(order.id, nextPrinterId);
+            }}
+          >
+            <SelectTrigger className="h-7 border-white/10 bg-[#050816] text-[10px] text-slate-100">
+              <SelectValue placeholder="Impressora" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={UNASSIGNED_PRINTER_KEY}>Sem impressora</SelectItem>
+              {printers.map((p) => (
+                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Status selector */}
+          <Select
+            disabled={!canUseProductionFlow}
+            value={orderStatus}
+            onValueChange={(value) => void handleOrderStatusChange(order.id, value as OrderStatus)}
+          >
+            <SelectTrigger className="h-7 border-white/10 bg-[#050816] text-[10px] text-slate-100">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="pending">Pendente</SelectItem>
+              <SelectItem value="printing">Fazendo</SelectItem>
+              <SelectItem value="done">Feito</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Delete */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-full justify-center rounded-md border border-white/10 text-[10px] text-slate-400 hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => void handleDeleteOrder(order.id)}
+          >
+            <Trash2 className="mr-1 h-3 w-3" />
+            Remover
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
   const renderQueueOrderCard = (order: Order, queueIndex?: number) => {
     const times = queueTimeMap.get(order.id);
     const totalMin = times?.totalMin || 0;
@@ -3948,7 +4114,7 @@ export default function Orders() {
                                           Sem pedidos
                                         </div>
                                       ) : (
-                                        colOrders.map((order, idx) => renderQueueOrderCard(order, idx))
+                                        colOrders.map((order, idx) => renderCompactQueueCard(order, idx))
                                       )}
                                     </div>
                                   </div>
