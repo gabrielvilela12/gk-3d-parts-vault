@@ -700,6 +700,7 @@ export default function Orders() {
   const [filterColor, setFilterColor] = useState("all");
   const [filterPieceId, setFilterPieceId] = useState("all");
   const [groupByPiece, setGroupByPiece] = useState(false);
+  const [queueViewMode, setQueueViewMode] = useState<"list" | "columns">("list");
   const [filterSearch, setFilterSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"queue" | "printing" | "done">("queue");
   const [filterPrinterKey, setFilterPrinterKey] = useState(ALL_PRINTERS_FILTER_KEY);
