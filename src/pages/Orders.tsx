@@ -3521,6 +3521,25 @@ export default function Orders() {
             ) : null}
 
             {isQueueView ? (
+              <Button
+                variant={queueViewMode === "columns" ? "default" : "outline"}
+                size="sm"
+                onClick={() =>
+                  setQueueViewMode((prev) => (prev === "columns" ? "list" : "columns"))
+                }
+                className="production-control gap-1.5 border-white/10 bg-[#050816] text-sm text-slate-100 hover:text-slate-50"
+                title="Visualizar todas as impressoras lado a lado"
+              >
+                {queueViewMode === "columns" ? (
+                  <LayoutList className="h-3.5 w-3.5" />
+                ) : (
+                  <Columns3 className="h-3.5 w-3.5" />
+                )}
+                {queueViewMode === "columns" ? "Lista" : "Colunas"}
+              </Button>
+            ) : null}
+
+            {isQueueView ? (
               <Select
                 value={queueTimeSort}
                 onValueChange={(value) => setQueueTimeSort(value as QueueTimeSort)}
