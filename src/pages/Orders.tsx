@@ -119,6 +119,14 @@ interface Piece {
   tempo_impressao_min: number | null;
   image_url: string | null;
   peso_g: number | null;
+  stock_quantity?: number | null;
+  stock_by_color?: { color: string; quantity: number }[] | null;
+}
+
+const STOCK_FULFILLED_TAG = "[ESTOQUE]";
+
+function isFulfilledFromStock(order: { notes?: string | null }): boolean {
+  return (order.notes || "").includes(STOCK_FULFILLED_TAG);
 }
 
 interface PrinterItem {
