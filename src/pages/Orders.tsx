@@ -1533,6 +1533,81 @@ export default function Orders() {
     }
   };
 
+  const optimizeQueueByMakespan = async () => {
+    if (!canUsePrinterFeatures) {
+      showSchemaWarningToast();
+      return;
+    }
+    if (printers.length === 0) {
+      toast({
+        title: "Nenhuma impressora cadastrada",
+        description: "Cadastre ao menos uma impressora para otimizar a fila.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Only redistribute pending orders. Keep printing orders fixed on their current printer.
+    const pendingOrders = orders.filter((o) => isOrderPending(o));
+    const printingOrders = orders.filter((o) => isOrderPrinting(o));
+
+    if (pendingOrders.length === 0) {
+      toast({ title: "Nenhum pedido pendente para otimizar" });
+      return;
+    }
+
+    // Initial load per printer = remaining time of currently printing orders
+    const loads = new Map<string, number>();
+    const buckets = new Map<string, Order[]>();
+    printers.forEach((p) => {
+      loads.set(p.id, 0);
+      buckets.set(p.id, []);
+    });
+
+    printingOrders.forEach((o) => {
+      const pid = o.printer_id;
+      if (pid && loads.has(pid)) {
+        loads.set(pid, (loads.get(pid) || 0) + getRemainingPrintTimeMin(o));
+        // keep printing orders at the start of their bucket to preserve position
+        const b = buckets.get(pid) || [];
+        b.push(o);
+        buckets.set(pid, b);
+      }
+    });
+
+    // LPT: sort pending desc by print time, then assign each to the printer with smallest current load
+    const sortedPending = [...pendingOrders].sort(
+      (a, b) => getPrintTimeMin(b) - getPrintTimeMin(a),
+    );
+
+    sortedPending.forEach((order) => {
+      let bestPrinterId = printers[0].id;
+      let bestLoad = loads.get(bestPrinterId) ?? Infinity;
+      printers.forEach((p) => {
+        const l = loads.get(p.id) ?? 0;
+        if (l < bestLoad) {
+          bestLoad = l;
+          bestPrinterId = p.id;
+        }
+      });
+      const time = getPrintTimeMin(order);
+      loads.set(bestPrinterId, bestLoad + time);
+      const bucket = buckets.get(bestPrinterId) || [];
+      bucket.push({ ...order, printer_id: bestPrinterId });
+      buckets.set(bestPrinterId, bucket);
+    });
+
+    const finalBuckets = new Map<string, Order[]>();
+    buckets.forEach((b, key) => finalBuckets.set(key, b));
+
+    const makespan = Math.max(...Array.from(loads.values()), 0);
+
+    await persistQueueBuckets(finalBuckets, {
+      title: "Fila otimizada",
+      description: `Tempo total estimado: ${formatTime(makespan)} (distribuído em ${printers.length} impressora(s)).`,
+    });
+  };
+
   const moveOrderInQueue = async (
     orderId: string,
     targetPrinterId: string | null,
@@ -3537,6 +3612,15 @@ export default function Orders() {
             onChange={handleOrderSpreadsheetUpload}
             className="hidden"
           />
+          <Button
+            variant="secondary"
+            className="production-touch-target w-full lg:w-auto"
+            onClick={optimizeQueueByMakespan}
+            disabled={isPersistingQueue || printers.length === 0}
+          >
+            <Timer className="mr-2 h-4 w-4" />
+            Otimizar Tempo
+          </Button>
           <Button
             className="production-touch-target w-full lg:w-auto"
             onClick={() => fileInputRef.current?.click()}
