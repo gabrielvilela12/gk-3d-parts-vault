@@ -119,6 +119,14 @@ interface Piece {
   tempo_impressao_min: number | null;
   image_url: string | null;
   peso_g: number | null;
+  stock_quantity?: number | null;
+  stock_by_color?: { color: string; quantity: number }[] | null;
+}
+
+const STOCK_FULFILLED_TAG = "[ESTOQUE]";
+
+function isFulfilledFromStock(order: { notes?: string | null }): boolean {
+  return (order.notes || "").includes(STOCK_FULFILLED_TAG);
 }
 
 interface PrinterItem {
@@ -767,7 +775,7 @@ export default function Orders() {
         supabase
           .from("pieces")
           .select(
-            "id, name, reference_names, cost, custo_material, custo_energia, custo_acessorios, preco_venda, tempo_impressao_min, image_url, peso_g",
+            "id, name, reference_names, cost, custo_material, custo_energia, custo_acessorios, preco_venda, tempo_impressao_min, image_url, peso_g, stock_quantity, stock_by_color",
           )
           .eq("user_id", user.id)
           .order("name", { ascending: true }),
@@ -942,7 +950,7 @@ export default function Orders() {
         const { data } = await supabase
           .from("pieces")
           .select(
-            "id, name, reference_names, cost, custo_material, custo_energia, custo_acessorios, preco_venda, tempo_impressao_min, image_url",
+            "id, name, reference_names, cost, custo_material, custo_energia, custo_acessorios, preco_venda, tempo_impressao_min, image_url, peso_g, stock_quantity, stock_by_color",
           )
           .eq("user_id", user.id)
           .order("name", { ascending: true });
@@ -1236,6 +1244,29 @@ export default function Orders() {
 
       const skipped = consolidatedRows.length - newRows.length;
       let nextPosition = getNextPosition(null);
+      const nowIso = new Date().toISOString();
+
+      // Track per-piece available stock-by-color across this import to avoid double-counting
+      const pieceStockMap = new Map<
+        string,
+        { stock_quantity: number; stock_by_color: { color: string; quantity: number }[] }
+      >();
+      const piecesNeedingUpdate = new Set<string>();
+      let stockFulfilledCount = 0;
+
+      const getPieceStockSnapshot = (pieceId: string) => {
+        if (!pieceStockMap.has(pieceId)) {
+          const piece = pieces.find((p) => p.id === pieceId);
+          const stockByColor = Array.isArray(piece?.stock_by_color)
+            ? piece!.stock_by_color!.map((s) => ({ color: s.color, quantity: s.quantity }))
+            : [];
+          pieceStockMap.set(pieceId, {
+            stock_quantity: piece?.stock_quantity ?? 0,
+            stock_by_color: stockByColor,
+          });
+        }
+        return pieceStockMap.get(pieceId)!;
+      };
 
       const inserts = newRows.map((row) => {
         const piece = pieces.find((item) => item.id === row.matchedPieceId);
@@ -1243,18 +1274,45 @@ export default function Orders() {
         const snapshotUnitPrice = piece?.preco_venda ?? null;
         const storeName = getStoreName(row.storeName);
 
+        // Check stock for the exact requested color
+        let fulfilledFromStock = false;
+        if (piece && row.color) {
+          const snapshot = getPieceStockSnapshot(piece.id);
+          const colorEntry = snapshot.stock_by_color.find(
+            (s) => (s.color || "").toLowerCase() === (row.color || "").toLowerCase(),
+          );
+          if (colorEntry && colorEntry.quantity >= row.quantity) {
+            fulfilledFromStock = true;
+            colorEntry.quantity -= row.quantity;
+            snapshot.stock_quantity = Math.max(0, snapshot.stock_quantity - row.quantity);
+            snapshot.stock_by_color = snapshot.stock_by_color.filter((s) => s.quantity > 0);
+            piecesNeedingUpdate.add(piece.id);
+            stockFulfilledCount += 1;
+          }
+        }
+
+        const baseNotes = row.buyerNotes
+          ? `${row.platformOrderId} - ${row.buyerNotes}`
+          : row.platformOrderId || null;
+        const notesWithTag = fulfilledFromStock
+          ? `${STOCK_FULFILLED_TAG}${baseNotes ? ` ${baseNotes}` : ""}`
+          : baseNotes;
+
         return {
           user_id: user.id,
           piece_id: row.matchedPieceId!,
           quantity: row.quantity,
           color: row.color || null,
-          notes: row.buyerNotes ? `${row.platformOrderId} - ${row.buyerNotes}` : row.platformOrderId || null,
+          notes: notesWithTag,
           platform_order_id: row.platformOrderId || null,
           source_product_name: row.productName || piece?.name || null,
           ...(orderStoreSchemaReady ? { store_name: storeName } : {}),
           snapshot_unit_cost: snapshotUnitCost,
           snapshot_unit_price: snapshotUnitPrice,
-          status: "pending",
+          status: fulfilledFromStock ? "done" : "pending",
+          is_printed: fulfilledFromStock,
+          printed_at: fulfilledFromStock ? nowIso : null,
+          printed_by: fulfilledFromStock ? "Estoque" : null,
           position: nextPosition++,
           started_at: null,
           expected_finish_at: null,
@@ -1264,12 +1322,31 @@ export default function Orders() {
       const { error } = await supabase.from("orders").insert(inserts);
       if (error) throw error;
 
+      // Persist stock decrements for affected pieces
+      if (piecesNeedingUpdate.size > 0) {
+        await Promise.all(
+          Array.from(piecesNeedingUpdate).map((pieceId) => {
+            const snapshot = pieceStockMap.get(pieceId)!;
+            return supabase
+              .from("pieces")
+              .update({
+                stock_quantity: snapshot.stock_quantity,
+                stock_by_color: snapshot.stock_by_color as any,
+              })
+              .eq("id", pieceId);
+          }),
+        );
+      }
+
       toast({
         title: "Importacao concluida",
         description:
-          skipped > 0
+          (stockFulfilledCount > 0
+            ? `${stockFulfilledCount} atendido(s) do estoque. `
+            : "") +
+          (skipped > 0
             ? `${newRows.length} novo(s), ${skipped} duplicado(s) ignorado(s)`
-            : `${newRows.length} pedido(s) importado(s)!`,
+            : `${newRows.length} pedido(s) importado(s)!`),
       });
 
       if (!orderStoreSchemaReady && newRows.some((row) => getStoreName(row.storeName))) {
@@ -2767,12 +2844,22 @@ export default function Orders() {
             >
               {isSelected ? <CheckSquare className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
             </button>
-            <Badge
-              variant="outline"
-              className={`ml-auto px-1.5 py-0 text-[9px] uppercase tracking-wider ${subtleBorder} ${subtleBg} ${textPrimary}`}
-            >
-              {isPrintingRow ? "Imprimindo" : "Pendente"}
-            </Badge>
+            {isFulfilledFromStock(order) ? (
+              <Badge
+                variant="outline"
+                className="ml-auto border-emerald-400/40 bg-emerald-500/15 px-1.5 py-0 text-[9px] uppercase tracking-wider text-emerald-200"
+              >
+                <Check className="mr-1 h-2.5 w-2.5" />
+                Feito do estoque
+              </Badge>
+            ) : (
+              <Badge
+                variant="outline"
+                className={`ml-auto px-1.5 py-0 text-[9px] uppercase tracking-wider ${subtleBorder} ${subtleBg} ${textPrimary}`}
+              >
+                {orderStatus === "done" ? "Feito" : isPrintingRow ? "Imprimindo" : "Pendente"}
+              </Badge>
+            )}
           </div>
 
           {/* Image + name (clickable to piece detail) */}
@@ -3014,16 +3101,26 @@ export default function Orders() {
                   <p className="production-order-title text-sm font-semibold text-slate-50 sm:text-base">
                     {order.pieces.name}
                   </p>
-                  <Badge
-                    variant="outline"
-                    className={`text-[10px] uppercase tracking-[0.18em] ${
-                      isPrintingRow
-                        ? "border-primary/30 bg-primary/15 text-primary"
-                        : "border-white/10 bg-white/[0.05] text-slate-200"
-                    }`}
-                  >
-                    {isPrintingRow ? "Imprimindo" : "Pendente"}
-                  </Badge>
+                  {isFulfilledFromStock(order) ? (
+                    <Badge
+                      variant="outline"
+                      className="border-emerald-400/40 bg-emerald-500/15 text-[10px] uppercase tracking-[0.18em] text-emerald-200"
+                    >
+                      <Check className="mr-1 h-3 w-3" />
+                      Feito do estoque
+                    </Badge>
+                  ) : (
+                    <Badge
+                      variant="outline"
+                      className={`text-[10px] uppercase tracking-[0.18em] ${
+                        isPrintingRow
+                          ? "border-primary/30 bg-primary/15 text-primary"
+                          : "border-white/10 bg-white/[0.05] text-slate-200"
+                      }`}
+                    >
+                      {isPrintingRow ? "Imprimindo" : "Pendente"}
+                    </Badge>
+                  )}
                   {order.quantity > 1 ? (
                     <Badge variant="secondary" className="text-[10px]">
                       x{order.quantity}
