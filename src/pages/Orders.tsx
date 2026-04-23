@@ -2844,12 +2844,22 @@ export default function Orders() {
             >
               {isSelected ? <CheckSquare className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
             </button>
-            <Badge
-              variant="outline"
-              className={`ml-auto px-1.5 py-0 text-[9px] uppercase tracking-wider ${subtleBorder} ${subtleBg} ${textPrimary}`}
-            >
-              {isPrintingRow ? "Imprimindo" : "Pendente"}
-            </Badge>
+            {isFulfilledFromStock(order) ? (
+              <Badge
+                variant="outline"
+                className="ml-auto border-emerald-400/40 bg-emerald-500/15 px-1.5 py-0 text-[9px] uppercase tracking-wider text-emerald-200"
+              >
+                <Check className="mr-1 h-2.5 w-2.5" />
+                Feito do estoque
+              </Badge>
+            ) : (
+              <Badge
+                variant="outline"
+                className={`ml-auto px-1.5 py-0 text-[9px] uppercase tracking-wider ${subtleBorder} ${subtleBg} ${textPrimary}`}
+              >
+                {orderStatus === "done" ? "Feito" : isPrintingRow ? "Imprimindo" : "Pendente"}
+              </Badge>
+            )}
           </div>
 
           {/* Image + name (clickable to piece detail) */}
