@@ -702,6 +702,7 @@ export default function Orders() {
   const [filterPieceId, setFilterPieceId] = useState("all");
   const [groupByPiece, setGroupByPiece] = useState(false);
   const [queueViewMode, setQueueViewMode] = useState<"list" | "columns">("columns");
+  const [expandedPrintingCols, setExpandedPrintingCols] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
   const [filterSearch, setFilterSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"queue" | "printing" | "done">("queue");
