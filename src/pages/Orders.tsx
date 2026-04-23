@@ -775,7 +775,7 @@ export default function Orders() {
         supabase
           .from("pieces")
           .select(
-            "id, name, reference_names, cost, custo_material, custo_energia, custo_acessorios, preco_venda, tempo_impressao_min, image_url, peso_g",
+            "id, name, reference_names, cost, custo_material, custo_energia, custo_acessorios, preco_venda, tempo_impressao_min, image_url, peso_g, stock_quantity, stock_by_color",
           )
           .eq("user_id", user.id)
           .order("name", { ascending: true }),
