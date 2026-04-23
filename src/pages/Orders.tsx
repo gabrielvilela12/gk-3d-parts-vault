@@ -3613,6 +3613,15 @@ export default function Orders() {
             className="hidden"
           />
           <Button
+            variant="secondary"
+            className="production-touch-target w-full lg:w-auto"
+            onClick={optimizeQueueByMakespan}
+            disabled={isPersistingQueue || printers.length === 0}
+          >
+            <Timer className="mr-2 h-4 w-4" />
+            Otimizar Tempo
+          </Button>
+          <Button
             className="production-touch-target w-full lg:w-auto"
             onClick={() => fileInputRef.current?.click()}
           >
