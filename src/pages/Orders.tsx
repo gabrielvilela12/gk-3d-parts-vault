@@ -3101,16 +3101,26 @@ export default function Orders() {
                   <p className="production-order-title text-sm font-semibold text-slate-50 sm:text-base">
                     {order.pieces.name}
                   </p>
-                  <Badge
-                    variant="outline"
-                    className={`text-[10px] uppercase tracking-[0.18em] ${
-                      isPrintingRow
-                        ? "border-primary/30 bg-primary/15 text-primary"
-                        : "border-white/10 bg-white/[0.05] text-slate-200"
-                    }`}
-                  >
-                    {isPrintingRow ? "Imprimindo" : "Pendente"}
-                  </Badge>
+                  {isFulfilledFromStock(order) ? (
+                    <Badge
+                      variant="outline"
+                      className="border-emerald-400/40 bg-emerald-500/15 text-[10px] uppercase tracking-[0.18em] text-emerald-200"
+                    >
+                      <Check className="mr-1 h-3 w-3" />
+                      Feito do estoque
+                    </Badge>
+                  ) : (
+                    <Badge
+                      variant="outline"
+                      className={`text-[10px] uppercase tracking-[0.18em] ${
+                        isPrintingRow
+                          ? "border-primary/30 bg-primary/15 text-primary"
+                          : "border-white/10 bg-white/[0.05] text-slate-200"
+                      }`}
+                    >
+                      {isPrintingRow ? "Imprimindo" : "Pendente"}
+                    </Badge>
+                  )}
                   {order.quantity > 1 ? (
                     <Badge variant="secondary" className="text-[10px]">
                       x{order.quantity}
