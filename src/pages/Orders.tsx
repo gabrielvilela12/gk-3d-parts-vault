@@ -7,6 +7,7 @@ import {
   type ChangeEvent,
   type DragEvent,
 } from "react";
+import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
 import {
   AlertCircle,
@@ -700,7 +701,8 @@ export default function Orders() {
   const [filterColor, setFilterColor] = useState("all");
   const [filterPieceId, setFilterPieceId] = useState("all");
   const [groupByPiece, setGroupByPiece] = useState(false);
-  const [queueViewMode, setQueueViewMode] = useState<"list" | "columns">("list");
+  const [queueViewMode, setQueueViewMode] = useState<"list" | "columns">("columns");
+  const navigate = useNavigate();
   const [filterSearch, setFilterSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"queue" | "printing" | "done">("queue");
   const [filterPrinterKey, setFilterPrinterKey] = useState(ALL_PRINTERS_FILTER_KEY);
@@ -2770,8 +2772,16 @@ export default function Orders() {
             </Badge>
           </div>
 
-          {/* Image + name */}
-          <div className="flex items-start gap-2">
+          {/* Image + name (clickable to piece detail) */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/piece/${order.piece_id}`);
+            }}
+            className="flex items-start gap-2 text-left hover:opacity-90 transition-opacity"
+            title="Ver detalhes da peça"
+          >
             {order.pieces.image_url ? (
               <img
                 src={order.pieces.image_url}
@@ -2784,7 +2794,7 @@ export default function Orders() {
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <p className={`text-xs font-semibold leading-tight line-clamp-2 ${textPrimary}`} title={order.pieces.name}>
+              <p className={`text-xs font-semibold leading-tight line-clamp-2 ${textPrimary} hover:underline`} title={order.pieces.name}>
                 {order.pieces.name}
               </p>
               <div className="mt-1 flex items-center gap-1 flex-wrap">
@@ -2800,7 +2810,7 @@ export default function Orders() {
                 ) : null}
               </div>
             </div>
-          </div>
+          </button>
 
           {/* Meta */}
           <div className="flex items-center gap-1 flex-wrap">
@@ -3710,24 +3720,7 @@ export default function Orders() {
               </Button>
             ) : null}
 
-            {isQueueView ? (
-              <Button
-                variant={queueViewMode === "columns" ? "default" : "outline"}
-                size="sm"
-                onClick={() =>
-                  setQueueViewMode((prev) => (prev === "columns" ? "list" : "columns"))
-                }
-                className="production-control gap-1.5 border-white/10 bg-[#050816] text-sm text-slate-100 hover:text-slate-50"
-                title="Visualizar todas as impressoras lado a lado"
-              >
-                {queueViewMode === "columns" ? (
-                  <LayoutList className="h-3.5 w-3.5" />
-                ) : (
-                  <Columns3 className="h-3.5 w-3.5" />
-                )}
-                {queueViewMode === "columns" ? "Lista" : "Colunas"}
-              </Button>
-            ) : null}
+            {null}
 
             {isQueueView ? (
               <Select
