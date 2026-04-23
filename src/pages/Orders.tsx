@@ -15,6 +15,8 @@ import {
   Check,
   CheckCircle2,
   CheckSquare,
+  ChevronDown,
+  ChevronRight,
   Columns3,
   FileDown,
   FileSpreadsheet,
