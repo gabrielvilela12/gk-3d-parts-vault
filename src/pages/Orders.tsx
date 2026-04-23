@@ -15,6 +15,8 @@ import {
   Check,
   CheckCircle2,
   CheckSquare,
+  ChevronDown,
+  ChevronRight,
   Columns3,
   FileDown,
   FileSpreadsheet,
@@ -702,6 +704,7 @@ export default function Orders() {
   const [filterPieceId, setFilterPieceId] = useState("all");
   const [groupByPiece, setGroupByPiece] = useState(false);
   const [queueViewMode, setQueueViewMode] = useState<"list" | "columns">("columns");
+  const [expandedPrintingCols, setExpandedPrintingCols] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
   const [filterSearch, setFilterSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"queue" | "printing" | "done">("queue");
@@ -4125,15 +4128,63 @@ export default function Orders() {
                                       <span>{totalQty} un</span>
                                       <span>{formatTime(totalMin)}</span>
                                     </div>
-                                    <div className="flex flex-col gap-2">
-                                      {colOrders.length === 0 ? (
-                                        <div className="rounded-xl border border-dashed border-white/10 bg-black/10 px-3 py-6 text-center text-xs text-slate-500">
-                                          Sem pedidos
+                                    {(() => {
+                                      const printingOrders = colOrders.filter((o) => getOrderStatus(o) === "printing");
+                                      const pendingOrders = colOrders.filter((o) => getOrderStatus(o) !== "printing");
+                                      const isPrintingExpanded = expandedPrintingCols.has(col.key);
+                                      return (
+                                        <div className="flex flex-col gap-2">
+                                          {printingOrders.length > 0 && (
+                                            <div className="rounded-xl border border-amber-400/30 bg-amber-500/10">
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  setExpandedPrintingCols((prev) => {
+                                                    const next = new Set(prev);
+                                                    if (next.has(col.key)) next.delete(col.key);
+                                                    else next.add(col.key);
+                                                    return next;
+                                                  })
+                                                }
+                                                className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left"
+                                              >
+                                                {isPrintingExpanded ? (
+                                                  <ChevronDown className="h-3.5 w-3.5 text-amber-300" />
+                                                ) : (
+                                                  <ChevronRight className="h-3.5 w-3.5 text-amber-300" />
+                                                )}
+                                                <Printer className="h-3 w-3 text-amber-300" />
+                                                <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-200">
+                                                  Fazendo
+                                                </span>
+                                                <Badge
+                                                  variant="secondary"
+                                                  className="ml-auto h-4 bg-amber-400/20 px-1.5 text-[9px] text-amber-100"
+                                                >
+                                                  {printingOrders.length}
+                                                </Badge>
+                                              </button>
+                                              {isPrintingExpanded && (
+                                                <div className="flex flex-col gap-2 border-t border-amber-400/20 p-2">
+                                                  {printingOrders.map((order, idx) =>
+                                                    renderCompactQueueCard(order, idx),
+                                                  )}
+                                                </div>
+                                              )}
+                                            </div>
+                                          )}
+                                          {pendingOrders.length === 0 && printingOrders.length === 0 ? (
+                                            <div className="rounded-xl border border-dashed border-white/10 bg-black/10 px-3 py-6 text-center text-xs text-slate-500">
+                                              Sem pedidos
+                                            </div>
+                                          ) : (
+                                            pendingOrders.map((order, idx) =>
+                                              renderCompactQueueCard(order, printingOrders.length + idx),
+                                            )
+                                          )}
                                         </div>
-                                      ) : (
-                                        colOrders.map((order, idx) => renderCompactQueueCard(order, idx))
-                                      )}
-                                    </div>
+                                      );
+                                    })()}
                                   </div>
                                 );
                               })}
